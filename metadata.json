@@ -1,0 +1,6 @@
+{
+  "name": "KHTN THẦY HOÀNG - Phòng Thí Nghiệm Khoa Học Số",
+  "description": "Website giáo dục Khoa học Tự nhiên lớp 6, 7, 8, 9 theo GDPT 2018 với phòng thí nghiệm 3D mô phỏng tương tác, bài học, video và tài liệu.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
