@@ -1,5 +1,6 @@
 import { supabase, isSupabaseConfigured, saveUserProgress, getInitialProgress } from '../lib/supabase.ts';
 import { QUIZ_QUESTIONS, LESSON_QUIZZES, LESSONS } from '../data/mockData.ts';
+import { getAdminQuestionsSync, getAdminQuizzesSync } from './adminService.ts';
 import { Grade, SubjectDomain, AppUser, QuizMeta } from '../types/index.ts';
 import {
   QuestionType,
@@ -19,6 +20,8 @@ export interface QuizSubmissionItem {
   question_id: string;
   selected_option_id?: string | null;
   selected_option_ids?: string[];
+  essay_text?: string;
+  essay_images?: import('../utils/quizScoringEngine.ts').UploadedEssayImage[];
 }
 
 export interface ClientQuestion {
@@ -30,6 +33,7 @@ export interface ClientQuestion {
   order_index: number;
   difficulty?: 'Nhận biết' | 'Thông hiểu' | 'Vận dụng';
   hint?: string;
+  allow_image_upload?: boolean;
   options: Array<{
     id: string;
     option_text: string;
@@ -86,8 +90,9 @@ export async function getLessonQuizzes(
     }
   }
 
-  // Fallback to local mock data
-  return LESSON_QUIZZES.filter((q) => {
+  // Fallback to admin-managed quizzes store
+  const allQuizzes = getAdminQuizzesSync();
+  return allQuizzes.filter((q) => {
     if (grade && grade !== 'all' && q.grade !== grade) return false;
     if (domain && domain !== 'all' && q.domain !== domain) return false;
     return true;
@@ -106,6 +111,7 @@ export async function getQuizForLesson(lessonId: string): Promise<QuizMeta | nul
   const lesson = LESSONS.find((l) => l.id === lessonId);
   if (!lesson) return null;
 
+  const questionsBank = getAdminQuestionsSync();
   return {
     id: `quiz-for-${lesson.id}`,
     lessonId: lesson.id,
@@ -113,10 +119,10 @@ export async function getQuizForLesson(lessonId: string): Promise<QuizMeta | nul
     grade: lesson.grade,
     domain: lesson.domain,
     title: `Kiểm tra củng cố: ${lesson.title}`,
-    description: `Bài đánh giá năng lực trắc nghiệm 3 dạng câu hỏi theo chuẩn GDPT 2018.`,
+    description: `Bài đánh giá năng lực trắc nghiệm theo bộ sách Kết nối tri thức với cuộc sống.`,
     durationMinutes: 15,
     passScore: 6.0,
-    questionCount: QUIZ_QUESTIONS.filter((q) => q.lessonId === lesson.id).length || 4,
+    questionCount: questionsBank.filter((q) => q.lessonId === lesson.id).length || 4,
     isPublished: true,
   };
 }
@@ -164,22 +170,34 @@ export async function getQuizQuestions(quizId: string): Promise<ClientQuestion[]
     }
   }
 
+  const questionsBank = getAdminQuestionsSync();
+  const quizzesBank = getAdminQuizzesSync();
+
+  // Direct match by topicId === quizId (e.g. imported Word exam)
+  const directQuizMatch = questionsBank.filter((q) => q.topicId === quizId);
+
   // Local fallback: map matching questions or pool
-  let matching = QUIZ_QUESTIONS.filter((q) => {
-    if (quizId.startsWith('quiz-for-')) {
-      const targetLessonId = quizId.replace('quiz-for-', '');
-      return q.lessonId === targetLessonId;
-    }
-    const meta = LESSON_QUIZZES.find((m) => m.id === quizId);
-    if (meta && meta.lessonId) {
-      return q.lessonId === meta.lessonId;
-    }
-    return false;
-  });
+  let matching =
+    directQuizMatch.length > 0
+      ? directQuizMatch
+      : questionsBank.filter((q) => {
+          if (quizId.startsWith('quiz-for-')) {
+            const targetLessonId = quizId.replace('quiz-for-', '');
+            return q.lessonId === targetLessonId;
+          }
+          const meta = quizzesBank.find((m) => m.id === quizId);
+          if (meta && meta.lessonId) {
+            return q.lessonId === meta.lessonId;
+          }
+          if (meta) {
+            return q.grade === meta.grade && q.domain === meta.domain;
+          }
+          return false;
+        });
 
   if (matching.length === 0) {
     // If general practice or not matched to lesson, return all or filtered pool
-    matching = QUIZ_QUESTIONS;
+    matching = questionsBank;
   }
 
   const converted: QuizQuestionItem[] = matching.map((q, idx) => ({
@@ -191,7 +209,8 @@ export async function getQuizQuestions(quizId: string): Promise<ClientQuestion[]
     order_index: idx + 1,
     difficulty: q.difficulty,
     hint: q.hint,
-    options: q.options.map((opt, optIdx) => ({
+    allow_image_upload: q.allowImageUpload ?? (q.questionType === 'essay' ? true : undefined),
+    options: (q.options || []).map((opt, optIdx) => ({
       id: `${q.id}_opt_${optIdx}`,
       option_text: opt,
       order_index: optIdx,
@@ -240,8 +259,10 @@ export async function submitQuizAttemptSecurely(
   }
 
   // 2. Authoritative local calculation engine (Protected Answer Keys)
+  const questionsBank = getAdminQuestionsSync();
+  const quizzesBank = getAdminQuizzesSync();
   const answerKeysMap = new Map<string, AnswerKeyEntry>();
-  for (const q of QUIZ_QUESTIONS) {
+  for (const q of questionsBank) {
     let correctOptionIds: string[] = [];
     if (Array.isArray(q.correctAnswers) && q.correctAnswers.length > 0) {
       correctOptionIds = q.correctAnswers.map((idx) => `${q.id}_opt_${idx}`);
@@ -253,12 +274,14 @@ export async function submitQuizAttemptSecurely(
       question_id: q.id,
       correct_option_ids: correctOptionIds,
       explanation: q.explanation,
+      solution_steps: q.solutionSteps,
+      sample_answer: q.sampleAnswer,
     });
   }
 
   // Re-fetch question definitions to calculate
   const questions = await getQuizQuestions(quizId);
-  const quizMeta = LESSON_QUIZZES.find((m) => m.id === quizId);
+  const quizMeta = quizzesBank.find((m) => m.id === quizId);
 
   const gradingResult = gradeQuizSubmission(
     questions,
@@ -450,19 +473,91 @@ export async function getTeacherClassAnalytics(filterGrade?: Grade | 'all'): Pro
   if (allAttempts.length === 0) {
     // Seed mock class attempts for demonstration
     allAttempts = [
-      { id: 'a1', user_id: 'hs1', quiz_id: 'quiz-atom-7', score: 9.0, passed: true, domain: 'hoa-hoc', topicTitle: 'Cấu tạo nguyên tử Rutherford - Bohr' },
-      { id: 'a2', user_id: 'hs2', quiz_id: 'quiz-atom-7', score: 8.5, passed: true, domain: 'hoa-hoc', topicTitle: 'Cấu tạo nguyên tử Rutherford - Bohr' },
-      { id: 'a3', user_id: 'hs3', quiz_id: 'quiz-atom-7', score: 7.0, passed: true, domain: 'hoa-hoc', topicTitle: 'Cấu tạo nguyên tử Rutherford - Bohr' },
-      { id: 'a4', user_id: 'hs4', quiz_id: 'quiz-circuit-8', score: 5.5, passed: false, domain: 'vat-li', topicTitle: 'Đo cường độ dòng điện & Định luật Ôm' },
-      { id: 'a5', user_id: 'hs5', quiz_id: 'quiz-circuit-8', score: 6.0, passed: true, domain: 'vat-li', topicTitle: 'Đo cường độ dòng điện & Định luật Ôm' },
-      { id: 'a6', user_id: 'hs1', quiz_id: 'quiz-acid-8', score: 9.5, passed: true, domain: 'hoa-hoc', topicTitle: 'Axit - Bazơ - Muối & pH' },
-      { id: 'a7', user_id: 'hs2', quiz_id: 'quiz-acid-8', score: 8.0, passed: true, domain: 'hoa-hoc', topicTitle: 'Axit - Bazơ - Muối & pH' },
+      { id: 'a1', user_id: 'hs1', quiz_id: 'quiz-atom-7', score: 9.0, passed: true, domain: 'hoa-hoc', topicTitle: 'Cấu tạo nguyên tử Rutherford - Bohr (IUPAC)' },
+      { id: 'a2', user_id: 'hs2', quiz_id: 'quiz-atom-7', score: 8.5, passed: true, domain: 'hoa-hoc', topicTitle: 'Cấu tạo nguyên tử Rutherford - Bohr (IUPAC)' },
+      { id: 'a3', user_id: 'hs3', quiz_id: 'quiz-atom-7', score: 7.0, passed: true, domain: 'hoa-hoc', topicTitle: 'Cấu tạo nguyên tử Rutherford - Bohr (IUPAC)' },
+      { id: 'a4', user_id: 'hs4', quiz_id: 'quiz-circuit-8', score: 5.5, passed: false, domain: 'vat-li', topicTitle: 'Đo cường độ dòng điện & Định luật Ohm' },
+      { id: 'a5', user_id: 'hs5', quiz_id: 'quiz-circuit-8', score: 6.0, passed: true, domain: 'vat-li', topicTitle: 'Đo cường độ dòng điện & Định luật Ohm' },
+      { id: 'a6', user_id: 'hs1', quiz_id: 'quiz-acid-8', score: 9.5, passed: true, domain: 'hoa-hoc', topicTitle: 'Acid - Base - Oxide - Muối & Thang pH' },
+      { id: 'a7', user_id: 'hs2', quiz_id: 'quiz-acid-8', score: 8.0, passed: true, domain: 'hoa-hoc', topicTitle: 'Acid - Base - Oxide - Muối & Thang pH' },
       { id: 'a8', user_id: 'hs6', quiz_id: 'quiz-cell-6', score: 9.0, passed: true, domain: 'sinh-hoc', topicTitle: 'Kính hiển vi quang học & Tế bào' },
       { id: 'a9', user_id: 'hs7', quiz_id: 'quiz-optics-9', score: 7.5, passed: true, domain: 'vat-li', topicTitle: 'Khúc xạ & Tán sắc ánh sáng' },
-      { id: 'a10', user_id: 'hs8', quiz_id: 'quiz-circuit-8', score: 4.5, passed: false, domain: 'vat-li', topicTitle: 'Đo cường độ dòng điện & Định luật Ôm' },
+      { id: 'a10', user_id: 'hs8', quiz_id: 'quiz-circuit-8', score: 4.5, passed: false, domain: 'vat-li', topicTitle: 'Đo cường độ dòng điện & Định luật Ohm' },
     ];
   }
 
   const studentIds = ['hs1', 'hs2', 'hs3', 'hs4', 'hs5', 'hs6', 'hs7', 'hs8', 'user_student_demo'];
   return computeTeacherClassStats(allAttempts, studentIds);
 }
+
+/**
+ * Convenience helpers for QuizPracticePage
+ */
+export async function getAllLessonQuizzes(): Promise<import('../utils/quizScoringEngine.ts').LessonQuizConfig[]> {
+  const metas = await getLessonQuizzes();
+  const questionsBank = getAdminQuestionsSync();
+  const bankMap = new Map(questionsBank.map((q) => [q.id, q]));
+  const results: import('../utils/quizScoringEngine.ts').LessonQuizConfig[] = [];
+  for (const meta of metas) {
+    const rawQuestions = await getQuizQuestions(meta.id);
+    results.push({
+      id: meta.id,
+      lessonId: meta.lessonId,
+      title: meta.title,
+      grade: meta.grade,
+      domain: meta.domain,
+      timeLimitMinutes: meta.durationMinutes,
+      passingScore: meta.passScore,
+      questions: rawQuestions.map((rq) => {
+        const fullQ = bankMap.get(rq.id);
+        return {
+          id: rq.id,
+          question: rq.question_text,
+          type: rq.question_type,
+          difficulty: rq.difficulty || 'Thông hiểu',
+          points: rq.points || 1,
+          hint: rq.hint,
+          allowImageUpload: rq.allow_image_upload ?? (rq.question_type === 'essay' ? true : undefined),
+          solutionSteps: fullQ?.solutionSteps,
+          sampleAnswer: fullQ?.sampleAnswer,
+          explanation: fullQ?.explanation,
+          options: rq.options.map((o) => ({
+            id: o.id,
+            content: o.option_text,
+          })),
+        };
+      }),
+    });
+  }
+  return results;
+}
+
+export async function getLessonQuizById(
+  quizId: string
+): Promise<import('../utils/quizScoringEngine.ts').LessonQuizConfig | null> {
+  const all = await getAllLessonQuizzes();
+  return all.find((q) => q.id === quizId) || null;
+}
+
+export async function submitQuizAttemptSecure(
+  quizId: string,
+  selections: import('../utils/quizScoringEngine.ts').UserAnswerSelection[],
+  timeSpentSeconds: number,
+  userId: string
+): Promise<ServerGradingResult> {
+  const submissionItems: QuizSubmissionItem[] = selections.map((s) => ({
+    question_id: s.questionId,
+    selected_option_id: s.selectedOptionId || null,
+    selected_option_ids: s.selectedOptionIds,
+    essay_text: s.essayText,
+    essay_images: s.essayImages,
+  }));
+  const mockUser: AppUser = {
+    id: userId,
+    email: 'student@khtn.edu.vn',
+    fullName: 'Học sinh KHTN',
+    role: 'student',
+  };
+  return submitQuizAttemptSecurely(quizId, submissionItems, timeSpentSeconds, mockUser);
+}
+

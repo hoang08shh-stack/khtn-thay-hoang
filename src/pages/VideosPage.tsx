@@ -1,188 +1,158 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { VIDEOS } from '../data/mockData.ts';
-import { VideoLesson, Grade } from '../types/index.ts';
+import { Grade, VideoResource } from '../types/index.ts';
+import { getAllVideos } from '../services/contentService.ts';
 import { Breadcrumbs } from '../components/common/Breadcrumbs.tsx';
-import {
-  Video,
-  Play,
-  Clock,
-  Eye,
-  CheckCircle,
-  Sparkles,
-  Share2,
-  BookOpen,
-} from 'lucide-react';
+import { Play, Clock, Eye, Sparkles, X, Atom } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 export const VideosPage: React.FC = () => {
   const [selectedGrade, setSelectedGrade] = useState<Grade | 'all'>('all');
-  const [activeVideo, setActiveVideo] = useState<VideoLesson>(VIDEOS[0]);
-  const [activeTimestamp, setActiveTimestamp] = useState<string>('00:00');
+  const [activeVideoId, setActiveVideoId] = useState<string | null>(null);
+  const [videosList, setVideosList] = useState<VideoResource[]>(VIDEOS);
 
-  const filteredVideos = VIDEOS.filter(
-    (v) => selectedGrade === 'all' || v.grade === selectedGrade
-  );
+  useEffect(() => {
+    let mounted = true;
+    getAllVideos().then((data) => {
+      if (mounted) {
+        setVideosList(data);
+      }
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const filteredVideos = videosList.filter((v) => {
+    if (selectedGrade !== 'all' && v.grade !== selectedGrade) return false;
+    return true;
+  });
+
+  const activeVideo = videosList.find((v) => v.id === activeVideoId);
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 py-8 text-slate-800 dark:text-slate-100">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <Breadcrumbs items={[{ label: 'Video bài giảng & Thí nghiệm thực hành' }]} />
+    <div className="min-h-screen bg-gradient-to-b from-sky-50/60 via-white to-teal-50/40 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
+        <Breadcrumbs items={[{ label: 'Thư viện Video Bài Giảng & Thí Nghiệm' }]} />
 
-        {/* Title Header */}
-        <div className="mb-8">
-          <div className="flex items-center gap-2 text-xs font-bold text-red-600 dark:text-red-400 uppercase tracking-wider">
-            <Video className="w-4 h-4" />
-            <span>Thực nghiệm khoa học</span>
+        {/* Header (No YouTube channel button!) */}
+        <div className="bg-gradient-to-r from-sky-600 via-teal-600 to-indigo-700 rounded-3xl p-6 sm:p-10 text-white shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="space-y-2 max-w-2xl">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/20 backdrop-blur-md text-xs font-extrabold uppercase tracking-wider">
+              <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+              <span>KHOA HỌC SỐ KHTN • Bộ sách Kết nối tri thức với cuộc sống</span>
+            </div>
+            <h1 className="text-2xl sm:text-4xl font-black text-white">
+              Video Thí Nghiệm & Bài Giảng Trực Quan
+            </h1>
+            <p className="text-sm sm:text-base text-white/90">
+              Hệ thống video bài giảng và thí nghiệm thực hành thuộc 3 phân môn <strong>Vật lí · Hóa học · Sinh học</strong> từ lớp 6 đến lớp 9 theo danh pháp quốc tế IUPAC.
+            </p>
           </div>
-          <h1 className="text-2xl sm:text-4xl font-extrabold text-[#0B1F3A] dark:text-white mt-1">
-            Video Thí Nghiệm & Bài Giảng Trực Quan
-          </h1>
-          <p className="text-slate-600 dark:text-slate-400 text-sm mt-1 max-w-2xl">
-            Tận mắt theo dõi các thí nghiệm thực tế tại phòng bộ môn KHTN cùng Thầy Hoàng:
-            từ kỹ thuật chuẩn độ buret, soi tế bào vảy hành đến đo lường định luật Ôm và tán sắc ánh sáng.
-          </p>
-        </div>
 
-        {/* Grade Filter */}
-        <div className="flex items-center gap-2 mb-8 bg-white dark:bg-slate-900 p-2 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm w-fit">
-          <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 ml-2">Khối lớp:</span>
-          <button
-            onClick={() => setSelectedGrade('all')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
-              selectedGrade === 'all'
-                ? 'bg-red-600 text-white'
-                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
-            }`}
+          <Link
+            to="/phong-thi-nghiem-3d"
+            className="px-5 py-3 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs sm:text-sm shadow-lg transition flex items-center gap-2 self-start md:self-auto"
           >
-            Tất cả video
-          </button>
-          {[6, 7, 8, 9].map((g) => (
-            <button
-              key={g}
-              onClick={() => setSelectedGrade(g as Grade)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
-                selectedGrade === g
-                  ? 'bg-red-600 text-white'
-                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
-              }`}
-            >
-              Lớp {g}
-            </button>
-          ))}
+            <Atom className="w-5 h-5" />
+            <span>Mở KHOA HỌC SỐ KHTN 3D</span>
+          </Link>
         </div>
 
-        {/* Active Player & Playlist Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mb-12">
-          {/* Main Video Viewport (Col 8) */}
-          <div className="lg:col-span-8 space-y-5">
-            <div className="relative w-full aspect-video rounded-3xl overflow-hidden bg-slate-950 shadow-2xl border border-slate-800">
+        {/* Active Video Player Modal / Banner */}
+        {activeVideo && (
+          <div className="bg-slate-900 rounded-3xl p-4 sm:p-6 text-white space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-xs text-teal-400 font-bold">
+                  Đang phát • Lớp {activeVideo.grade} • KHOA HỌC SỐ KHTN
+                </span>
+                <h2 className="text-lg font-extrabold">{activeVideo.title}</h2>
+              </div>
+              <button
+                onClick={() => setActiveVideoId(null)}
+                className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="aspect-video w-full rounded-2xl overflow-hidden bg-black">
               <iframe
-                src={`https://www.youtube-nocookie.com/embed/${activeVideo.youtubeId}?autoplay=0&rel=0`}
+                className="w-full h-full"
+                src={`https://www.youtube.com/embed/${activeVideo.youtubeId}?autoplay=1`}
                 title={activeVideo.title}
-                className="w-full h-full border-0"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                 allowFullScreen
               />
             </div>
+          </div>
+        )}
 
-            {/* Video Details Card */}
-            <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <span className="px-3 py-1 rounded-full bg-red-100 dark:bg-red-950/60 text-red-700 dark:text-red-300 text-xs font-bold">
-                    Lớp {activeVideo.grade} • {activeVideo.experimentType}
+        {/* Grade Filters */}
+        <div className="flex flex-wrap items-center gap-2">
+          {(['all', 6, 7, 8, 9] as const).map((g) => (
+            <button
+              key={g}
+              onClick={() => setSelectedGrade(g)}
+              className={`px-4 py-2 rounded-xl text-xs font-extrabold transition cursor-pointer ${
+                selectedGrade === g
+                  ? 'bg-gradient-to-r from-teal-600 to-sky-600 text-white shadow-sm'
+                  : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-teal-50'
+              }`}
+            >
+              {g === 'all' ? 'Tất cả khối lớp (6–9)' : `Video KHTN Lớp ${g}`}
+            </button>
+          ))}
+        </div>
+
+        {/* Videos Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredVideos.map((vid) => (
+            <div
+              key={vid.id}
+              onClick={() => setActiveVideoId(vid.id)}
+              className="group cursor-pointer bg-white dark:bg-slate-900 rounded-3xl overflow-hidden border-2 border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-xl transition flex flex-col justify-between"
+            >
+              <div>
+                <div className="relative h-48 overflow-hidden bg-slate-900">
+                  <img
+                    src={vid.thumbnail}
+                    alt={vid.title}
+                    className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
+                  />
+                  <div className="absolute inset-0 bg-slate-950/35 flex items-center justify-center group-hover:bg-slate-950/20 transition">
+                    <div className="w-12 h-12 rounded-full bg-teal-500 text-white flex items-center justify-center shadow-lg group-hover:scale-110 transition">
+                      <Play className="w-5 h-5 fill-current ml-0.5" />
+                    </div>
+                  </div>
+                  <span className="absolute top-3 left-3 px-2.5 py-1 rounded-lg bg-slate-900/80 text-teal-300 text-xs font-bold">
+                    Lớp {vid.grade}
                   </span>
-                  <span className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1 font-medium">
-                    <Clock className="w-3.5 h-3.5" /> {activeVideo.duration}
-                  </span>
-                  <span className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1 font-medium">
-                    <Eye className="w-3.5 h-3.5" /> {activeVideo.views.toLocaleString()} lượt xem
+                  <span className="absolute bottom-3 right-3 px-2 py-0.5 rounded bg-slate-950/80 text-white text-xs font-mono">
+                    {vid.duration}
                   </span>
                 </div>
 
-                <span className="text-xs font-semibold text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-950/60 px-2.5 py-1 rounded-lg border border-teal-200 dark:border-teal-800">
-                  Giảng viên: {activeVideo.instructor}
+                <div className="p-5 space-y-2">
+                  <h3 className="font-extrabold text-slate-900 dark:text-white group-hover:text-teal-600 transition text-base">
+                    {vid.title}
+                  </h3>
+                  <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                    {vid.summary}
+                  </p>
+                </div>
+              </div>
+
+              <div className="px-5 pb-5 pt-2 flex items-center justify-between text-xs text-slate-400">
+                <span className="flex items-center gap-1 font-medium text-teal-600">
+                  <Clock className="w-3.5 h-3.5" /> {vid.instructor}
+                </span>
+                <span className="flex items-center gap-1">
+                  <Eye className="w-3.5 h-3.5" /> {vid.views} lượt xem
                 </span>
               </div>
-
-              <h2 className="text-xl sm:text-2xl font-bold text-[#0B1F3A] dark:text-white">
-                {activeVideo.title}
-              </h2>
-
-              <p className="text-slate-600 dark:text-slate-300 text-xs sm:text-sm leading-relaxed">
-                {activeVideo.description}
-              </p>
-
-              {/* Timestamps Chapter Index */}
-              <div className="pt-4 border-t border-slate-100 dark:border-slate-800 space-y-2">
-                <h3 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-                  Mốc thời gian các bước thực hành:
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {activeVideo.timestamps.map((stamp, sIdx) => (
-                    <button
-                      key={sIdx}
-                      onClick={() => setActiveTimestamp(stamp.time)}
-                      className={`text-left p-2.5 rounded-xl border text-xs flex items-center gap-2.5 transition ${
-                        activeTimestamp === stamp.time
-                          ? 'bg-red-50 dark:bg-red-950/60 border-red-300 dark:border-red-700 text-red-900 dark:text-red-200 font-bold'
-                          : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
-                      }`}
-                    >
-                      <span className="font-mono text-red-600 dark:text-red-400 font-bold bg-white dark:bg-slate-900 px-1.5 py-0.5 rounded border border-red-200 dark:border-red-800 text-[11px]">
-                        {stamp.time}
-                      </span>
-                      <span className="line-clamp-1">{stamp.label}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
             </div>
-          </div>
-
-          {/* Playlist Sidebar (Col 4) */}
-          <div className="lg:col-span-4 space-y-3">
-            <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100 uppercase tracking-wider px-1">
-              Danh sách thí nghiệm ({filteredVideos.length})
-            </h3>
-            <div className="space-y-2.5">
-              {filteredVideos.map((vid) => {
-                const isActive = vid.id === activeVideo.id;
-                return (
-                  <button
-                    key={vid.id}
-                    onClick={() => {
-                      setActiveVideo(vid);
-                      setActiveTimestamp(vid.timestamps[0]?.time || '00:00');
-                    }}
-                    className={`w-full text-left p-3 rounded-2xl border transition-all flex items-center gap-3 group ${
-                      isActive
-                        ? 'bg-red-50/70 dark:bg-red-950/40 border-red-300 dark:border-red-700 shadow-sm'
-                        : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 shadow-sm'
-                    }`}
-                  >
-                    <div className="relative w-24 h-16 rounded-xl bg-slate-900 overflow-hidden shrink-0 flex items-center justify-center">
-                      <Play className="w-5 h-5 text-white/80 group-hover:scale-110 transition-transform fill-current" />
-                      <span className="absolute bottom-1 right-1 text-[9px] font-mono bg-black/80 px-1 rounded text-white">
-                        {vid.duration}
-                      </span>
-                    </div>
-
-                    <div className="min-w-0 flex-1">
-                      <span className="text-[10px] font-bold text-red-600 dark:text-red-400 block">
-                        Lớp {vid.grade} • {vid.experimentType}
-                      </span>
-                      <h4 className="font-bold text-xs text-slate-800 dark:text-slate-100 line-clamp-2 mt-0.5 group-hover:text-red-700 dark:group-hover:text-red-400">
-                        {vid.title}
-                      </h4>
-                      <span className="text-[10px] text-slate-400 dark:text-slate-500 mt-1 block">
-                        {vid.views.toLocaleString()} lượt xem
-                      </span>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+          ))}
         </div>
       </div>
     </div>

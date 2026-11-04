@@ -5,7 +5,7 @@ import { Grade, SubjectDomain } from './index.ts';
  * - 'declarative_glb': Model uploaded/configured by admin via GLB/GLTF + predefined controls. Zero code editing required.
  * - 'custom_tsx': Programmed in TypeScript/React with full scientific physics, tested and deployed via Git.
  */
-export type SimulationMode = 'declarative_glb' | 'custom_tsx';
+export type SimulationMode = 'declarative_glb' | 'custom_tsx' | 'external_embed';
 
 /**
  * Publication status:
@@ -117,6 +117,7 @@ export interface SimulationManifest {
   learningObjectives: string[];
   keyConcepts: KeyConceptDef[];
   modelAsset?: ModelAssetDef;
+  externalUrl?: string;
   controlsConfig: PredefinedControlsConfig;
   annotations: SimulationAnnotation[];
   scientificExplanation: {

@@ -102,11 +102,11 @@ export const SimulationManager: React.FC<SimulationManagerProps> = ({ lessons, s
 
   // Toggle publish
   const handleTogglePublish = async (sim: SimulationManifest) => {
-    const nextStatus = sim.status === 'published' ? false : true;
-    const ok = await toggleSimulationPublish(sim.id, nextStatus);
-    if (ok) {
+    const nextStatus = sim.status === 'published' ? 'draft' : 'published';
+    const updated = await toggleSimulationPublish(sim.id, nextStatus);
+    if (updated) {
       showToast(
-        nextStatus
+        nextStatus === 'published'
           ? `Đã xuất bản mô phỏng "${sim.title}". Học sinh có thể xem ngay.`
           : `Đã chuyển sang Bản nháp "${sim.title}". Chỉ giáo viên/admin mới thấy.`
       );
@@ -119,8 +119,8 @@ export const SimulationManager: React.FC<SimulationManagerProps> = ({ lessons, s
   // Delete
   const handleConfirmDelete = async () => {
     if (!deleteModal.id) return;
-    const res = await deleteSimulation(deleteModal.id);
-    if (res.success) {
+    const deleted = await deleteSimulation(deleteModal.id);
+    if (deleted) {
       showToast(`Đã xóa mô phỏng "${deleteModal.title}"`);
       setDeleteModal({ isOpen: false, id: '', title: '' });
       loadSims();
@@ -136,10 +136,10 @@ export const SimulationManager: React.FC<SimulationManagerProps> = ({ lessons, s
         <div>
           <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
             <Atom className="w-5 h-5 text-teal-500" />
-            <span>Hệ Thống Quản Lý Mô Phỏng Khoa Học 3D</span>
+            <span>Hệ Thống Quản Lý KHOA HỌC SỐ KHTN 3D</span>
           </h3>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            Quản trị mô hình 3D GDPT 2018: Upload tệp GLB không cần sửa code (Chế độ 1) & Tích hợp TSX Code (Chế độ 2).
+            Quản trị mô hình 3D bộ sách Kết nối tri thức: Upload tệp GLB không cần sửa code (Chế độ 1) & Tích hợp TSX Code (Chế độ 2).
           </p>
         </div>
 
@@ -271,6 +271,7 @@ export const SimulationManager: React.FC<SimulationManagerProps> = ({ lessons, s
               className="px-2.5 py-1 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs"
             >
               <option value="all">Tất cả chế độ</option>
+              <option value="external_embed">Web 3D / AI Studio URL</option>
               <option value="declarative_glb">Chế độ 1: GLB Upload ({mode1Count})</option>
               <option value="custom_tsx">Chế độ 2: TSX Code ({mode2Count})</option>
             </select>
@@ -284,11 +285,10 @@ export const SimulationManager: React.FC<SimulationManagerProps> = ({ lessons, s
               onChange={(e) => setSelectedDomain(e.target.value as any)}
               className="px-2.5 py-1 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs"
             >
-              <option value="all">Tất cả phân môn</option>
-              <option value="hoa-hoc">Hóa học</option>
+              <option value="all">Tất cả 3 phân môn</option>
               <option value="vat-li">Vật lí</option>
+              <option value="hoa-hoc">Hóa học</option>
               <option value="sinh-hoc">Sinh học</option>
-              <option value="trai-dat-vu-tru">Trái Đất và Vũ trụ</option>
             </select>
           </div>
         </div>
@@ -320,12 +320,18 @@ export const SimulationManager: React.FC<SimulationManagerProps> = ({ lessons, s
                   <div className="absolute top-3 left-3 flex flex-wrap gap-1.5 z-10">
                     <span
                       className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
-                        sim.mode === 'declarative_glb'
+                        sim.mode === 'external_embed'
+                          ? 'bg-sky-600 text-white'
+                          : sim.mode === 'declarative_glb'
                           ? 'bg-teal-600 text-white'
                           : 'bg-purple-600 text-white'
                       }`}
                     >
-                      {sim.mode === 'declarative_glb' ? 'GLB Model' : 'TSX Code'}
+                      {sim.mode === 'external_embed'
+                        ? 'Web 3D URL'
+                        : sim.mode === 'declarative_glb'
+                        ? 'GLB Model'
+                        : 'TSX Code'}
                     </span>
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-900/80 text-white backdrop-blur-sm">
                       Lớp {sim.grade} • v{sim.version}
@@ -561,15 +567,38 @@ export const SimulationManager: React.FC<SimulationManagerProps> = ({ lessons, s
                 <Sparkles className="w-4 h-4 text-teal-400" />
                 <span className="font-bold text-sm">Xem trước 3D: {previewingSimulation.title}</span>
               </div>
-              <button
-                onClick={() => setPreviewingSimulation(null)}
-                className="w-7 h-7 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center"
-              >
-                ✕
-              </button>
+              <div className="flex items-center gap-2">
+                {previewingSimulation.externalUrl && (
+                  <a
+                    href={previewingSimulation.externalUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-1 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold flex items-center gap-1"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span>Mở tab mới</span>
+                  </a>
+                )}
+                <button
+                  onClick={() => setPreviewingSimulation(null)}
+                  className="w-7 h-7 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center"
+                >
+                  ✕
+                </button>
+              </div>
             </div>
-            <div className="flex-1 w-full h-full overflow-hidden">
-              <ModelViewer manifest={previewingSimulation} />
+            <div className="flex-1 w-full h-full overflow-hidden bg-slate-950">
+              {previewingSimulation.externalUrl ? (
+                <iframe
+                  src={previewingSimulation.externalUrl}
+                  title={previewingSimulation.title}
+                  className="w-full h-full border-0"
+                  allow="fullscreen; accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                />
+              ) : (
+                <ModelViewer manifest={previewingSimulation} />
+              )}
             </div>
           </div>
         </div>

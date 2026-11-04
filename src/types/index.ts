@@ -1,6 +1,6 @@
 export type Grade = 6 | 7 | 8 | 9;
 
-export type SubjectDomain = 'vat-li' | 'hoa-hoc' | 'sinh-hoc' | 'trai-dat-vu-tru';
+export type SubjectDomain = 'vat-li' | 'hoa-hoc' | 'sinh-hoc';
 
 export interface DomainInfo {
   id: SubjectDomain;
@@ -9,8 +9,10 @@ export interface DomainInfo {
   color: string;
   bgColor: string;
   borderColor: string;
+  gradient?: string;
   iconName: string;
   description: string;
+  image?: string;
 }
 
 export interface Topic {
@@ -18,12 +20,15 @@ export interface Topic {
   grade: Grade;
   domain: SubjectDomain;
   code: string;
+  chapterNumber?: string;
   title: string;
   description: string;
   lessonCount: number;
+  lessonsCount?: number;
   experimentCount: number;
   icon: string;
   order: number;
+  image?: string;
 }
 
 export interface LessonSection {
@@ -34,6 +39,26 @@ export interface LessonSection {
   formulaMeaning?: string;
   imageUrl?: string;
   imageCaption?: string;
+  highlightBox?: {
+    title: string;
+    text: string;
+  };
+}
+
+export interface LessonMiniQuizItem {
+  question: string;
+  options: string[];
+  correctIndex: number;
+  explanation: string;
+}
+
+export interface LessonAsset {
+  id: string;
+  title: string;
+  format: 'pptx' | 'pdf' | 'docx';
+  type: string;
+  fileSize: string;
+  fileUrl: string;
 }
 
 export interface Lesson {
@@ -44,10 +69,13 @@ export interface Lesson {
   code: string;
   title: string;
   summary: string;
-  objectives: string[]; // Yêu cầu cần đạt theo GDPT 2018
+  objectives: string[];
   durationMinutes: number;
   sections: LessonSection[];
   keyTakeaways: string[];
+  keyFormulas?: string[];
+  miniQuiz?: LessonMiniQuizItem[];
+  assets?: LessonAsset[];
   thumbnailUrl?: string;
   simulationId?: string;
   videoUrl?: string;
@@ -67,8 +95,18 @@ export interface Simulation3D {
   learningGoal: string;
   keyConcepts: string[];
   thumbnail: string;
-  type: 'atom-bohr' | 'microscope-cell' | 'electric-circuit' | 'acid-base-ph' | 'solar-system' | 'light-refraction' | 'water-molecule' | 'declarative-model';
-  difficulty: 'Cơ bản' | 'Nâng cao' | 'Chuyên sâu';
+  type:
+    | 'atom-bohr'
+    | 'microscope-cell'
+    | 'electric-circuit'
+    | 'acid-base-ph'
+    | 'solar-system'
+    | 'light-refraction'
+    | 'water-molecule'
+    | 'declarative-model'
+    | 'external-embed';
+  externalUrl?: string;
+  difficulty: 'Cơ bản' | 'Trung bình' | 'Nâng cao' | 'Chuyên sâu';
   relatedLessonId?: string;
   controlsDescription: { key: string; action: string }[];
   parameters: {
@@ -88,15 +126,20 @@ export interface DocumentItem {
   grade: Grade;
   domain: SubjectDomain;
   format: 'pptx' | 'pdf' | 'docx';
-  type: 'Giáo án điện tử' | 'Phiếu học tập' | 'Sơ đồ tư duy' | 'Đề kiểm tra 15p/1T';
+  type: string;
   pageCount: number;
+  pagesCount?: number;
   fileSize: string;
   description: string;
   author: string;
   downloadCount: number;
+  downloadsCount?: number;
   previewSlides?: string[];
   downloadUrl: string;
+  fileUrl?: string;
 }
+
+export type DocumentResource = DocumentItem;
 
 export interface VideoLesson {
   id: string;
@@ -108,11 +151,15 @@ export interface VideoLesson {
   experimentType: 'Thí nghiệm thực hành' | 'Bài giảng lý thuyết' | 'Mô phỏng 3D hướng dẫn';
   instructor: string;
   description: string;
+  summary?: string;
+  thumbnail?: string;
   views: number;
   timestamps: { time: string; label: string }[];
 }
 
-export type QuestionType = 'single_choice' | 'multiple_choice' | 'true_false';
+export type VideoResource = VideoLesson;
+
+export type QuestionType = 'single_choice' | 'multiple_choice' | 'true_false' | 'essay';
 
 export interface QuizQuestion {
   id: string;
@@ -126,6 +173,9 @@ export interface QuizQuestion {
   correctAnswer?: number; // 0-based index for single_choice/true_false
   correctAnswers?: number[]; // array of 0-based indices for multiple_choice
   explanation: string;
+  solutionSteps?: string[]; // Hướng dẫn giải từng bước chi tiết
+  sampleAnswer?: string; // Đáp án mẫu / biểu điểm cho câu hỏi tự luận
+  allowImageUpload?: boolean; // Cho phép học sinh tải file ảnh bài làm lên (mặc định true với tự luận)
   difficulty: 'Nhận biết' | 'Thông hiểu' | 'Vận dụng';
   hint?: string;
   points?: number;

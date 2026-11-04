@@ -251,7 +251,7 @@ export const AcidBaseSimulation: React.FC<AcidBaseSimulationProps> = ({
       {/* Top Header Badge */}
       <div className="absolute top-4 left-4 z-10 flex flex-wrap items-center gap-2">
         <span className="px-3 py-1 text-xs font-semibold uppercase tracking-wider rounded-lg bg-teal-500/20 text-teal-300 border border-teal-500/40">
-          Chuẩn độ Axit - Bazơ & Thang đo pH
+          Chuẩn độ Acid - Base & Thang đo pH
         </span>
         <div className="px-3 py-1 text-xs font-medium rounded-lg bg-slate-900/80 text-white border border-slate-700 backdrop-blur-md">
           {label}

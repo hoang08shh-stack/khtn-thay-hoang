@@ -13,6 +13,9 @@ import { UserProgress } from './types/index.ts';
 import { NotificationProvider, useNotification } from './context/NotificationContext.tsx';
 import { PushNotificationToast } from './components/notifications/PushNotificationToast.tsx';
 
+import { AdminPage } from './pages/AdminPage.tsx';
+import { QuizPracticePage } from './pages/QuizPracticePage.tsx';
+
 // Lazy-loaded pages to optimize initial bundle size on Cloudflare Pages
 const Grade6Page = lazy(() => import('./pages/GradeTemplatePage.tsx').then((m) => ({ default: m.Grade6Page })));
 const Grade7Page = lazy(() => import('./pages/GradeTemplatePage.tsx').then((m) => ({ default: m.Grade7Page })));
@@ -24,10 +27,9 @@ const DocumentsPage = lazy(() => import('./pages/DocumentsPage.tsx').then((m) =>
 const VideosPage = lazy(() => import('./pages/VideosPage.tsx').then((m) => ({ default: m.VideosPage })));
 const Lab3DPage = lazy(() => import('./pages/Lab3DPage.tsx').then((m) => ({ default: m.Lab3DPage })));
 const SimulationDetailPage = lazy(() => import('./pages/SimulationDetailPage.tsx').then((m) => ({ default: m.SimulationDetailPage })));
-const QuizPracticePage = lazy(() => import('./pages/QuizPracticePage.tsx').then((m) => ({ default: m.QuizPracticePage })));
+const ScienceGamesPage = lazy(() => import('./pages/ScienceGamesPage.tsx').then((m) => ({ default: m.ScienceGamesPage })));
 const AuthPage = lazy(() => import('./pages/AuthPage.tsx').then((m) => ({ default: m.AuthPage })));
 const StudentProgressPage = lazy(() => import('./pages/StudentProgressPage.tsx').then((m) => ({ default: m.StudentProgressPage })));
-const AdminPage = lazy(() => import('./pages/AdminPage.tsx').then((m) => ({ default: m.AdminPage })));
 
 // Loading indicator for code-split route transitions
 function PageLoadingFallback() {
@@ -81,12 +83,14 @@ function AppContent() {
             <Route path="/lop-8" element={<Grade8Page />} />
             <Route path="/lop-9" element={<Grade9Page />} />
             <Route path="/chu-de" element={<TopicsPage />} />
+            <Route path="/chuyen-de" element={<TopicsPage />} />
             <Route path="/bai-hoc/:lessonId" element={<LessonDetailPage />} />
             <Route path="/tai-lieu" element={<DocumentsPage />} />
             <Route path="/video" element={<VideosPage />} />
             <Route path="/phong-thi-nghiem-3d" element={<Lab3DPage />} />
             <Route path="/mo-phong/:simId" element={<SimulationDetailPage />} />
             <Route path="/luyen-tap" element={<QuizPracticePage />} />
+            <Route path="/tro-choi" element={<ScienceGamesPage />} />
             <Route path="/dang-nhap" element={<AuthPage />} />
             <Route path="/dang-ky" element={<AuthPage />} />
 
@@ -102,7 +106,7 @@ function AppContent() {
             <Route
               path="/quan-tri"
               element={
-                <ProtectedRoute requireAuth={true} allowedRoles={['admin', 'teacher']}>
+                <ProtectedRoute requireAuth={true} allowedRoles={['admin']}>
                   <AdminPage />
                 </ProtectedRoute>
               }

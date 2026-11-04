@@ -13,12 +13,12 @@ interface AtomSimulationProps {
 }
 
 const PRESET_ELEMENTS = [
-  { name: 'Hydro (Hydrogen)', symbol: 'H', p: 1, n: 0 },
-  { name: 'Heli (Helium)', symbol: 'He', p: 2, n: 2 },
-  { name: 'Cacbon (Carbon)', symbol: 'C', p: 6, n: 6 },
-  { name: 'Oxy (Oxygen)', symbol: 'O', p: 8, n: 8 },
-  { name: 'Natri (Sodium)', symbol: 'Na', p: 11, n: 12 },
-  { name: 'Clo (Chlorine)', symbol: 'Cl', p: 17, n: 18 },
+  { name: 'Hydrogen', symbol: 'H', p: 1, n: 0 },
+  { name: 'Helium', symbol: 'He', p: 2, n: 2 },
+  { name: 'Carbon', symbol: 'C', p: 6, n: 6 },
+  { name: 'Oxygen', symbol: 'O', p: 8, n: 8 },
+  { name: 'Sodium', symbol: 'Na', p: 11, n: 12 },
+  { name: 'Chlorine', symbol: 'Cl', p: 17, n: 18 },
 ];
 
 export const AtomSimulation: React.FC<AtomSimulationProps> = ({

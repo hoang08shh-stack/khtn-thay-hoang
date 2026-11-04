@@ -46,7 +46,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           const currentSession = res?.data?.session;
           if (mounted && currentSession) {
             setSession(currentSession);
-            const { profile, role } = await fetchUserProfileAndRole(currentSession.user.id);
+            const { profile, role } = await fetchUserProfileAndRole(currentSession.user.id, currentSession.user.email);
             setUser({
               id: currentSession.user.id,
               email: currentSession.user.email || '',
@@ -73,7 +73,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           setSession(newSession);
 
           if (newSession?.user) {
-            const { profile, role } = await fetchUserProfileAndRole(newSession.user.id);
+            const { profile, role } = await fetchUserProfileAndRole(newSession.user.id, newSession.user.email);
             setUser({
               id: newSession.user.id,
               email: newSession.user.email || '',

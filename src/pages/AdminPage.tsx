@@ -4,21 +4,75 @@ import { Breadcrumbs } from '../components/common/Breadcrumbs.tsx';
 import { isSupabaseConfigured } from '../lib/supabase.ts';
 import { useAuth } from '../hooks/useAuth.ts';
 import { SIMULATIONS_3D, DOMAINS } from '../data/mockData.ts';
-import { Grade, SubjectDomain } from '../types/index.ts';
+import {
+  Grade,
+  SubjectDomain,
+  Topic,
+  QuizQuestion,
+  QuizMeta,
+  VideoLesson,
+  DocumentItem,
+  AppUser,
+} from '../types/index.ts';
+import {
+  SciencePairItem,
+  CrosswordRowItem,
+  DetectivePuzzleItem,
+} from '../utils/scienceGameEngine.ts';
 import {
   AdminLesson,
   LessonAssetItem,
+  SiteSettings,
   fetchAdminLessons,
   toggleLessonPublish,
   deleteAdminLesson,
   fetchAllAdminDocuments,
   deleteAdminAsset,
-  updateAssetMetadata,
+  fetchAdminTopics,
+  saveAdminTopic,
+  deleteAdminTopic,
+  fetchAdminQuestions,
+  saveAdminQuestion,
+  deleteAdminQuestion,
+  fetchAdminQuizzes,
+  saveAdminQuiz,
+  deleteAdminQuiz,
+  fetchAdminVideos,
+  saveAdminVideo,
+  deleteAdminVideo,
+  fetchAdminCatalogDocs,
+  saveAdminCatalogDoc,
+  deleteAdminCatalogDoc,
+  getAdminGamePairsSync,
+  saveAdminGamePair,
+  deleteAdminGamePair,
+  getAdminCrosswordsSync,
+  saveAdminCrossword,
+  deleteAdminCrossword,
+  getAdminDetectivePuzzlesSync,
+  saveAdminDetectivePuzzle,
+  deleteAdminDetectivePuzzle,
+  getAdminUsersSync,
+  saveAdminUser,
+  deleteAdminUser,
+  getSiteSettingsSync,
+  saveSiteSettingsSync,
+  resetAllAdminDataToDefault,
 } from '../services/adminService.ts';
 import { LessonFormModal } from '../components/admin/LessonFormModal.tsx';
 import { DeleteConfirmModal } from '../components/admin/DeleteConfirmModal.tsx';
 import { AssetUploader } from '../components/admin/AssetUploader.tsx';
 import { SimulationManager } from '../components/admin/SimulationManager.tsx';
+import {
+  ScientificSolutionView,
+  renderFormattedMathAndChem,
+} from '../components/common/ScientificSolutionView.tsx';
+import { WordQuestionImportModal } from '../components/admin/WordQuestionImportModal.tsx';
+import {
+  parseExplanationIntoSteps,
+  generateStepByStepSolution,
+  generateDetailedExplanation,
+} from '../utils/wordQuestionParser.ts';
 import {
   ShieldCheck,
   BookOpen,
@@ -28,52 +82,111 @@ import {
   Trash2,
   Edit,
   Database,
-  Cloud,
   CheckCircle2,
-  Copy,
   Search,
   Filter,
   Eye,
   Video,
-  UploadCloud,
   FileUp,
   AlertCircle,
   ExternalLink,
   RefreshCw,
   Clock,
   Layers,
-  ArrowUpDown,
   Lock,
+  CheckSquare,
+  Gamepad2,
+  Users,
+  Settings,
+  FolderKanban,
+  Download,
+  RotateCcw,
+  Save,
+  X,
+  UserCheck,
 } from 'lucide-react';
 
+type AdminTabId =
+  | 'overview'
+  | 'topics'
+  | 'lessons'
+  | 'sims'
+  | 'quizzes'
+  | 'games'
+  | 'videos'
+  | 'docs'
+  | 'users';
+
 export const AdminPage: React.FC = () => {
-  const { user, role } = useAuth();
+  const { user } = useAuth();
 
-  // Navigation tab
-  const [activeTab, setActiveTab] = useState<'overview' | 'lessons' | 'docs' | 'sims' | 'schema'>('lessons');
+  // Active Navigation Tab
+  const [activeTab, setActiveTab] = useState<AdminTabId>('overview');
 
-  // Lessons state
+  // 1. Lessons State
   const [lessons, setLessons] = useState<AdminLesson[]>([]);
   const [isLoadingLessons, setIsLoadingLessons] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedGrade, setSelectedGrade] = useState<number | 'all'>('all');
+  const [selectedGrade, setSelectedGrade] = useState<Grade | 'all'>('all');
   const [selectedDomain, setSelectedDomain] = useState<SubjectDomain | 'all'>('all');
   const [selectedStatus, setSelectedStatus] = useState<'all' | 'published' | 'draft'>('all');
 
-  // Documents state
+  // 2. Topics State
+  const [topics, setTopics] = useState<Topic[]>([]);
+  const [topicFilterGrade, setTopicFilterGrade] = useState<Grade | 'all'>('all');
+  const [topicFilterDomain, setTopicFilterDomain] = useState<SubjectDomain | 'all'>('all');
+  const [editingTopic, setEditingTopic] = useState<Partial<Topic> | null>(null);
+
+  // 3. Quizzes & Questions State
+  const [quizSubTab, setQuizSubTab] = useState<'questions' | 'exams'>('questions');
+  const [questions, setQuestions] = useState<QuizQuestion[]>([]);
+  const [quizzes, setQuizzes] = useState<QuizMeta[]>([]);
+  const [questionFilterGrade, setQuestionFilterGrade] = useState<Grade | 'all'>('all');
+  const [questionFilterDomain, setQuestionFilterDomain] = useState<SubjectDomain | 'all'>('all');
+  const [editingQuestion, setEditingQuestion] = useState<Partial<QuizQuestion> | null>(null);
+  const [editingQuiz, setEditingQuiz] = useState<Partial<QuizMeta> | null>(null);
+  const [isWordImportOpen, setIsWordImportOpen] = useState(false);
+
+  // 4. Games State
+  const [gameSubTab, setGameSubTab] = useState<'pairs' | 'crosswords' | 'detective'>('pairs');
+  const [gamePairs, setGamePairs] = useState<SciencePairItem[]>([]);
+  const [crosswords, setCrosswords] = useState<CrosswordRowItem[]>([]);
+  const [detectivePuzzles, setDetectivePuzzles] = useState<DetectivePuzzleItem[]>([]);
+  const [editingPair, setEditingPair] = useState<Partial<SciencePairItem> | null>(null);
+  const [editingCrossword, setEditingCrossword] = useState<Partial<CrosswordRowItem> | null>(null);
+  const [editingDetective, setEditingDetective] = useState<Partial<DetectivePuzzleItem> | null>(null);
+
+  // 5. Videos State
+  const [videos, setVideos] = useState<VideoLesson[]>([]);
+  const [videoFilterGrade, setVideoFilterGrade] = useState<Grade | 'all'>('all');
+  const [editingVideo, setEditingVideo] = useState<Partial<VideoLesson> | null>(null);
+
+  // 6. Documents State (Catalog + Storage)
+  const [docSubTab, setDocSubTab] = useState<'catalog' | 'storage'>('catalog');
+  const [catalogDocs, setCatalogDocs] = useState<DocumentItem[]>([]);
   const [documents, setDocuments] = useState<LessonAssetItem[]>([]);
   const [docFormatFilter, setDocFormatFilter] = useState<'all' | 'pptx' | 'pdf' | 'docx' | 'image'>('all');
+  const [editingCatalogDoc, setEditingCatalogDoc] = useState<Partial<DocumentItem> | null>(null);
 
-  // Modals state
+  // 7. Users State
+  const [usersList, setUsersList] = useState<AppUser[]>([]);
+  const [editingUser, setEditingUser] = useState<Partial<AppUser> | null>(null);
+
+  // 8. Site Settings & Reset Confirmation
+  const [siteSettings, setSiteSettings] = useState<SiteSettings>(() => getSiteSettingsSync());
+  const [confirmResetOpen, setConfirmResetOpen] = useState(false);
+
+  // Modals State for Lessons & Delete Confirmation
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [editingLesson, setEditingLesson] = useState<AdminLesson | null>(null);
 
   const [deleteModalState, setDeleteModalState] = useState<{
     isOpen: boolean;
-    itemType: 'bài học' | 'tài liệu' | 'mô phỏng';
+    itemType: string;
     id: string;
     name: string;
     storagePath?: string;
+    onCustomDelete?: () => Promise<void>;
   }>({
     isOpen: false,
     itemType: 'bài học',
@@ -82,84 +195,100 @@ export const AdminPage: React.FC = () => {
   });
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Notifications
+  // Toast Notification
   const [toastMessage, setToastMessage] = useState<{
     type: 'success' | 'error';
     text: string;
   } | null>(null);
-
-  // SQL Migration active view
-  const [activeSqlTab, setActiveSqlTab] = useState<'000' | '001' | '002' | '003' | '004' | '005' | '006'>('006');
-  const [copiedSql, setCopiedSql] = useState(false);
-
-  // Load data
-  const loadLessons = async () => {
-    setIsLoadingLessons(true);
-    try {
-      const data = await fetchAdminLessons();
-      setLessons(data);
-      const docs = await fetchAllAdminDocuments();
-      setDocuments(docs);
-    } catch (err) {
-      console.error('Error loading admin lessons:', err);
-    } finally {
-      setIsLoadingLessons(false);
-    }
-  };
-
-  useEffect(() => {
-    loadLessons();
-  }, []);
 
   const showToast = (text: string, type: 'success' | 'error' = 'success') => {
     setToastMessage({ text, type });
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  // Toggle publish
+  // Load All System Data
+  const loadAllData = async () => {
+    setIsLoadingLessons(true);
+    try {
+      const [
+        lessonsData,
+        docsData,
+        topicsData,
+        questionsData,
+        quizzesData,
+        videosData,
+        catalogDocsData,
+      ] = await Promise.all([
+        fetchAdminLessons(),
+        fetchAllAdminDocuments(),
+        fetchAdminTopics(),
+        fetchAdminQuestions(),
+        fetchAdminQuizzes(),
+        fetchAdminVideos(),
+        fetchAdminCatalogDocs(),
+      ]);
+      setLessons(lessonsData);
+      setDocuments(docsData);
+      setTopics(topicsData);
+      setQuestions(questionsData);
+      setQuizzes(quizzesData);
+      setVideos(videosData);
+      setCatalogDocs(catalogDocsData);
+      setGamePairs(getAdminGamePairsSync());
+      setCrosswords(getAdminCrosswordsSync());
+      setDetectivePuzzles(getAdminDetectivePuzzlesSync());
+      setUsersList(getAdminUsersSync());
+      setSiteSettings(getSiteSettingsSync());
+    } catch (err) {
+      console.error('Error loading admin data:', err);
+    } finally {
+      setIsLoadingLessons(false);
+    }
+  };
+
+  useEffect(() => {
+    loadAllData();
+  }, []);
+
+  // Lesson handlers
   const handleTogglePublish = async (lesson: AdminLesson) => {
     const newStatus = !lesson.isPublished;
-    // Optimistic update
     setLessons((prev) =>
       prev.map((l) => (l.id === lesson.id ? { ...l, isPublished: newStatus } : l))
     );
-
     const success = await toggleLessonPublish(lesson.id, newStatus);
     if (success) {
       showToast(
         newStatus
-          ? `Đã xuất bản bài: "${lesson.title}". Học sinh có thể xem ngay.`
-          : `Đã chuyển sang Bản nháp: "${lesson.title}". Chỉ giáo viên/admin mới thấy.`
+          ? `Đã xuất bản bài: "${lesson.title}".`
+          : `Đã chuyển sang Bản nháp: "${lesson.title}".`
       );
     } else {
       showToast('Không thể cập nhật trạng thái xuất bản.', 'error');
-      loadLessons();
+      loadAllData();
     }
   };
 
-  // Open create form
-  const handleOpenCreate = () => {
+  const handleOpenCreateLesson = () => {
     setEditingLesson(null);
     setIsFormModalOpen(true);
   };
 
-  // Open edit form
-  const handleOpenEdit = (lesson: AdminLesson) => {
+  const handleOpenEditLesson = (lesson: AdminLesson) => {
     setEditingLesson(lesson);
     setIsFormModalOpen(true);
   };
 
-  // Confirm delete
   const handleConfirmDelete = async () => {
     setIsDeleting(true);
     try {
-      if (deleteModalState.itemType === 'bài học') {
+      if (deleteModalState.onCustomDelete) {
+        await deleteModalState.onCustomDelete();
+      } else if (deleteModalState.itemType === 'bài học') {
         const success = await deleteAdminLesson(deleteModalState.id);
         if (success) {
           showToast(`Đã xóa bài học: "${deleteModalState.name}"`);
           setLessons((prev) => prev.filter((l) => l.id !== deleteModalState.id));
-        } else {
-          showToast('Lỗi khi xóa bài học.', 'error');
         }
       } else if (deleteModalState.itemType === 'tài liệu') {
         const success = await deleteAdminAsset(
@@ -167,20 +296,66 @@ export const AdminPage: React.FC = () => {
           deleteModalState.storagePath
         );
         if (success) {
-          showToast(`Đã xóa tài liệu khỏi Storage và CSDL.`);
+          showToast(`Đã xóa tệp học liệu khỏi kho lưu trữ.`);
           setDocuments((prev) => prev.filter((d) => d.id !== deleteModalState.id));
-        } else {
-          showToast('Lỗi khi xóa tài liệu.', 'error');
         }
       }
     } finally {
       setIsDeleting(false);
       setDeleteModalState({ isOpen: false, itemType: 'bài học', id: '', name: '' });
-      loadLessons();
+      loadAllData();
     }
   };
 
-  // Filter lessons
+  // Export System Data as JSON
+  const handleExportAllData = () => {
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      siteSettings,
+      topics,
+      lessons,
+      questions,
+      quizzes,
+      videos,
+      catalogDocs,
+      games: {
+        pairs: gamePairs,
+        crosswords,
+        detectivePuzzles,
+      },
+      users: usersList,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `khtn-cms-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('Đã xuất tệp sao lưu toàn bộ dữ liệu hệ thống (.JSON)!');
+  };
+
+  const handleResetAllToDefault = () => {
+    resetAllAdminDataToDefault();
+    setConfirmResetOpen(false);
+    loadAllData();
+    showToast('Đã khôi phục toàn bộ dữ liệu về mặc định gốc!');
+  };
+
+  // Switch active user account in localStorage
+  const handleSwitchUserAccount = (targetUser: AppUser) => {
+    try {
+      localStorage.setItem('khtn_hoang_user', JSON.stringify(targetUser));
+      showToast(`Đã chuyển phiên tài khoản sang: ${targetUser.fullName} (${targetUser.role})`);
+      setTimeout(() => {
+        window.location.reload();
+      }, 600);
+    } catch {
+      showToast('Không thể chuyển tài khoản.', 'error');
+    }
+  };
+
+  // Filtered Lists
   const filteredLessons = lessons.filter((l) => {
     if (selectedGrade !== 'all' && l.grade !== selectedGrade) return false;
     if (selectedDomain !== 'all' && l.domain !== selectedDomain) return false;
@@ -188,175 +363,65 @@ export const AdminPage: React.FC = () => {
     if (selectedStatus === 'draft' && l.isPublished) return false;
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
-      const matchTitle = l.title.toLowerCase().includes(q);
-      const matchCode = l.code.toLowerCase().includes(q);
-      const matchSlug = (l.slug || '').toLowerCase().includes(q);
-      return matchTitle || matchCode || matchSlug;
+      return (
+        l.title.toLowerCase().includes(q) ||
+        l.code.toLowerCase().includes(q) ||
+        (l.slug || '').toLowerCase().includes(q)
+      );
     }
     return true;
   });
 
-  // Filter documents
+  const filteredTopics = topics.filter((t) => {
+    if (topicFilterGrade !== 'all' && t.grade !== topicFilterGrade) return false;
+    if (topicFilterDomain !== 'all' && t.domain !== topicFilterDomain) return false;
+    return true;
+  });
+
+  const filteredQuestions = questions.filter((q) => {
+    if (questionFilterGrade !== 'all' && q.grade !== questionFilterGrade) return false;
+    if (questionFilterDomain !== 'all' && q.domain !== questionFilterDomain) return false;
+    return true;
+  });
+
+  const filteredVideos = videos.filter((v) => {
+    if (videoFilterGrade !== 'all' && v.grade !== videoFilterGrade) return false;
+    return true;
+  });
+
   const filteredDocuments = documents.filter((doc) => {
     if (docFormatFilter === 'all') return true;
     if (docFormatFilter === 'image') return ['png', 'jpg', 'jpeg', 'webp'].includes(doc.format);
     return doc.format === docFormatFilter;
   });
 
-  // Calculate stats
+  // Counts
   const totalLessonsCount = lessons.length;
   const publishedCount = lessons.filter((l) => l.isPublished).length;
   const draftCount = totalLessonsCount - publishedCount;
-  const totalDocsCount = documents.length;
+  const totalGamesItems = gamePairs.length + crosswords.length + detectivePuzzles.length;
 
-  const sqlSnippets: Record<string, string> = {
-    '000': `-- 20261029000000_schema_and_rls.sql
--- Khởi tạo 14 bảng dữ liệu, Enum và Row Level Security:
--- profiles, user_roles, topics, lessons, lesson_assets,
--- simulations, lesson_simulations, quizzes, questions,
--- question_options, answer_keys, quiz_attempts, attempt_answers, lesson_progress.
--- Trigger handle_new_user() tự động gán role = 'student' không thể tự nâng quyền.
--- RPC public.submit_quiz_attempt() chấm điểm bảo mật tại máy chủ DB.`,
-    '001': `-- 20261029000001_seed_data.sql
--- Nạp dữ liệu chuẩn Chương trình Giáo dục Phổ thông 2018:
--- Chuyên đề Hóa học, Vật lí, Sinh học, Thiên văn lớp 6, 7, 8, 9.
--- 6 trạm mô phỏng 3D WebGL Three.js.
--- Đề trắc nghiệm và câu hỏi kèm đáp án an toàn trong bảng answer_keys.`,
-    '002': `-- 20261029000002_storage_setup.sql
--- Tạo các Storage Buckets công khai & chính sách bảo vệ RLS:
--- 1. science-assets (Ảnh bìa, mô hình GLTF 3D)
--- 2. lesson-documents (Giáo án PPTX, Phiếu học tập PDF, DOCX)
--- 3. avatars (Ảnh đại diện theo thư mục auth.uid())
--- Chỉ teacher và admin được phép upload/xóa tài liệu bài học.`,
-    '003': `-- 20261029000003_admin_enhancements.sql
--- Mở rộng trường quản trị bài học:
-ALTER TABLE public.lessons
-  ADD COLUMN IF NOT EXISTS slug TEXT,
-  ADD COLUMN IF NOT EXISTS video_url TEXT,
-  ADD COLUMN IF NOT EXISTS order_index INT NOT NULL DEFAULT 0;
-
--- Giới hạn Supabase Free tối đa 50MB (52,428,800 bytes):
-UPDATE storage.buckets
-SET file_size_limit = 52428800
-WHERE id IN ('lesson-documents', 'science-assets');
-
--- Function kiểm tra trùng lặp slug:
-CREATE OR REPLACE FUNCTION public.check_slug_available(p_slug TEXT, p_exclude_id UUID DEFAULT NULL)
-RETURNS BOOLEAN LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
-BEGIN
-  RETURN NOT EXISTS (
-    SELECT 1 FROM public.lessons
-    WHERE (slug = p_slug OR code = p_slug) AND (p_exclude_id IS NULL OR id != p_exclude_id)
-  );
-END; $$;`,
-    '004': `-- 20261030000004_simulations_management.sql
--- Bảng simulations và chính sách RLS phân quyền Chế độ 1 (GLB) & Chế độ 2 (TSX):
-CREATE TABLE IF NOT EXISTS public.simulations (
-  id TEXT PRIMARY KEY,
-  slug TEXT UNIQUE NOT NULL,
-  title TEXT NOT NULL,
-  subtitle TEXT,
-  version TEXT NOT NULL DEFAULT '1.0.0',
-  mode TEXT NOT NULL DEFAULT 'declarative_glb' CHECK (mode IN ('declarative_glb', 'custom_tsx')),
-  status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'published')),
-  grade INTEGER NOT NULL CHECK (grade BETWEEN 6 AND 9),
-  domain TEXT NOT NULL CHECK (domain IN ('hoa-hoc', 'vat-li', 'sinh-hoc', 'trai-dat-vu-tru')),
-  category TEXT NOT NULL DEFAULT 'Mô hình 3D',
-  difficulty TEXT NOT NULL DEFAULT 'Cơ bản',
-  curriculum_code TEXT,
-  summary TEXT NOT NULL,
-  thumbnail_url TEXT,
-  model_url TEXT,
-  manifest_data JSONB NOT NULL DEFAULT '{}'::jsonb,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- RLS: Học sinh chỉ xem published, giáo viên/admin toàn quyền quản trị
-ALTER TABLE public.simulations ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Public view published simulations" ON public.simulations FOR SELECT
-USING (status = 'published' OR public.has_role(auth.uid(), 'admin') OR public.has_role(auth.uid(), 'teacher'));
-
-CREATE POLICY "Admins teachers manage simulations" ON public.simulations FOR ALL
-TO authenticated USING (public.has_role(auth.uid(), 'admin') OR public.has_role(auth.uid(), 'teacher'));`,
-    '005': `-- 20261031000005_quiz_and_progress_system.sql
--- Hệ thống trắc nghiệm đa dạng (single_choice, multiple_choice, true_false) & Chấm điểm Server-side:
-ALTER TABLE public.questions
-  ADD COLUMN IF NOT EXISTS question_type TEXT NOT NULL DEFAULT 'single_choice'
-  CHECK (question_type IN ('single_choice', 'multiple_choice', 'true_false')),
-  ADD COLUMN IF NOT EXISTS hint TEXT,
-  ADD COLUMN IF NOT EXISTS difficulty TEXT DEFAULT 'Thông hiểu';
-
--- Hỗ trợ mảng đáp án đúng cho multiple_choice:
-ALTER TABLE public.answer_keys DROP CONSTRAINT IF EXISTS answer_keys_question_id_key;
-ALTER TABLE public.answer_keys ADD COLUMN IF NOT EXISTS correct_option_ids UUID[];
-
--- RLS: Học sinh TUYỆT ĐỐI không có quyền SELECT answer_keys
-ALTER TABLE public.answer_keys ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Only teachers and admins can view answer keys"
-  ON public.answer_keys FOR SELECT TO authenticated USING (public.is_teacher_or_admin());
-
--- RPC Chấm điểm Server-side bảo mật:
-CREATE OR REPLACE FUNCTION public.submit_quiz_attempt(p_quiz_id UUID, p_answers JSONB, p_time_spent_seconds INT DEFAULT 0)
-RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
-... (Chấm điểm tại DB, ghi nhận quiz_attempts, tự động cập nhật lesson_progress) ...
-$$;`,
-    '006': `-- 20261031000006_badge_system.sql
--- Hệ thống Huy Hiệu Năng Lực Học Sinh (Master of Physics, Lab Pioneer, Science Explorer):
-CREATE TABLE IF NOT EXISTS public.badges (
-  id VARCHAR(50) PRIMARY KEY,
-  code VARCHAR(50) UNIQUE NOT NULL,
-  name VARCHAR(100) NOT NULL,
-  title_en VARCHAR(100) NOT NULL,
-  description TEXT NOT NULL,
-  icon VARCHAR(50) NOT NULL DEFAULT 'Award',
-  category VARCHAR(30) NOT NULL DEFAULT 'general',
-  tier VARCHAR(20) NOT NULL DEFAULT 'bronze',
-  required_criteria TEXT NOT NULL,
-  points_reward INT NOT NULL DEFAULT 50,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS public.user_badges (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  badge_id VARCHAR(50) NOT NULL REFERENCES badges(id) ON DELETE CASCADE,
-  earned_at TIMESTAMPTZ DEFAULT NOW(),
-  progress_snapshot JSONB DEFAULT '{}'::jsonb,
-  UNIQUE(user_id, badge_id)
-);
-
--- RLS: Public xem danh mục, Học sinh chỉ xem huy hiệu của chính mình
-ALTER TABLE public.badges ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.user_badges ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Public can view badges catalog" ON public.badges FOR SELECT USING (true);
-CREATE POLICY "Users can view own badges" ON public.user_badges FOR SELECT
-  USING (auth.uid() = user_id OR public.is_admin_or_teacher());
-
--- Server-side RPC đánh giá tự động: evaluate_and_award_badges(p_user_id UUID)
-CREATE OR REPLACE FUNCTION public.evaluate_and_award_badges(p_user_id UUID)
-RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
-... (Đánh giá tiến độ bài học, mô phỏng 3D, điểm số và tự động trao huy hiệu) ...
-$$;`,
-  };
-
-  const copySql = (text: string) => {
-    navigator.clipboard?.writeText(text);
-    setCopiedSql(true);
-    setTimeout(() => setCopiedSql(false), 2000);
-  };
+  const navTabs: { id: AdminTabId; label: string; count?: number; icon: React.FC<{ className?: string }> }[] = [
+    { id: 'overview', label: 'Tổng quan & Cài đặt', icon: Layers },
+    { id: 'topics', label: 'Chủ đề (Lớp 6–9)', count: topics.length, icon: FolderKanban },
+    { id: 'lessons', label: 'Bài giảng', count: totalLessonsCount, icon: BookOpen },
+    { id: 'sims', label: 'Mô phỏng 3D', count: SIMULATIONS_3D.length, icon: Atom },
+    { id: 'quizzes', label: 'Câu hỏi & Đề thi', count: questions.length, icon: CheckSquare },
+    { id: 'games', label: 'Trò chơi KHTN', count: totalGamesItems, icon: Gamepad2 },
+    { id: 'videos', label: 'Video', count: videos.length, icon: Video },
+    { id: 'docs', label: 'Tài liệu & Đề cương', count: catalogDocs.length + documents.length, icon: FileText },
+    { id: 'users', label: 'Học sinh & Tài khoản', count: usersList.length, icon: Users },
+  ];
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 py-8 text-slate-800 dark:text-slate-100">
+    <div className="min-h-screen bg-slate-100 dark:bg-slate-950 py-8 text-slate-800 dark:text-slate-100">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
-        <Breadcrumbs items={[{ label: 'Bảng Điều Khiển Quản Trị Giáo Viên' }]} />
+        <Breadcrumbs items={[{ label: 'Trung Tâm Quản Trị Hệ Thống Toàn Diện (CMS)' }]} />
 
-        {/* Toast alert */}
+        {/* Toast Notification */}
         {toastMessage && (
           <div
-            className={`p-4 rounded-2xl border text-xs sm:text-sm font-semibold flex items-center justify-between shadow-lg animate-fadeIn ${
+            className={`p-4 rounded-2xl border text-xs sm:text-sm font-semibold flex items-center justify-between shadow-md ${
               toastMessage.type === 'success'
                 ? 'bg-emerald-50 dark:bg-emerald-950/80 border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200'
                 : 'bg-red-50 dark:bg-red-950/80 border-red-300 dark:border-red-800 text-red-800 dark:text-red-200'
@@ -364,15 +429,15 @@ $$;`,
           >
             <div className="flex items-center gap-2">
               {toastMessage.type === 'success' ? (
-                <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
               ) : (
-                <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400" />
+                <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 shrink-0" />
               )}
               <span>{toastMessage.text}</span>
             </div>
             <button
               onClick={() => setToastMessage(null)}
-              className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs"
+              className="text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 text-xs font-bold ml-4"
             >
               Đóng
             </button>
@@ -380,117 +445,565 @@ $$;`,
         )}
 
         {/* Admin Dashboard Hero Header */}
-        <div className="bg-gradient-to-r from-slate-900 via-[#0B1F3A] to-slate-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-6 border border-slate-800">
-          <div className="space-y-2">
+        <div className="bg-gradient-to-r from-slate-800 via-[#15283c] to-slate-800 rounded-3xl p-6 sm:p-8 text-white shadow-lg flex flex-col lg:flex-row lg:items-center justify-between gap-6 border border-slate-700/80">
+          <div className="space-y-2.5">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="px-2.5 py-0.5 rounded-full bg-teal-500/20 text-teal-300 border border-teal-500/30 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
-                <ShieldCheck className="w-3.5 h-3.5 text-teal-400" />
-                {role === 'admin' ? 'Quyền Quản Trị Viên (Admin)' : 'Quyền Giáo Viên (Teacher)'}
+              <span className="px-3 py-1 rounded-full bg-teal-500/20 text-teal-300 border border-teal-500/30 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
+                <ShieldCheck className="w-4 h-4 text-teal-300" />
+                Quản Trị Toàn Hệ Thống (Full CMS)
               </span>
-              <span className="text-xs text-slate-400">
-                • Người dùng: <strong className="text-white">{user?.fullName || 'Thầy Hoàng'}</strong> ({user?.email})
+              <span className="text-xs text-slate-300">
+                • Quản trị viên: <strong className="text-white">{user?.fullName || 'Quản trị viên KHTN'}</strong> ({siteSettings.email})
               </span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-              Quản Trị Phòng Thí Nghiệm & Bài Giảng KHTN
+              Quản Trị {siteSettings.siteName} — {siteSettings.labName}
             </h1>
-            <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed">
-              Quản lý toàn diện bài học GDPT 2018 (lớp 6–9), phân loại mạch kiến thức, xuất bản bài viết, tải lên tài liệu PPT/PDF vào Supabase Storage (giới hạn 50MB) và nhúng video YouTube.
+            <p className="text-xs sm:text-sm text-slate-300 max-w-3xl leading-relaxed">
+              Quản lý tập trung tất cả Chủ đề, Bài giảng (Lớp 6–9), Mô phỏng 3D, Ngân hàng câu hỏi trắc nghiệm, Trò chơi học tập (Ghép thẻ, Ô chữ, Thám tử), Video thí nghiệm, Tài liệu và Tài khoản người dùng. Mọi thay đổi được lưu và cập nhật trực tiếp lên trang web.
             </p>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-            <div className="bg-slate-950/80 px-4 py-3 rounded-2xl border border-slate-800 text-xs space-y-1">
-              <div className="flex items-center gap-2 text-slate-200 font-semibold">
-                <Database className="w-4 h-4 text-teal-400" />
-                <span>
-                  Supabase: {isSupabaseConfigured ? 'Kết nối trực tiếp' : 'Đồng bộ Bộ nhớ Cache'}
-                </span>
-              </div>
-              <div className="flex items-center gap-2 text-slate-400 text-[11px]">
-                <Lock className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Bảo vệ RLS: Học sinh không xem được Bản nháp</span>
-              </div>
-            </div>
-
+          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
             <button
-              onClick={handleOpenCreate}
-              className="px-4 py-3 rounded-2xl bg-teal-500 hover:bg-teal-400 text-slate-950 font-extrabold text-xs sm:text-sm shadow-lg shadow-teal-500/20 transition flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-[0.98]"
+              onClick={handleOpenCreateLesson}
+              className="px-4 py-2.5 rounded-2xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs sm:text-sm shadow-sm transition flex items-center gap-2"
             >
               <Plus className="w-4 h-4 stroke-[2.5]" />
               <span>Soạn bài học mới</span>
             </button>
+
+            <a
+              href="/khtn-source-code.zip"
+              download="KHTN-Khoa-Hoc-So-Source-Code.zip"
+              className="px-4 py-2.5 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs sm:text-sm shadow-sm transition flex items-center gap-2"
+              title="Tải toàn bộ mã nguồn dự án về máy (.ZIP) để mở bằng VS Code hoặc tải lên ChatGPT"
+            >
+              <Download className="w-4 h-4 stroke-[2.5]" />
+              <span>Tải mã nguồn (.ZIP)</span>
+            </a>
+
+            <button
+              onClick={handleExportAllData}
+              className="px-4 py-2.5 rounded-2xl bg-slate-700 hover:bg-slate-600 text-slate-100 font-bold text-xs sm:text-sm border border-slate-600 transition flex items-center gap-2"
+              title="Tải xuống toàn bộ dữ liệu dạng JSON"
+            >
+              <Download className="w-4 h-4" />
+              <span>Sao lưu JSON</span>
+            </button>
           </div>
         </div>
 
-        {/* Tab Navigation */}
-        <div className="flex flex-wrap items-center gap-2 bg-white dark:bg-slate-900 p-2 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
-          <button
-            onClick={() => setActiveTab('lessons')}
-            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition flex items-center gap-1.5 ${
-              activeTab === 'lessons'
-                ? 'bg-teal-600 text-white shadow-sm'
-                : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-            }`}
-          >
-            <BookOpen className="w-4 h-4" />
-            <span>Quản lý Bài học ({totalLessonsCount})</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('docs')}
-            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition flex items-center gap-1.5 ${
-              activeTab === 'docs'
-                ? 'bg-teal-600 text-white shadow-sm'
-                : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-            }`}
-          >
-            <FileText className="w-4 h-4" />
-            <span>Kho Tài liệu Storage ({totalDocsCount})</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('overview')}
-            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition flex items-center gap-1.5 ${
-              activeTab === 'overview'
-                ? 'bg-teal-600 text-white shadow-sm'
-                : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-            }`}
-          >
-            <Layers className="w-4 h-4" />
-            <span>Tổng quan hệ thống</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('sims')}
-            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition flex items-center gap-1.5 ${
-              activeTab === 'sims'
-                ? 'bg-teal-600 text-white shadow-sm'
-                : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-            }`}
-          >
-            <Atom className="w-4 h-4" />
-            <span>Trạm Mô phỏng 3D ({SIMULATIONS_3D.length})</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('schema')}
-            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition flex items-center gap-1.5 ${
-              activeTab === 'schema'
-                ? 'bg-slate-800 dark:bg-teal-600 text-white shadow-sm'
-                : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-            }`}
-          >
-            <Database className="w-4 h-4" />
-            <span>Cơ sở Dữ liệu & RLS</span>
-          </button>
+        {/* Multi-Module Navigation Tabs */}
+        <div className="flex flex-wrap items-center gap-1.5 bg-white dark:bg-slate-900 p-2 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-sm">
+          {navTabs.map((t) => {
+            const Icon = t.icon;
+            const active = activeTab === t.id;
+            return (
+              <button
+                key={t.id}
+                onClick={() => setActiveTab(t.id)}
+                className={`px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+                  active
+                    ? 'bg-teal-700 text-white shadow-sm'
+                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                }`}
+              >
+                <Icon className="w-3.5 h-3.5 shrink-0" />
+                <span>{t.label}</span>
+                {typeof t.count === 'number' && (
+                  <span
+                    className={`px-1.5 py-0.5 rounded-md text-[10px] font-mono ${
+                      active
+                        ? 'bg-white/20 text-white'
+                        : 'bg-slate-200/70 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                    }`}
+                  >
+                    {t.count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
 
         {/* ============================================================== */}
-        {/* TAB 1: LESSONS MANAGEMENT */}
+        {/* TAB 1: OVERVIEW & SYSTEM CONFIGURATION */}
+        {/* ============================================================== */}
+        {activeTab === 'overview' && (
+          <div className="space-y-6">
+            {/* 8 KPI Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <button
+                onClick={() => setActiveTab('topics')}
+                className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm text-left hover:border-teal-500 transition space-y-1"
+              >
+                <div className="flex items-center justify-between text-xs text-slate-500 font-semibold">
+                  <span>Chủ đề KHTN (Lớp 6–9)</span>
+                  <FolderKanban className="w-4 h-4 text-teal-600" />
+                </div>
+                <div className="text-2xl sm:text-3xl font-extrabold text-slate-800 dark:text-white font-mono">
+                  {topics.length}
+                </div>
+                <div className="text-[11px] text-teal-700 dark:text-teal-400 font-medium">
+                  Quản lý chuyên đề →
+                </div>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('lessons')}
+                className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm text-left hover:border-teal-500 transition space-y-1"
+              >
+                <div className="flex items-center justify-between text-xs text-slate-500 font-semibold">
+                  <span>Bài giảng lý thuyết</span>
+                  <BookOpen className="w-4 h-4 text-sky-600" />
+                </div>
+                <div className="text-2xl sm:text-3xl font-extrabold text-slate-800 dark:text-white font-mono">
+                  {totalLessonsCount}
+                </div>
+                <div className="text-[11px] text-slate-500">
+                  {publishedCount} xuất bản • {draftCount} nháp
+                </div>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('sims')}
+                className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm text-left hover:border-teal-500 transition space-y-1"
+              >
+                <div className="flex items-center justify-between text-xs text-slate-500 font-semibold">
+                  <span>Phòng thí nghiệm 3D</span>
+                  <Atom className="w-4 h-4 text-indigo-600" />
+                </div>
+                <div className="text-2xl sm:text-3xl font-extrabold text-slate-800 dark:text-white font-mono">
+                  {SIMULATIONS_3D.length}
+                </div>
+                <div className="text-[11px] text-indigo-700 dark:text-indigo-400 font-medium">
+                  Quản lý mô phỏng 3D →
+                </div>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('quizzes')}
+                className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm text-left hover:border-teal-500 transition space-y-1"
+              >
+                <div className="flex items-center justify-between text-xs text-slate-500 font-semibold">
+                  <span>Ngân hàng Câu hỏi & Đề</span>
+                  <CheckSquare className="w-4 h-4 text-emerald-600" />
+                </div>
+                <div className="text-2xl sm:text-3xl font-extrabold text-slate-800 dark:text-white font-mono">
+                  {questions.length}
+                </div>
+                <div className="text-[11px] text-slate-500">
+                  {quizzes.length} bộ đề trắc nghiệm
+                </div>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('games')}
+                className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm text-left hover:border-teal-500 transition space-y-1"
+              >
+                <div className="flex items-center justify-between text-xs text-slate-500 font-semibold">
+                  <span>Dữ liệu Trò chơi KHTN</span>
+                  <Gamepad2 className="w-4 h-4 text-amber-600" />
+                </div>
+                <div className="text-2xl sm:text-3xl font-extrabold text-slate-800 dark:text-white font-mono">
+                  {totalGamesItems}
+                </div>
+                <div className="text-[11px] text-slate-500">
+                  {gamePairs.length} thẻ • {crosswords.length} ô chữ • {detectivePuzzles.length} mật mã
+                </div>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('videos')}
+                className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm text-left hover:border-teal-500 transition space-y-1"
+              >
+                <div className="flex items-center justify-between text-xs text-slate-500 font-semibold">
+                  <span>Video Thí nghiệm</span>
+                  <Video className="w-4 h-4 text-rose-600" />
+                </div>
+                <div className="text-2xl sm:text-3xl font-extrabold text-slate-800 dark:text-white font-mono">
+                  {videos.length}
+                </div>
+                <div className="text-[11px] text-rose-700 dark:text-rose-400 font-medium">
+                  Quản lý kho video →
+                </div>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('docs')}
+                className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm text-left hover:border-teal-500 transition space-y-1"
+              >
+                <div className="flex items-center justify-between text-xs text-slate-500 font-semibold">
+                  <span>Tài liệu & Đề cương</span>
+                  <FileText className="w-4 h-4 text-purple-600" />
+                </div>
+                <div className="text-2xl sm:text-3xl font-extrabold text-slate-800 dark:text-white font-mono">
+                  {catalogDocs.length + documents.length}
+                </div>
+                <div className="text-[11px] text-slate-500">
+                  {catalogDocs.length} đề cương • {documents.length} tệp bài giảng
+                </div>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('users')}
+                className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm text-left hover:border-teal-500 transition space-y-1"
+              >
+                <div className="flex items-center justify-between text-xs text-slate-500 font-semibold">
+                  <span>Tài khoản & Phân quyền</span>
+                  <Users className="w-4 h-4 text-teal-600" />
+                </div>
+                <div className="text-2xl sm:text-3xl font-extrabold text-slate-800 dark:text-white font-mono">
+                  {usersList.length}
+                </div>
+                <div className="text-[11px] text-teal-700 dark:text-teal-400 font-medium">
+                  Quản lý giáo viên & học sinh →
+                </div>
+              </button>
+            </div>
+
+            {/* Site Configuration Form */}
+            <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-4">
+                <div>
+                  <h3 className="text-base sm:text-lg font-extrabold text-slate-800 dark:text-white flex items-center gap-2">
+                    <Settings className="w-5 h-5 text-teal-600" />
+                    Cấu Hình Thông Tin Website & Liên Hệ
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Quản lý thông tin thương hiệu, bộ sách, địa điểm và thông tin liên hệ trên toàn hệ thống.
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    saveSiteSettingsSync(siteSettings);
+                    showToast('Đã lưu cấu hình thông tin website thành công!');
+                  }}
+                  className="px-4 py-2 rounded-xl bg-teal-700 hover:bg-teal-600 text-white text-xs font-bold flex items-center gap-1.5 self-start sm:self-center shadow-sm"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>Lưu cấu hình</span>
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
+                <div className="space-y-1.5">
+                  <label className="font-bold text-slate-600 dark:text-slate-300">Tên Website chính</label>
+                  <input
+                    type="text"
+                    value={siteSettings.siteName}
+                    onChange={(e) => setSiteSettings({ ...siteSettings, siteName: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-white font-semibold"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="font-bold text-slate-600 dark:text-slate-300">Tên Phòng thí nghiệm số</label>
+                  <input
+                    type="text"
+                    value={siteSettings.labName}
+                    onChange={(e) => setSiteSettings({ ...siteSettings, labName: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-white font-semibold"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="font-bold text-slate-600 dark:text-slate-300">Bộ sách chuẩn</label>
+                  <input
+                    type="text"
+                    value={siteSettings.bookSeries}
+                    onChange={(e) => setSiteSettings({ ...siteSettings, bookSeries: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-white font-semibold"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="font-bold text-slate-600 dark:text-slate-300">Địa điểm</label>
+                  <input
+                    type="text"
+                    value={siteSettings.location}
+                    onChange={(e) => setSiteSettings({ ...siteSettings, location: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-white font-semibold"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="font-bold text-slate-600 dark:text-slate-300">Email liên hệ</label>
+                  <input
+                    type="email"
+                    value={siteSettings.email}
+                    onChange={(e) => setSiteSettings({ ...siteSettings, email: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-white font-semibold"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="font-bold text-slate-600 dark:text-slate-300">Số Zalo hỗ trợ</label>
+                  <input
+                    type="text"
+                    value={siteSettings.zalo}
+                    onChange={(e) => setSiteSettings({ ...siteSettings, zalo: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-white font-semibold"
+                  />
+                </div>
+              </div>
+
+              {/* System Reset Box */}
+              <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="text-xs text-slate-500">
+                  Muốn khôi phục toàn bộ bài học, chủ đề, câu hỏi, trò chơi về dữ liệu gốc ban đầu?
+                </div>
+                {!confirmResetOpen ? (
+                  <button
+                    onClick={() => setConfirmResetOpen(true)}
+                    className="px-3.5 py-2 rounded-xl border border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/50 text-xs font-bold flex items-center gap-1.5 self-start sm:self-center"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Khôi phục dữ liệu mặc định</span>
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-rose-600">Xác nhận đặt lại tất cả?</span>
+                    <button
+                      onClick={handleResetAllToDefault}
+                      className="px-3 py-1.5 rounded-xl bg-rose-600 text-white text-xs font-bold hover:bg-rose-500"
+                    >
+                      Đồng ý Reset
+                    </button>
+                    <button
+                      onClick={() => setConfirmResetOpen(false)}
+                      className="px-3 py-1.5 rounded-xl bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold"
+                    >
+                      Hủy
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ============================================================== */}
+        {/* TAB 2: TOPICS (CHỦ ĐỀ LỚP 6–9) MANAGEMENT */}
+        {/* ============================================================== */}
+        {activeTab === 'topics' && (
+          <div className="space-y-4">
+            <div className="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-bold text-slate-500">Khối lớp:</span>
+                {(['all', 6, 7, 8, 9] as const).map((g) => (
+                  <button
+                    key={g}
+                    onClick={() => setTopicFilterGrade(g)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+                      topicFilterGrade === g
+                        ? 'bg-teal-700 text-white'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+                    }`}
+                  >
+                    {g === 'all' ? 'Tất cả' : `Lớp ${g}`}
+                  </button>
+                ))}
+                <select
+                  value={topicFilterDomain}
+                  onChange={(e) => setTopicFilterDomain(e.target.value as any)}
+                  className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-semibold"
+                >
+                  <option value="all">Tất cả 3 phân môn</option>
+                  {DOMAINS.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.shortName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <button
+                onClick={() =>
+                  setEditingTopic({
+                    grade: 8,
+                    domain: 'hoa-hoc',
+                    code: `CD8-0${topics.length + 1}`,
+                    title: '',
+                    description: '',
+                    lessonCount: 6,
+                    experimentCount: 2,
+                  })
+                }
+                className="px-4 py-2 rounded-xl bg-teal-700 hover:bg-teal-600 text-white text-xs font-bold flex items-center gap-1.5 self-start sm:self-center"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Thêm chủ đề mới</span>
+              </button>
+            </div>
+
+            {editingTopic && (
+              <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border-2 border-teal-600/60 shadow-md space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-extrabold text-slate-800 dark:text-white">
+                    {editingTopic.id ? 'Chỉnh sửa Chủ đề' : 'Thêm Chủ đề KHTN mới'}
+                  </h4>
+                  <button onClick={() => setEditingTopic(null)} className="text-slate-400 hover:text-slate-600">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                  <div>
+                    <label className="font-bold text-slate-600 dark:text-slate-300">Mã chủ đề</label>
+                    <input
+                      type="text"
+                      value={editingTopic.code || ''}
+                      onChange={(e) => setEditingTopic({ ...editingTopic, code: e.target.value })}
+                      placeholder="VD: CD8-04"
+                      className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-bold text-slate-600 dark:text-slate-300">Khối lớp</label>
+                    <select
+                      value={editingTopic.grade || 8}
+                      onChange={(e) => setEditingTopic({ ...editingTopic, grade: Number(e.target.value) as Grade })}
+                      className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                    >
+                      <option value={6}>Lớp 6</option>
+                      <option value={7}>Lớp 7</option>
+                      <option value={8}>Lớp 8</option>
+                      <option value={9}>Lớp 9</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="font-bold text-slate-600 dark:text-slate-300">Phân môn KHTN</label>
+                    <select
+                      value={editingTopic.domain || 'hoa-hoc'}
+                      onChange={(e) => setEditingTopic({ ...editingTopic, domain: e.target.value as SubjectDomain })}
+                      className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                    >
+                      {DOMAINS.map((d) => (
+                        <option key={d.id} value={d.id}>
+                          {d.shortName}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="space-y-3 text-xs">
+                  <div>
+                    <label className="font-bold text-slate-600 dark:text-slate-300">Tên Chủ đề</label>
+                    <input
+                      type="text"
+                      value={editingTopic.title || ''}
+                      onChange={(e) => setEditingTopic({ ...editingTopic, title: e.target.value })}
+                      placeholder="Nhập tên chủ đề theo sách Kết nối tri thức..."
+                      className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-semibold"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-bold text-slate-600 dark:text-slate-300">Mô tả trọng tâm</label>
+                    <textarea
+                      rows={2}
+                      value={editingTopic.description || ''}
+                      onChange={(e) => setEditingTopic({ ...editingTopic, description: e.target.value })}
+                      placeholder="Mô tả tóm tắt nội dung chủ đề..."
+                      className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <button
+                    onClick={() => setEditingTopic(null)}
+                    className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold"
+                  >
+                    Hủy
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (!editingTopic.title?.trim()) {
+                        showToast('Vui lòng nhập tên chủ đề!', 'error');
+                        return;
+                      }
+                      await saveAdminTopic({
+                        ...editingTopic,
+                        title: editingTopic.title,
+                        grade: (editingTopic.grade as Grade) || 8,
+                        domain: (editingTopic.domain as SubjectDomain) || 'hoa-hoc',
+                      });
+                      setEditingTopic(null);
+                      await loadAllData();
+                      showToast('Đã lưu chủ đề học tập thành công!');
+                    }}
+                    className="px-4 py-2 rounded-xl bg-teal-700 text-white text-xs font-bold"
+                  >
+                    Lưu chủ đề
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {filteredTopics.map((t) => {
+                const dom = DOMAINS.find((d) => d.id === t.domain);
+                return (
+                  <div
+                    key={t.id}
+                    className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between gap-3"
+                  >
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="px-2 py-0.5 rounded bg-teal-50 dark:bg-teal-950 text-teal-700 dark:text-teal-300 font-mono text-[11px] font-bold">
+                            {t.code}
+                          </span>
+                          <span className="text-xs font-bold text-slate-600 dark:text-slate-300">
+                            Lớp {t.grade} • {dom?.shortName}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => setEditingTopic(t)}
+                            className="p-1.5 rounded-lg text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-950/60"
+                            title="Sửa chủ đề"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() =>
+                              setDeleteModalState({
+                                isOpen: true,
+                                itemType: 'chủ đề',
+                                id: t.id,
+                                name: t.title,
+                                onCustomDelete: async () => {
+                                  await deleteAdminTopic(t.id);
+                                  showToast(`Đã xóa chủ đề "${t.title}"`);
+                                },
+                              })
+                            }
+                            className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-950/60"
+                            title="Xóa chủ đề"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                      <h4 className="font-extrabold text-sm text-slate-800 dark:text-white">{t.title}</h4>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2">{t.description}</p>
+                    </div>
+                    <div className="text-[11px] text-slate-400 pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                      <span>{t.lessonCount} bài học • {t.experimentCount} thí nghiệm</span>
+                      <Link to="/chu-de" className="text-teal-600 font-bold hover:underline">
+                        Xem trên trang Chủ đề →
+                      </Link>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ============================================================== */}
+        {/* TAB 3: LESSONS MANAGEMENT */}
         {/* ============================================================== */}
         {activeTab === 'lessons' && (
           <div className="space-y-4">
-            {/* Search and Filters Bar */}
             <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
               <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3">
-                {/* Search */}
                 <div className="relative flex-1">
                   <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
                   <input
@@ -500,19 +1013,10 @@ $$;`,
                     placeholder="Tìm kiếm theo tiêu đề bài học, mã bài hoặc slug..."
                     className="w-full pl-10 pr-4 py-2.5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 text-slate-800 dark:text-slate-100"
                   />
-                  {searchQuery && (
-                    <button
-                      onClick={() => setSearchQuery('')}
-                      className="absolute right-3 top-3 text-xs text-slate-400 hover:text-slate-600"
-                    >
-                      Xóa
-                    </button>
-                  )}
                 </div>
 
-                {/* Grade Pills */}
-                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0">
-                  <span className="text-xs font-bold text-slate-500 dark:text-slate-400 mr-1 flex items-center gap-1">
+                <div className="flex items-center gap-1.5 overflow-x-auto">
+                  <span className="text-xs font-bold text-slate-500 mr-1 flex items-center gap-1">
                     <Filter className="w-3.5 h-3.5" /> Khối:
                   </span>
                   {(['all', 6, 7, 8, 9] as const).map((g) => (
@@ -521,8 +1025,8 @@ $$;`,
                       onClick={() => setSelectedGrade(g)}
                       className={`px-3 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap ${
                         selectedGrade === g
-                          ? 'bg-teal-600 text-white'
-                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                          ? 'bg-teal-700 text-white'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
                       }`}
                     >
                       {g === 'all' ? 'Tất cả' : `Lớp ${g}`}
@@ -531,16 +1035,15 @@ $$;`,
                 </div>
               </div>
 
-              {/* Sub-filters: Domain & Status */}
               <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100 dark:border-slate-800 text-xs">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-semibold text-slate-500 dark:text-slate-400">Mạch KHTN:</span>
+                  <span className="font-semibold text-slate-500">Phân môn:</span>
                   <select
                     value={selectedDomain}
                     onChange={(e) => setSelectedDomain(e.target.value as any)}
-                    className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-teal-500"
+                    className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-semibold"
                   >
-                    <option value="all">Tất cả các mạch</option>
+                    <option value="all">Tất cả 3 phân môn</option>
                     {DOMAINS.map((d) => (
                       <option key={d.id} value={d.id}>
                         {d.shortName}
@@ -548,11 +1051,11 @@ $$;`,
                     ))}
                   </select>
 
-                  <span className="font-semibold text-slate-500 dark:text-slate-400 ml-2">Trạng thái:</span>
+                  <span className="font-semibold text-slate-500 ml-2">Trạng thái:</span>
                   <select
                     value={selectedStatus}
                     onChange={(e) => setSelectedStatus(e.target.value as any)}
-                    className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-teal-500"
+                    className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-semibold"
                   >
                     <option value="all">Tất cả ({totalLessonsCount})</option>
                     <option value="published">Đã xuất bản ({publishedCount})</option>
@@ -560,84 +1063,43 @@ $$;`,
                   </select>
                 </div>
 
-                <div className="text-[11px] text-slate-400 flex items-center gap-2">
-                  <span>Hiển thị <strong>{filteredLessons.length}</strong> bài học</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] text-slate-400">
+                    Hiển thị <strong>{filteredLessons.length}</strong> bài học
+                  </span>
                   <button
-                    onClick={loadLessons}
-                    className="p-1 rounded text-slate-400 hover:text-teal-600 transition"
-                    title="Tải lại danh sách"
+                    onClick={handleOpenCreateLesson}
+                    className="px-3 py-1.5 rounded-xl bg-teal-700 text-white font-bold text-xs flex items-center gap-1"
                   >
-                    <RefreshCw className="w-3.5 h-3.5" />
+                    <Plus className="w-3.5 h-3.5" /> Thêm bài giảng
                   </button>
                 </div>
               </div>
             </div>
 
-            {/* Lesson Cards / Rows */}
             {isLoadingLessons ? (
               <div className="p-12 text-center text-slate-400 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800">
                 <RefreshCw className="w-8 h-8 animate-spin mx-auto text-teal-600 mb-2" />
                 <p className="text-xs">Đang tải dữ liệu bài học...</p>
               </div>
-            ) : filteredLessons.length === 0 ? (
-              <div className="p-12 text-center bg-white dark:bg-slate-900 rounded-3xl border border-dashed border-slate-300 dark:border-slate-800 space-y-3">
-                <BookOpen className="w-10 h-10 text-slate-300 dark:text-slate-700 mx-auto" />
-                <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300">
-                  Không tìm thấy bài học nào phù hợp bộ lọc
-                </h3>
-                <p className="text-xs text-slate-400 max-w-sm mx-auto">
-                  Hãy thử thay đổi từ khóa tìm kiếm hoặc chọn &quot;Tất cả&quot; khối lớp.
-                </p>
-                <button
-                  onClick={handleOpenCreate}
-                  className="px-4 py-2 rounded-xl bg-teal-600 text-white text-xs font-bold shadow-md hover:bg-teal-500 inline-flex items-center gap-1.5"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Tạo bài học mới</span>
-                </button>
-              </div>
             ) : (
               <div className="space-y-3">
                 {filteredLessons.map((l) => {
                   const domainInfo = DOMAINS.find((d) => d.id === l.domain);
-                  const hasVideo = Boolean(l.videoUrl);
-                  const hasSims = (l.simulationIds && l.simulationIds.length > 0);
-                  const assetCount = l.assets ? l.assets.length : 0;
-
                   return (
                     <div
                       key={l.id}
-                      className={`p-4 sm:p-5 rounded-3xl border transition-all duration-200 ${
-                        l.isPublished
-                          ? 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm hover:border-teal-300 dark:hover:border-teal-800'
-                          : 'bg-slate-50 dark:bg-slate-900/60 border-amber-200 dark:border-amber-950/80'
-                      } flex flex-col md:flex-row md:items-center justify-between gap-4`}
+                      className="p-4 sm:p-5 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4"
                     >
-                      {/* Left: Code, Title, Badges */}
-                      <div className="space-y-2 flex-1 min-w-0">
+                      <div className="space-y-1.5 flex-1 min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          {/* Order Index */}
-                          <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
-                            #{l.orderIndex}
-                          </span>
-
-                          {/* Code */}
                           <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-teal-50 dark:bg-teal-950 text-teal-700 dark:text-teal-300 font-mono">
                             {l.code}
                           </span>
-
-                          {/* Grade */}
                           <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                            Lớp {l.grade}
+                            Lớp {l.grade} • {domainInfo?.shortName}
                           </span>
-
-                          {/* Domain */}
-                          <span className="text-xs text-slate-400">• {domainInfo?.shortName}</span>
-
-                          {/* Duration */}
                           <span className="text-xs text-slate-400">• {l.durationMinutes} phút</span>
-
-                          {/* Published / Draft Pill */}
                           <span
                             className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1 ${
                               l.isPublished
@@ -651,79 +1113,38 @@ $$;`,
                               </>
                             ) : (
                               <>
-                                <Clock className="w-3 h-3" /> Bản nháp (Draft)
+                                <Clock className="w-3 h-3" /> Bản nháp
                               </>
                             )}
                           </span>
                         </div>
-
-                        {/* Title and Slug */}
-                        <div>
-                          <h3 className="font-extrabold text-sm sm:text-base text-[#0B1F3A] dark:text-white truncate">
-                            {l.title}
-                          </h3>
-                          <div className="text-[11px] text-slate-400 dark:text-slate-500 font-mono truncate mt-0.5">
-                            slug: /{l.slug || 'chua-co-slug'}
-                          </div>
-                        </div>
-
-                        {/* Attached items indicators */}
-                        <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 dark:text-slate-400 pt-1">
-                          <span className="flex items-center gap-1">
-                            <FileText className="w-3.5 h-3.5 text-teal-500" />
-                            <strong>{assetCount}</strong> tài liệu PPT/PDF
-                          </span>
-
-                          {hasSims && (
-                            <span className="flex items-center gap-1 text-blue-600 dark:text-blue-400 font-medium">
-                              <Atom className="w-3.5 h-3.5" />
-                              {l.simulationIds?.length} trạm 3D
-                            </span>
-                          )}
-
-                          {hasVideo && (
-                            <span className="flex items-center gap-1 text-red-500 font-medium">
-                              <Video className="w-3.5 h-3.5" />
-                              Video YouTube
-                            </span>
-                          )}
-                        </div>
+                        <h3 className="font-extrabold text-sm sm:text-base text-slate-800 dark:text-white truncate">
+                          {l.title}
+                        </h3>
+                        <p className="text-xs text-slate-500 line-clamp-1">{l.summary}</p>
                       </div>
 
-                      {/* Right: Actions */}
                       <div className="flex items-center gap-2 self-end md:self-center shrink-0">
-                        {/* Toggle Publish button */}
                         <button
                           onClick={() => handleTogglePublish(l)}
-                          title={l.isPublished ? 'Chuyển về bản nháp' : 'Xuất bản bài học'}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition flex items-center gap-1.5 ${
-                            l.isPublished
-                              ? 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-amber-50 hover:text-amber-700 dark:hover:bg-amber-950/40'
-                              : 'border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100'
-                          }`}
+                          className="px-3 py-1.5 rounded-xl text-xs font-bold border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
                         >
-                          {l.isPublished ? 'Gỡ xuất bản' : 'Xuất bản ngay'}
+                          {l.isPublished ? 'Chuyển nháp' : 'Xuất bản'}
                         </button>
-
-                        {/* Preview in Portal link */}
                         <Link
                           to={`/bai-hoc/${l.id}`}
-                          className="p-2 rounded-xl text-slate-500 dark:text-slate-400 hover:text-teal-600 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition"
-                          title="Xem trang học sinh"
+                          className="p-2 rounded-xl text-slate-500 hover:text-teal-600 border border-slate-200 dark:border-slate-700"
+                          title="Xem bài học"
                         >
                           <Eye className="w-4 h-4" />
                         </Link>
-
-                        {/* Edit button */}
                         <button
-                          onClick={() => handleOpenEdit(l)}
-                          className="p-2 rounded-xl text-teal-600 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-950/60 border border-teal-200 dark:border-teal-800 transition"
-                          title="Chỉnh sửa bài học"
+                          onClick={() => handleOpenEditLesson(l)}
+                          className="p-2 rounded-xl text-teal-600 border border-teal-200 dark:border-teal-800 hover:bg-teal-50"
+                          title="Sửa bài học"
                         >
                           <Edit className="w-4 h-4" />
                         </button>
-
-                        {/* Delete button */}
                         <button
                           onClick={() =>
                             setDeleteModalState({
@@ -733,7 +1154,7 @@ $$;`,
                               name: l.title,
                             })
                           }
-                          className="p-2 rounded-xl text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/60 border border-red-200 dark:border-red-900 transition"
+                          className="p-2 rounded-xl text-red-600 border border-red-200 dark:border-red-900 hover:bg-red-50"
                           title="Xóa bài học"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -748,110 +1169,1627 @@ $$;`,
         )}
 
         {/* ============================================================== */}
-        {/* TAB 2: STORAGE DOCUMENTS & ASSETS */}
+        {/* TAB 4: 3D SIMULATIONS */}
         {/* ============================================================== */}
-        {activeTab === 'docs' && (
-          <div className="space-y-6">
-            {/* Standalone Uploader Banner */}
-            <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-slate-100 dark:border-slate-800">
-                <div>
-                  <h3 className="text-base sm:text-lg font-bold text-[#0B1F3A] dark:text-white flex items-center gap-2">
-                    <FileUp className="w-5 h-5 text-teal-500" />
-                    Tải Lên Học Liệu Trực Tiếp Vào Supabase Storage
-                  </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                    Tệp sẽ được lưu vào bucket <code>lesson-documents</code> hoặc <code>science-assets</code>. Giới hạn: tối đa 50MB/tệp.
-                  </p>
-                </div>
+        {activeTab === 'sims' && (
+          <SimulationManager lessons={lessons} showToast={showToast} />
+        )}
+
+        {/* ============================================================== */}
+        {/* TAB 5: QUIZZES & QUESTIONS BANK */}
+        {/* ============================================================== */}
+        {activeTab === 'quizzes' && (
+          <div className="space-y-4">
+            <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setQuizSubTab('questions')}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold transition ${
+                    quizSubTab === 'questions'
+                      ? 'bg-teal-700 text-white'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+                  }`}
+                >
+                  Ngân hàng Câu hỏi ({questions.length})
+                </button>
+                <button
+                  onClick={() => setQuizSubTab('exams')}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold transition ${
+                    quizSubTab === 'exams'
+                      ? 'bg-teal-700 text-white'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+                  }`}
+                >
+                  Bộ Đề Kiểm Tra ({quizzes.length})
+                </button>
               </div>
 
-              {/* Asset Uploader for general storage */}
-              <AssetUploader
-                lessonId="general-library"
-                onAssetUploaded={(newDoc) => {
-                  setDocuments((prev) => [newDoc, ...prev]);
-                  showToast(`Đã tải lên tài liệu: "${newDoc.title}"`);
-                  loadLessons();
-                }}
-              />
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => setIsWordImportOpen(true)}
+                  data-testid="open-word-import-btn"
+                  className="px-4 py-2 rounded-xl bg-sky-700 hover:bg-sky-600 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-sm transition"
+                >
+                  <FileUp className="w-4 h-4" />
+                  <span>Nhập câu hỏi từ file Word (.docx)</span>
+                </button>
+
+                {quizSubTab === 'questions' ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      onClick={() =>
+                        setEditingQuestion({
+                          grade: 8,
+                          domain: 'hoa-hoc',
+                          questionType: 'single_choice',
+                          question: '',
+                          options: ['', '', '', ''],
+                          correctAnswer: 0,
+                          explanation: '',
+                          difficulty: 'Thông hiểu',
+                        })
+                      }
+                      className="px-4 py-2 rounded-xl bg-teal-700 hover:bg-teal-600 text-white text-xs font-bold flex items-center gap-1.5"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Thêm câu hỏi trắc nghiệm</span>
+                    </button>
+
+                    <button
+                      onClick={() =>
+                        setEditingQuestion({
+                          grade: 8,
+                          domain: 'hoa-hoc',
+                          questionType: 'essay',
+                          allowImageUpload: true,
+                          question: '',
+                          options: [],
+                          explanation: '',
+                          difficulty: 'Vận dụng',
+                          points: 3.0,
+                        })
+                      }
+                      className="px-4 py-2 rounded-xl bg-violet-700 hover:bg-violet-600 text-white text-xs font-bold flex items-center gap-1.5"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Thêm câu hỏi tự luận (Nộp ảnh)</span>
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() =>
+                      setEditingQuiz({
+                        grade: 8,
+                        domain: 'hoa-hoc',
+                        title: '',
+                        durationMinutes: 15,
+                        passScore: 6.0,
+                        questionCount: 5,
+                        isPublished: true,
+                      })
+                    }
+                    className="px-4 py-2 rounded-xl bg-teal-700 hover:bg-teal-600 text-white text-xs font-bold flex items-center gap-1.5"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Tạo đề kiểm tra mới</span>
+                  </button>
+                )}
+              </div>
             </div>
 
-            {/* Documents List */}
-            <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-base font-bold text-[#0B1F3A] dark:text-white">
-                    Danh Sách Học Liệu Đã Tải Lên ({documents.length})
-                  </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Bao gồm slide giáo án PPTX, phiếu học tập PDF và tài liệu tham khảo
-                  </p>
-                </div>
-
-                {/* Filter formats */}
-                <div className="flex items-center gap-1.5 overflow-x-auto text-xs">
-                  {(['all', 'pptx', 'pdf', 'docx', 'image'] as const).map((fmt) => (
+            {quizSubTab === 'questions' && (
+              <>
+                {/* Filter bar for questions */}
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                  {(['all', 6, 7, 8, 9] as const).map((g) => (
                     <button
-                      key={fmt}
-                      onClick={() => setDocFormatFilter(fmt)}
-                      className={`px-3 py-1.5 rounded-xl font-bold transition uppercase ${
-                        docFormatFilter === fmt
-                          ? 'bg-teal-600 text-white'
-                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+                      key={g}
+                      onClick={() => setQuestionFilterGrade(g)}
+                      className={`px-3 py-1.5 rounded-xl font-bold ${
+                        questionFilterGrade === g
+                          ? 'bg-teal-700 text-white'
+                          : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600'
                       }`}
                     >
-                      {fmt === 'all' ? 'Tất cả' : fmt}
+                      {g === 'all' ? 'Tất cả khối' : `Lớp ${g}`}
                     </button>
+                  ))}
+                  <select
+                    value={questionFilterDomain}
+                    onChange={(e) => setQuestionFilterDomain(e.target.value as any)}
+                    className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 font-semibold"
+                  >
+                    <option value="all">Tất cả phân môn</option>
+                    {DOMAINS.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.shortName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {editingQuestion && (
+                  <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border-2 border-teal-600/60 shadow-md space-y-4 text-xs">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-sm font-extrabold">
+                        {editingQuestion.id
+                          ? 'Chỉnh sửa Câu hỏi'
+                          : editingQuestion.questionType === 'essay'
+                          ? 'Thêm Câu hỏi Tự luận (Cho phép học sinh tải file ảnh bài làm)'
+                          : 'Thêm Câu hỏi Trắc nghiệm mới'}
+                      </h4>
+                      <button onClick={() => setEditingQuestion(null)}>
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                      <div>
+                        <label className="font-bold">Loại câu hỏi</label>
+                        <select
+                          value={editingQuestion.questionType || 'single_choice'}
+                          onChange={(e) => {
+                            const nextType = e.target.value as any;
+                            setEditingQuestion({
+                              ...editingQuestion,
+                              questionType: nextType,
+                              allowImageUpload: nextType === 'essay' ? true : undefined,
+                              options:
+                                nextType === 'essay'
+                                  ? []
+                                  : editingQuestion.options && editingQuestion.options.length >= 2
+                                  ? editingQuestion.options
+                                  : ['', '', '', ''],
+                            });
+                          }}
+                          className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-bold"
+                        >
+                          <option value="single_choice">Trắc nghiệm (4 đáp án)</option>
+                          <option value="essay">Tự luận (Học sinh tải ảnh bài làm)</option>
+                          <option value="true_false">Đúng / Sai</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="font-bold">Khối lớp</label>
+                        <select
+                          value={editingQuestion.grade || 8}
+                          onChange={(e) =>
+                            setEditingQuestion({ ...editingQuestion, grade: Number(e.target.value) as Grade })
+                          }
+                          className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                        >
+                          <option value={6}>Lớp 6</option>
+                          <option value={7}>Lớp 7</option>
+                          <option value={8}>Lớp 8</option>
+                          <option value={9}>Lớp 9</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="font-bold">Phân môn</label>
+                        <select
+                          value={editingQuestion.domain || 'hoa-hoc'}
+                          onChange={(e) =>
+                            setEditingQuestion({ ...editingQuestion, domain: e.target.value as SubjectDomain })
+                          }
+                          className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                        >
+                          {DOMAINS.map((d) => (
+                            <option key={d.id} value={d.id}>
+                              {d.shortName}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="font-bold">Mức độ</label>
+                        <select
+                          value={editingQuestion.difficulty || 'Thông hiểu'}
+                          onChange={(e) =>
+                            setEditingQuestion({ ...editingQuestion, difficulty: e.target.value as any })
+                          }
+                          className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                        >
+                          <option value="Nhận biết">Nhận biết</option>
+                          <option value="Thông hiểu">Thông hiểu</option>
+                          <option value="Vận dụng">Vận dụng</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="font-bold">Nội dung câu hỏi (Chuẩn danh pháp IUPAC)</label>
+                      <textarea
+                        rows={2}
+                        value={editingQuestion.question || ''}
+                        onChange={(e) => setEditingQuestion({ ...editingQuestion, question: e.target.value })}
+                        placeholder={
+                          editingQuestion.questionType === 'essay'
+                            ? 'Nhập đề bài tự luận (yêu cầu học sinh trình bày các bước giải hoặc chụp ảnh bài làm)...'
+                            : 'Nhập câu hỏi trắc nghiệm...'
+                        }
+                        className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-semibold"
+                      />
+                    </div>
+
+                    {editingQuestion.questionType === 'essay' ? (
+                      <div className="p-3.5 rounded-2xl bg-violet-50/80 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-800 text-violet-900 dark:text-violet-200 flex items-center justify-between gap-3">
+                        <div>
+                          <span className="font-extrabold block">
+                            Định dạng Câu hỏi Tự luận: Hỗ trợ học sinh tải file ảnh bài giải (.jpg, .png, .webp)
+                          </span>
+                          <span className="text-[11px] text-violet-700 dark:text-violet-300">
+                            Khi làm bài trên trang Luyện tập, học sinh sẽ có khung tải lên ảnh chụp bài làm viết tay và ô nhập lời giải tự luận.
+                          </span>
+                        </div>
+                        <span className="px-2.5 py-1 rounded-lg bg-violet-600 text-white font-bold text-[11px] shrink-0">
+                          Cho phép up ảnh
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {(editingQuestion.options || ['', '', '', '']).map((opt, idx) => (
+                          <div key={idx} className="space-y-1">
+                            <label className="font-bold flex items-center justify-between">
+                              <span>Phương án {String.fromCharCode(65 + idx)}</span>
+                              <label className="flex items-center gap-1 text-teal-700 cursor-pointer">
+                                <input
+                                  type="radio"
+                                  name="correctOption"
+                                  checked={(editingQuestion.correctAnswer ?? 0) === idx}
+                                  onChange={() => setEditingQuestion({ ...editingQuestion, correctAnswer: idx })}
+                                />
+                                <span>Đáp án đúng</span>
+                              </label>
+                            </label>
+                            <input
+                              type="text"
+                              value={opt}
+                              onChange={(e) => {
+                                const nextOpts = [...(editingQuestion.options || ['', '', '', ''])];
+                                nextOpts[idx] = e.target.value;
+                                setEditingQuestion({ ...editingQuestion, options: nextOpts });
+                              }}
+                              placeholder={`Nội dung đáp án ${String.fromCharCode(65 + idx)}...`}
+                              className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="font-bold">
+                          Lời giải chi tiết bài tập (Bước 1, Bước 2, Bước 3...)
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const qText = editingQuestion.question || 'Bài tập Khoa học tự nhiên';
+                            const opts = editingQuestion.options || [];
+                            const cIdx = editingQuestion.correctAnswer ?? 0;
+                            const dom = (editingQuestion.domain as SubjectDomain) || 'hoa-hoc';
+                            const gr = (editingQuestion.grade as Grade) || 8;
+                            const qType = editingQuestion.questionType || 'single_choice';
+                            const steps = generateStepByStepSolution({
+                              question: qText,
+                              options: opts,
+                              correctAnswer: cIdx,
+                              questionType: qType,
+                              domain: dom,
+                              grade: gr,
+                            });
+                            const exp = generateDetailedExplanation({
+                              question: qText,
+                              options: opts,
+                              correctAnswer: cIdx,
+                              questionType: qType,
+                              domain: dom,
+                              grade: gr,
+                            });
+                            setEditingQuestion({
+                              ...editingQuestion,
+                              explanation: exp,
+                              solutionSteps: steps,
+                            });
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-teal-100 dark:bg-teal-950 text-teal-800 dark:text-teal-300 font-bold text-[11px] hover:bg-teal-200 transition"
+                        >
+                          ✨ Tự động giải chi tiết bài tập này
+                        </button>
+                      </div>
+                      <textarea
+                        rows={4}
+                        value={editingQuestion.explanation || ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setEditingQuestion({
+                            ...editingQuestion,
+                            explanation: val,
+                            solutionSteps: parseExplanationIntoSteps(val, undefined, {
+                              question: editingQuestion.question || '',
+                              options: editingQuestion.options || [],
+                              correctAnswer: editingQuestion.correctAnswer,
+                              questionType: editingQuestion.questionType,
+                              domain: editingQuestion.domain as SubjectDomain,
+                              grade: editingQuestion.grade as Grade,
+                            }),
+                          });
+                        }}
+                        placeholder={`Nhập lời giải cụ thể của bài tập:\nBước 1: Tính số mol / Đổi đơn vị...\nBước 2: Thay số tính toán trực tiếp...\nBước 3: Kết luận đáp số...`}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 leading-relaxed"
+                      />
+                    </div>
+
+                    <div className="flex justify-end gap-2">
+                      <button
+                        onClick={() => setEditingQuestion(null)}
+                        className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 font-bold"
+                      >
+                        Hủy
+                      </button>
+                      <button
+                        onClick={async () => {
+                          if (!editingQuestion.question?.trim()) {
+                            showToast('Vui lòng nhập nội dung câu hỏi!', 'error');
+                            return;
+                          }
+                          const qType = editingQuestion.questionType || 'single_choice';
+                          const dom = (editingQuestion.domain as SubjectDomain) || 'hoa-hoc';
+                          const gr = (editingQuestion.grade as Grade) || 8;
+                          const steps = parseExplanationIntoSteps(
+                            editingQuestion.explanation || '',
+                            editingQuestion.solutionSteps,
+                            {
+                              question: editingQuestion.question,
+                              options: editingQuestion.options || [],
+                              correctAnswer: editingQuestion.correctAnswer,
+                              questionType: qType,
+                              domain: dom,
+                              grade: gr,
+                            }
+                          );
+                          await saveAdminQuestion({
+                            ...editingQuestion,
+                            question: editingQuestion.question,
+                            grade: gr,
+                            domain: dom,
+                            questionType: qType,
+                            allowImageUpload: qType === 'essay' ? true : undefined,
+                            solutionSteps: steps,
+                            explanation:
+                              editingQuestion.explanation?.trim() ||
+                              generateDetailedExplanation({
+                                question: editingQuestion.question,
+                                options: editingQuestion.options || [],
+                                correctAnswer: editingQuestion.correctAnswer ?? 0,
+                                questionType: qType,
+                                domain: dom,
+                                grade: gr,
+                              }),
+                          });
+                          setEditingQuestion(null);
+                          await loadAllData();
+                          showToast('Đã lưu câu hỏi kèm lời giải chi tiết vào ngân hàng đề!');
+                        }}
+                        className="px-4 py-2 rounded-xl bg-teal-700 text-white font-bold"
+                      >
+                        Lưu câu hỏi
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-3">
+                  {filteredQuestions.map((q, index) => {
+                    const isEssay = q.questionType === 'essay';
+                    const stepsList = parseExplanationIntoSteps(q.explanation, q.solutionSteps, {
+                      question: q.question,
+                      options: q.options,
+                      correctAnswer: q.correctAnswer,
+                      questionType: q.questionType,
+                      domain: q.domain,
+                      grade: q.grade,
+                    });
+                    return (
+                      <div
+                        key={q.id}
+                        className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-2.5"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="space-y-1">
+                            <div className="flex flex-wrap items-center gap-2 text-xs">
+                              <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 font-mono font-bold">
+                                Câu #{index + 1}
+                              </span>
+                              <span
+                                className={`px-2 py-0.5 rounded font-bold text-[11px] ${
+                                  isEssay
+                                    ? 'bg-violet-100 dark:bg-violet-950 text-violet-800 dark:text-violet-300'
+                                    : 'bg-teal-50 dark:bg-teal-950 text-teal-700 dark:text-teal-300'
+                                }`}
+                              >
+                                {isEssay ? 'Tự luận (Cho phép học sinh up ảnh bài làm)' : 'Trắc nghiệm'}
+                              </span>
+                              <span className="font-bold text-teal-700 dark:text-teal-400">
+                                Lớp {q.grade} • {DOMAINS.find((d) => d.id === q.domain)?.shortName}
+                              </span>
+                              <span className="px-2 py-0.5 rounded bg-sky-50 dark:bg-sky-950 text-sky-700 dark:text-sky-300 text-[11px] font-bold">
+                                {q.difficulty}
+                              </span>
+                            </div>
+                            <h4 className="font-serif font-bold text-sm sm:text-base text-slate-900 dark:text-white whitespace-pre-line">
+                              {renderFormattedMathAndChem(q.question)}
+                            </h4>
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              onClick={() => setEditingQuestion(q)}
+                              className="p-1.5 rounded-lg text-teal-600 hover:bg-teal-50"
+                              title="Sửa câu hỏi"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() =>
+                                setDeleteModalState({
+                                  isOpen: true,
+                                  itemType: 'câu hỏi',
+                                  id: q.id,
+                                  name: q.question,
+                                  onCustomDelete: async () => {
+                                    await deleteAdminQuestion(q.id);
+                                    showToast('Đã xóa câu hỏi.');
+                                  },
+                                })
+                              }
+                              className="p-1.5 rounded-lg text-red-600 hover:bg-red-50"
+                              title="Xóa câu hỏi"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {isEssay ? (
+                          <div className="px-3.5 py-2 rounded-xl bg-violet-50/60 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-800 text-xs text-violet-800 dark:text-violet-200 font-semibold">
+                            📷 Định dạng Tự luận: Học sinh được tải lên file ảnh bài làm (.jpg, .png) và nhập lời giải chi tiết.
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                            {q.options.map((opt, idx) => {
+                              const isCorrect =
+                                q.correctAnswer === idx ||
+                                (Array.isArray(q.correctAnswers) && q.correctAnswers.includes(idx));
+                              return (
+                                <div
+                                  key={idx}
+                                  className={`px-3 py-1.5 rounded-xl border font-serif ${
+                                    isCorrect
+                                      ? 'bg-emerald-50/80 dark:bg-emerald-950/50 border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200 font-bold'
+                                      : 'bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
+                                  }`}
+                                >
+                                  {String.fromCharCode(65 + idx)}. {renderFormattedMathAndChem(opt)} {isCorrect && '✓'}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {stepsList.length > 0 && (
+                          <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-[#c8dfee] dark:border-slate-700">
+                            <ScientificSolutionView
+                              steps={stepsList}
+                              questionText={q.question}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+
+            {quizSubTab === 'exams' && (
+              <div className="space-y-4">
+                {editingQuiz && (
+                  <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border-2 border-teal-600/60 shadow-md space-y-4 text-xs">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-sm font-extrabold">
+                        {editingQuiz.id ? 'Chỉnh sửa Đề kiểm tra' : 'Tạo Bộ Đề Kiểm Tra mới'}
+                      </h4>
+                      <button onClick={() => setEditingQuiz(null)}>
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="sm:col-span-2">
+                        <label className="font-bold">Tiêu đề Đề kiểm tra</label>
+                        <input
+                          type="text"
+                          value={editingQuiz.title || ''}
+                          onChange={(e) => setEditingQuiz({ ...editingQuiz, title: e.target.value })}
+                          placeholder="VD: Kiểm tra 15 phút - Acid, Base và Thang pH"
+                          className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-semibold"
+                        />
+                      </div>
+                      <div>
+                        <label className="font-bold">Thời gian (phút)</label>
+                        <input
+                          type="number"
+                          value={editingQuiz.durationMinutes || 15}
+                          onChange={(e) =>
+                            setEditingQuiz({ ...editingQuiz, durationMinutes: Number(e.target.value) })
+                          }
+                          className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                        />
+                      </div>
+                      <div>
+                        <label className="font-bold">Khối lớp</label>
+                        <select
+                          value={editingQuiz.grade || 8}
+                          onChange={(e) =>
+                            setEditingQuiz({ ...editingQuiz, grade: Number(e.target.value) as Grade })
+                          }
+                          className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                        >
+                          <option value={6}>Lớp 6</option>
+                          <option value={7}>Lớp 7</option>
+                          <option value={8}>Lớp 8</option>
+                          <option value={9}>Lớp 9</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="font-bold">Phân môn</label>
+                        <select
+                          value={editingQuiz.domain || 'hoa-hoc'}
+                          onChange={(e) =>
+                            setEditingQuiz({ ...editingQuiz, domain: e.target.value as SubjectDomain })
+                          }
+                          className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                        >
+                          {DOMAINS.map((d) => (
+                            <option key={d.id} value={d.id}>
+                              {d.shortName}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="font-bold">Điểm đạt chuẩn (/10)</label>
+                        <input
+                          type="number"
+                          step="0.5"
+                          value={editingQuiz.passScore || 6.0}
+                          onChange={(e) =>
+                            setEditingQuiz({ ...editingQuiz, passScore: Number(e.target.value) })
+                          }
+                          className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex justify-end gap-2">
+                      <button
+                        onClick={() => setEditingQuiz(null)}
+                        className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 font-bold"
+                      >
+                        Hủy
+                      </button>
+                      <button
+                        onClick={async () => {
+                          if (!editingQuiz.title?.trim()) {
+                            showToast('Vui lòng nhập tên đề kiểm tra!', 'error');
+                            return;
+                          }
+                          await saveAdminQuiz({
+                            ...editingQuiz,
+                            title: editingQuiz.title,
+                            grade: (editingQuiz.grade as Grade) || 8,
+                            domain: (editingQuiz.domain as SubjectDomain) || 'hoa-hoc',
+                          });
+                          setEditingQuiz(null);
+                          await loadAllData();
+                          showToast('Đã lưu đề kiểm tra!');
+                        }}
+                        className="px-4 py-2 rounded-xl bg-teal-700 text-white font-bold"
+                      >
+                        Lưu đề kiểm tra
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {quizzes.map((qz) => (
+                    <div
+                      key={qz.id}
+                      className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between gap-4"
+                    >
+                      <div className="space-y-1">
+                        <div className="text-xs font-bold text-teal-700 dark:text-teal-400">
+                          Lớp {qz.grade} • {DOMAINS.find((d) => d.id === qz.domain)?.shortName} • {qz.durationMinutes} phút
+                        </div>
+                        <h4 className="font-extrabold text-sm text-slate-800 dark:text-white">{qz.title}</h4>
+                        <div className="text-[11px] text-slate-400">
+                          Điểm đạt: {qz.passScore}/10 • <Link to="/luyen-tap" className="text-sky-600 hover:underline">Mở trang Luyện tập →</Link>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={() => setEditingQuiz(qz)}
+                          className="p-2 rounded-xl text-teal-600 hover:bg-teal-50 border border-teal-200 dark:border-teal-800"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() =>
+                            setDeleteModalState({
+                              isOpen: true,
+                              itemType: 'đề kiểm tra',
+                              id: qz.id,
+                              name: qz.title,
+                              onCustomDelete: async () => {
+                                await deleteAdminQuiz(qz.id);
+                                showToast('Đã xóa đề kiểm tra.');
+                              },
+                            })
+                          }
+                          className="p-2 rounded-xl text-red-600 hover:bg-red-50 border border-red-200 dark:border-red-900"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
                   ))}
                 </div>
               </div>
+            )}
+          </div>
+        )}
 
-              {filteredDocuments.length === 0 ? (
-                <div className="text-center py-10 border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl text-xs text-slate-400">
-                  Không tìm thấy tài liệu nào trong bộ lọc này.
+        {/* ============================================================== */}
+        {/* TAB 6: SCIENCE GAMES (GHÉP THẺ, Ô CHỮ, THÁM TỬ) MANAGEMENT */}
+        {/* ============================================================== */}
+        {activeTab === 'games' && (
+          <div className="space-y-4">
+            <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => setGameSubTab('pairs')}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition ${
+                    gameSubTab === 'pairs'
+                      ? 'bg-teal-700 text-white'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+                  }`}
+                >
+                  1. Ghép Thẻ Tri Thức ({gamePairs.length})
+                </button>
+                <button
+                  onClick={() => setGameSubTab('crosswords')}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition ${
+                    gameSubTab === 'crosswords'
+                      ? 'bg-teal-700 text-white'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+                  }`}
+                >
+                  2. Giải Mã Ô Chữ ({crosswords.length})
+                </button>
+                <button
+                  onClick={() => setGameSubTab('detective')}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition ${
+                    gameSubTab === 'detective'
+                      ? 'bg-teal-700 text-white'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+                  }`}
+                >
+                  3. Thám Tử Công Thức ({detectivePuzzles.length})
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Link
+                  to="/tro-choi"
+                  className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 flex items-center gap-1"
+                >
+                  <Eye className="w-3.5 h-3.5" /> Chơi thử
+                </Link>
+                {gameSubTab === 'pairs' && (
+                  <button
+                    onClick={() =>
+                      setEditingPair({ grade: 8, domain: 'hoa-hoc', term: '', definition: '', explanation: '' })
+                    }
+                    className="px-4 py-2 rounded-xl bg-teal-700 text-white text-xs font-bold flex items-center gap-1"
+                  >
+                    <Plus className="w-4 h-4" /> Thêm cặp thẻ
+                  </button>
+                )}
+                {gameSubTab === 'crosswords' && (
+                  <button
+                    onClick={() =>
+                      setEditingCrossword({
+                        grade: 8,
+                        domain: 'hoa-hoc',
+                        displayTerm: '',
+                        answer: '',
+                        clue: '',
+                        scientificHint: '',
+                      })
+                    }
+                    className="px-4 py-2 rounded-xl bg-teal-700 text-white text-xs font-bold flex items-center gap-1"
+                  >
+                    <Plus className="w-4 h-4" /> Thêm hàng ô chữ
+                  </button>
+                )}
+                {gameSubTab === 'detective' && (
+                  <button
+                    onClick={() =>
+                      setEditingDetective({
+                        grade: 8,
+                        domain: 'hoa-hoc',
+                        clue: '',
+                        displayAnswer: '',
+                        displayFormula: '',
+                        scientificHint: '',
+                      })
+                    }
+                    className="px-4 py-2 rounded-xl bg-teal-700 text-white text-xs font-bold flex items-center gap-1"
+                  >
+                    <Plus className="w-4 h-4" /> Thêm mật mã thám tử
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Sub-tab 1: Memory Match Pairs */}
+            {gameSubTab === 'pairs' && (
+              <div className="space-y-4">
+                {editingPair && (
+                  <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border-2 border-teal-600/60 space-y-3 text-xs">
+                    <h4 className="font-extrabold text-sm">
+                      {editingPair.id ? 'Chỉnh sửa Cặp thẻ' : 'Thêm Cặp thẻ Ghép đôi mới'}
+                    </h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="font-bold">Mặt A (Thuật ngữ / Ký hiệu / Công thức)</label>
+                        <input
+                          type="text"
+                          value={editingPair.term || ''}
+                          onChange={(e) => setEditingPair({ ...editingPair, term: e.target.value })}
+                          placeholder="VD: NaOH"
+                          className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-bold"
+                        />
+                      </div>
+                      <div>
+                        <label className="font-bold">Mặt B (Tên chuẩn IUPAC / Định nghĩa)</label>
+                        <input
+                          type="text"
+                          value={editingPair.definition || ''}
+                          onChange={(e) => setEditingPair({ ...editingPair, definition: e.target.value })}
+                          placeholder="VD: Sodium hydroxide (Base kiềm mạnh)"
+                          className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                        />
+                      </div>
+                      <div>
+                        <label className="font-bold">Khối lớp</label>
+                        <select
+                          value={editingPair.grade || 8}
+                          onChange={(e) => setEditingPair({ ...editingPair, grade: Number(e.target.value) as Grade })}
+                          className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                        >
+                          <option value={6}>Lớp 6</option>
+                          <option value={7}>Lớp 7</option>
+                          <option value={8}>Lớp 8</option>
+                          <option value={9}>Lớp 9</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="font-bold">Phân môn</label>
+                        <select
+                          value={editingPair.domain || 'hoa-hoc'}
+                          onChange={(e) => setEditingPair({ ...editingPair, domain: e.target.value as SubjectDomain })}
+                          className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                        >
+                          {DOMAINS.map((d) => (
+                            <option key={d.id} value={d.id}>
+                              {d.shortName}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    <div className="flex justify-end gap-2">
+                      <button
+                        onClick={() => setEditingPair(null)}
+                        className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 font-bold"
+                      >
+                        Hủy
+                      </button>
+                      <button
+                        onClick={async () => {
+                          if (!editingPair.term?.trim() || !editingPair.definition?.trim()) {
+                            showToast('Vui lòng nhập đủ 2 mặt thẻ!', 'error');
+                            return;
+                          }
+                          await saveAdminGamePair({
+                            ...editingPair,
+                            term: editingPair.term,
+                            definition: editingPair.definition,
+                            grade: (editingPair.grade as Grade) || 8,
+                            domain: (editingPair.domain as SubjectDomain) || 'hoa-hoc',
+                          });
+                          setEditingPair(null);
+                          await loadAllData();
+                          showToast('Đã lưu cặp thẻ trò chơi!');
+                        }}
+                        className="px-4 py-2 rounded-xl bg-teal-700 text-white font-bold"
+                      >
+                        Lưu cặp thẻ
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {gamePairs.map((p) => (
+                    <div
+                      key={p.id}
+                      className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3"
+                    >
+                      <div className="space-y-1 text-xs">
+                        <span className="font-bold text-teal-700 dark:text-teal-400">
+                          Lớp {p.grade} • {DOMAINS.find((d) => d.id === p.domain)?.shortName}
+                        </span>
+                        <div className="font-extrabold text-sm text-slate-800 dark:text-white">
+                          {p.term} ↔ <span className="text-sky-700 dark:text-sky-300">{p.definition}</span>
+                        </div>
+                        <p className="text-[11px] text-slate-500">{p.explanation}</p>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={() => setEditingPair(p)}
+                          className="p-1.5 rounded-lg text-teal-600 hover:bg-teal-50"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={async () => {
+                            await deleteAdminGamePair(p.id);
+                            await loadAllData();
+                            showToast('Đã xóa cặp thẻ.');
+                          }}
+                          className="p-1.5 rounded-lg text-red-600 hover:bg-red-50"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ) : (
-                <div className="space-y-3">
-                  {filteredDocuments.map((doc) => (
+              </div>
+            )}
+
+            {/* Sub-tab 2: Crosswords */}
+            {gameSubTab === 'crosswords' && (
+              <div className="space-y-4">
+                {editingCrossword && (
+                  <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border-2 border-teal-600/60 space-y-3 text-xs">
+                    <h4 className="font-extrabold text-sm">
+                      {editingCrossword.id ? 'Chỉnh sửa Hàng Ô Chữ' : 'Thêm Hàng Ô Chữ KHTN mới'}
+                    </h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className="font-bold">Từ khóa hiển thị</label>
+                        <input
+                          type="text"
+                          value={editingCrossword.displayTerm || ''}
+                          onChange={(e) => setEditingCrossword({ ...editingCrossword, displayTerm: e.target.value })}
+                          placeholder="VD: Oxygen (O₂)"
+                          className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-bold"
+                        />
+                      </div>
+                      <div>
+                        <label className="font-bold">Khối lớp</label>
+                        <select
+                          value={editingCrossword.grade || 8}
+                          onChange={(e) =>
+                            setEditingCrossword({ ...editingCrossword, grade: Number(e.target.value) as Grade })
+                          }
+                          className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                        >
+                          <option value={6}>Lớp 6</option>
+                          <option value={7}>Lớp 7</option>
+                          <option value={8}>Lớp 8</option>
+                          <option value={9}>Lớp 9</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="font-bold">Phân môn</label>
+                        <select
+                          value={editingCrossword.domain || 'hoa-hoc'}
+                          onChange={(e) =>
+                            setEditingCrossword({ ...editingCrossword, domain: e.target.value as SubjectDomain })
+                          }
+                          className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                        >
+                          {DOMAINS.map((d) => (
+                            <option key={d.id} value={d.id}>
+                              {d.shortName}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="font-bold">Câu hỏi gợi ý mở ô chữ</label>
+                      <input
+                        type="text"
+                        value={editingCrossword.clue || ''}
+                        onChange={(e) => setEditingCrossword({ ...editingCrossword, clue: e.target.value })}
+                        placeholder="Nhập câu hỏi gợi ý..."
+                        className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                      />
+                    </div>
+                    <div className="flex justify-end gap-2">
+                      <button
+                        onClick={() => setEditingCrossword(null)}
+                        className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 font-bold"
+                      >
+                        Hủy
+                      </button>
+                      <button
+                        onClick={async () => {
+                          if (!editingCrossword.displayTerm?.trim() || !editingCrossword.clue?.trim()) {
+                            showToast('Vui lòng nhập từ khóa và gợi ý!', 'error');
+                            return;
+                          }
+                          await saveAdminCrossword({
+                            ...editingCrossword,
+                            displayTerm: editingCrossword.displayTerm,
+                            clue: editingCrossword.clue,
+                            grade: (editingCrossword.grade as Grade) || 8,
+                            domain: (editingCrossword.domain as SubjectDomain) || 'hoa-hoc',
+                          });
+                          setEditingCrossword(null);
+                          await loadAllData();
+                          showToast('Đã lưu hàng ô chữ KHTN!');
+                        }}
+                        className="px-4 py-2 rounded-xl bg-teal-700 text-white font-bold"
+                      >
+                        Lưu ô chữ
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {crosswords.map((cw) => (
+                    <div
+                      key={cw.id}
+                      className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3"
+                    >
+                      <div className="space-y-1 text-xs">
+                        <div className="flex items-center gap-2">
+                          <span className="px-2 py-0.5 rounded bg-teal-50 dark:bg-teal-950 text-teal-700 dark:text-teal-300 font-mono font-bold">
+                            {cw.answer}
+                          </span>
+                          <span className="font-bold text-slate-600">
+                            ({cw.displayTerm}) • Lớp {cw.grade}
+                          </span>
+                        </div>
+                        <p className="text-slate-700 dark:text-slate-300 font-medium">{cw.clue}</p>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={() => setEditingCrossword(cw)}
+                          className="p-1.5 rounded-lg text-teal-600 hover:bg-teal-50"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={async () => {
+                            await deleteAdminCrossword(cw.id);
+                            await loadAllData();
+                            showToast('Đã xóa hàng ô chữ.');
+                          }}
+                          className="p-1.5 rounded-lg text-red-600 hover:bg-red-50"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Sub-tab 3: Formula Detective */}
+            {gameSubTab === 'detective' && (
+              <div className="space-y-4">
+                {editingDetective && (
+                  <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border-2 border-teal-600/60 space-y-3 text-xs">
+                    <h4 className="font-extrabold text-sm">
+                      {editingDetective.id ? 'Chỉnh sửa Mật mã Thám tử' : 'Thêm Mật mã Thám tử mới'}
+                    </h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className="font-bold">Đáp án thuật ngữ (IUPAC)</label>
+                        <input
+                          type="text"
+                          value={editingDetective.displayAnswer || ''}
+                          onChange={(e) =>
+                            setEditingDetective({ ...editingDetective, displayAnswer: e.target.value })
+                          }
+                          placeholder="VD: SODIUM"
+                          className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-bold"
+                        />
+                      </div>
+                      <div>
+                        <label className="font-bold">Công thức / Ký hiệu hiển thị</label>
+                        <input
+                          type="text"
+                          value={editingDetective.displayFormula || ''}
+                          onChange={(e) =>
+                            setEditingDetective({ ...editingDetective, displayFormula: e.target.value })
+                          }
+                          placeholder="VD: Na (Z = 11)"
+                          className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                        />
+                      </div>
+                      <div>
+                        <label className="font-bold">Khối lớp</label>
+                        <select
+                          value={editingDetective.grade || 8}
+                          onChange={(e) =>
+                            setEditingDetective({ ...editingDetective, grade: Number(e.target.value) as Grade })
+                          }
+                          className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                        >
+                          <option value={6}>Lớp 6</option>
+                          <option value={7}>Lớp 7</option>
+                          <option value={8}>Lớp 8</option>
+                          <option value={9}>Lớp 9</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="font-bold">Dữ kiện thực nghiệm / Hiện tượng</label>
+                      <input
+                        type="text"
+                        value={editingDetective.clue || ''}
+                        onChange={(e) => setEditingDetective({ ...editingDetective, clue: e.target.value })}
+                        placeholder="Nhập dữ kiện hiện tượng khoa học..."
+                        className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                      />
+                    </div>
+                    <div className="flex justify-end gap-2">
+                      <button
+                        onClick={() => setEditingDetective(null)}
+                        className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 font-bold"
+                      >
+                        Hủy
+                      </button>
+                      <button
+                        onClick={async () => {
+                          if (!editingDetective.displayAnswer?.trim() || !editingDetective.clue?.trim()) {
+                            showToast('Vui lòng nhập đáp án và dữ kiện!', 'error');
+                            return;
+                          }
+                          await saveAdminDetectivePuzzle({
+                            ...editingDetective,
+                            displayAnswer: editingDetective.displayAnswer,
+                            clue: editingDetective.clue,
+                            grade: (editingDetective.grade as Grade) || 8,
+                            domain: (editingDetective.domain as SubjectDomain) || 'hoa-hoc',
+                          });
+                          setEditingDetective(null);
+                          await loadAllData();
+                          showToast('Đã lưu mật mã Thám tử!');
+                        }}
+                        className="px-4 py-2 rounded-xl bg-teal-700 text-white font-bold"
+                      >
+                        Lưu mật mã
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {detectivePuzzles.map((det) => (
+                    <div
+                      key={det.id}
+                      className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3"
+                    >
+                      <div className="space-y-1 text-xs">
+                        <div className="flex items-center gap-2">
+                          <span className="px-2 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-mono font-bold">
+                            {det.answer}
+                          </span>
+                          <span className="font-bold text-slate-600">
+                            {det.displayFormula} • Lớp {det.grade}
+                          </span>
+                        </div>
+                        <p className="text-slate-700 dark:text-slate-300 font-medium">{det.clue}</p>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={() => setEditingDetective(det)}
+                          className="p-1.5 rounded-lg text-teal-600 hover:bg-teal-50"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={async () => {
+                            await deleteAdminDetectivePuzzle(det.id);
+                            await loadAllData();
+                            showToast('Đã xóa mật mã thám tử.');
+                          }}
+                          className="p-1.5 rounded-lg text-red-600 hover:bg-red-50"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ============================================================== */}
+        {/* TAB 7: VIDEOS MANAGEMENT */}
+        {/* ============================================================== */}
+        {activeTab === 'videos' && (
+          <div className="space-y-4">
+            <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-2">
+                {(['all', 6, 7, 8, 9] as const).map((g) => (
+                  <button
+                    key={g}
+                    onClick={() => setVideoFilterGrade(g)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold ${
+                      videoFilterGrade === g
+                        ? 'bg-teal-700 text-white'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+                    }`}
+                  >
+                    {g === 'all' ? 'Tất cả khối' : `Lớp ${g}`}
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={() =>
+                  setEditingVideo({
+                    grade: 8,
+                    domain: 'hoa-hoc',
+                    title: '',
+                    youtubeId: 'dQw4w9WgXcQ',
+                    duration: '12:45',
+                    experimentType: 'Thí nghiệm thực hành',
+                    instructor: 'KHOA HỌC SỐ KHTN',
+                    description: '',
+                  })
+                }
+                className="px-4 py-2 rounded-xl bg-teal-700 text-white text-xs font-bold flex items-center gap-1.5"
+              >
+                <Plus className="w-4 h-4" /> Thêm Video mới
+              </button>
+            </div>
+
+            {editingVideo && (
+              <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border-2 border-teal-600/60 shadow-md space-y-4 text-xs">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-extrabold">
+                    {editingVideo.id ? 'Chỉnh sửa Video' : 'Thêm Video Bài giảng / Thí nghiệm mới'}
+                  </h4>
+                  <button onClick={() => setEditingVideo(null)}>
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="sm:col-span-2">
+                    <label className="font-bold">Tiêu đề Video</label>
+                    <input
+                      type="text"
+                      value={editingVideo.title || ''}
+                      onChange={(e) => setEditingVideo({ ...editingVideo, title: e.target.value })}
+                      placeholder="Nhập tiêu đề video thí nghiệm..."
+                      className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-semibold"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-bold">YouTube URL hoặc ID</label>
+                    <input
+                      type="text"
+                      value={editingVideo.youtubeId || ''}
+                      onChange={(e) => setEditingVideo({ ...editingVideo, youtubeId: e.target.value })}
+                      placeholder="VD: dQw4w9WgXcQ"
+                      className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-bold">Khối lớp</label>
+                    <select
+                      value={editingVideo.grade || 8}
+                      onChange={(e) => setEditingVideo({ ...editingVideo, grade: Number(e.target.value) as Grade })}
+                      className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                    >
+                      <option value={6}>Lớp 6</option>
+                      <option value={7}>Lớp 7</option>
+                      <option value={8}>Lớp 8</option>
+                      <option value={9}>Lớp 9</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="font-bold">Phân môn</label>
+                    <select
+                      value={editingVideo.domain || 'hoa-hoc'}
+                      onChange={(e) =>
+                        setEditingVideo({ ...editingVideo, domain: e.target.value as SubjectDomain })
+                      }
+                      className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                    >
+                      {DOMAINS.map((d) => (
+                        <option key={d.id} value={d.id}>
+                          {d.shortName}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="font-bold">Thời lượng</label>
+                    <input
+                      type="text"
+                      value={editingVideo.duration || '12:30'}
+                      onChange={(e) => setEditingVideo({ ...editingVideo, duration: e.target.value })}
+                      className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="font-bold">Mô tả nội dung video</label>
+                  <input
+                    type="text"
+                    value={editingVideo.description || ''}
+                    onChange={(e) => setEditingVideo({ ...editingVideo, description: e.target.value })}
+                    placeholder="Mô tả tóm tắt nội dung thí nghiệm..."
+                    className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                  />
+                </div>
+                <div className="flex justify-end gap-2">
+                  <button
+                    onClick={() => setEditingVideo(null)}
+                    className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 font-bold"
+                  >
+                    Hủy
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (!editingVideo.title?.trim()) {
+                        showToast('Vui lòng nhập tiêu đề video!', 'error');
+                        return;
+                      }
+                      await saveAdminVideo({
+                        ...editingVideo,
+                        title: editingVideo.title,
+                        grade: (editingVideo.grade as Grade) || 8,
+                        domain: (editingVideo.domain as SubjectDomain) || 'hoa-hoc',
+                        youtubeId: editingVideo.youtubeId || 'dQw4w9WgXcQ',
+                      });
+                      setEditingVideo(null);
+                      await loadAllData();
+                      showToast('Đã lưu video thành công!');
+                    }}
+                    className="px-4 py-2 rounded-xl bg-teal-700 text-white font-bold"
+                  >
+                    Lưu Video
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {filteredVideos.map((v) => (
+                <div
+                  key={v.id}
+                  className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex items-start justify-between gap-3"
+                >
+                  <div className="space-y-1.5 text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="px-2 py-0.5 rounded bg-rose-50 dark:bg-rose-950 text-rose-700 dark:text-rose-300 font-bold">
+                        {v.experimentType}
+                      </span>
+                      <span className="font-bold text-slate-600">
+                        Lớp {v.grade} • {DOMAINS.find((d) => d.id === v.domain)?.shortName} • {v.duration}
+                      </span>
+                    </div>
+                    <h4 className="font-extrabold text-sm text-slate-800 dark:text-white">{v.title}</h4>
+                    <p className="text-slate-500 line-clamp-2">{v.description}</p>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={() => setEditingVideo(v)}
+                      className="p-1.5 rounded-lg text-teal-600 hover:bg-teal-50"
+                    >
+                      <Edit className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() =>
+                        setDeleteModalState({
+                          isOpen: true,
+                          itemType: 'video',
+                          id: v.id,
+                          name: v.title,
+                          onCustomDelete: async () => {
+                            await deleteAdminVideo(v.id);
+                            showToast('Đã xóa video.');
+                          },
+                        })
+                      }
+                      className="p-1.5 rounded-lg text-red-600 hover:bg-red-50"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ============================================================== */}
+        {/* TAB 8: DOCUMENTS & STORAGE */}
+        {/* ============================================================== */}
+        {activeTab === 'docs' && (
+          <div className="space-y-6">
+            <div className="bg-white dark:bg-slate-900 p-4 rounded-3xl border border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setDocSubTab('catalog')}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold ${
+                    docSubTab === 'catalog'
+                      ? 'bg-teal-700 text-white'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600'
+                  }`}
+                >
+                  Đề cương & Tài liệu Học tập ({catalogDocs.length})
+                </button>
+                <button
+                  onClick={() => setDocSubTab('storage')}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold ${
+                    docSubTab === 'storage'
+                      ? 'bg-teal-700 text-white'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600'
+                  }`}
+                >
+                  Tệp Đính kèm Bài giảng ({documents.length})
+                </button>
+              </div>
+
+              {docSubTab === 'catalog' && (
+                <button
+                  onClick={() =>
+                    setEditingCatalogDoc({
+                      grade: 8,
+                      domain: 'hoa-hoc',
+                      title: '',
+                      format: 'pdf',
+                      type: 'Đề cương ôn tập',
+                      pageCount: 15,
+                      fileSize: '3.2 MB',
+                      description: '',
+                    })
+                  }
+                  className="px-4 py-2 rounded-xl bg-teal-700 text-white text-xs font-bold flex items-center gap-1.5"
+                >
+                  <Plus className="w-4 h-4" /> Thêm đề cương mới
+                </button>
+              )}
+            </div>
+
+            {docSubTab === 'catalog' && (
+              <div className="space-y-4">
+                {editingCatalogDoc && (
+                  <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border-2 border-teal-600/60 space-y-4 text-xs">
+                    <h4 className="font-extrabold text-sm">
+                      {editingCatalogDoc.id ? 'Chỉnh sửa Tài liệu' : 'Thêm Tài liệu / Đề cương mới'}
+                    </h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="sm:col-span-2">
+                        <label className="font-bold">Tên Tài liệu / Đề cương</label>
+                        <input
+                          type="text"
+                          value={editingCatalogDoc.title || ''}
+                          onChange={(e) => setEditingCatalogDoc({ ...editingCatalogDoc, title: e.target.value })}
+                          placeholder="Nhập tên tài liệu..."
+                          className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-semibold"
+                        />
+                      </div>
+                      <div>
+                        <label className="font-bold">Định dạng</label>
+                        <select
+                          value={editingCatalogDoc.format || 'pdf'}
+                          onChange={(e) => setEditingCatalogDoc({ ...editingCatalogDoc, format: e.target.value as any })}
+                          className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                        >
+                          <option value="pdf">PDF</option>
+                          <option value="pptx">PPTX (PowerPoint)</option>
+                          <option value="docx">DOCX (Word)</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="font-bold">Khối lớp</label>
+                        <select
+                          value={editingCatalogDoc.grade || 8}
+                          onChange={(e) =>
+                            setEditingCatalogDoc({ ...editingCatalogDoc, grade: Number(e.target.value) as Grade })
+                          }
+                          className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                        >
+                          <option value={6}>Lớp 6</option>
+                          <option value={7}>Lớp 7</option>
+                          <option value={8}>Lớp 8</option>
+                          <option value={9}>Lớp 9</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="font-bold">Phân môn</label>
+                        <select
+                          value={editingCatalogDoc.domain || 'hoa-hoc'}
+                          onChange={(e) =>
+                            setEditingCatalogDoc({ ...editingCatalogDoc, domain: e.target.value as SubjectDomain })
+                          }
+                          className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                        >
+                          {DOMAINS.map((d) => (
+                            <option key={d.id} value={d.id}>
+                              {d.shortName}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="font-bold">Dung lượng tệp</label>
+                        <input
+                          type="text"
+                          value={editingCatalogDoc.fileSize || '3.2 MB'}
+                          onChange={(e) => setEditingCatalogDoc({ ...editingCatalogDoc, fileSize: e.target.value })}
+                          className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="font-bold">Mô tả tài liệu</label>
+                      <input
+                        type="text"
+                        value={editingCatalogDoc.description || ''}
+                        onChange={(e) => setEditingCatalogDoc({ ...editingCatalogDoc, description: e.target.value })}
+                        placeholder="Mô tả nội dung tài liệu..."
+                        className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                      />
+                    </div>
+                    <div className="flex justify-end gap-2">
+                      <button
+                        onClick={() => setEditingCatalogDoc(null)}
+                        className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 font-bold"
+                      >
+                        Hủy
+                      </button>
+                      <button
+                        onClick={async () => {
+                          if (!editingCatalogDoc.title?.trim()) {
+                            showToast('Vui lòng nhập tên tài liệu!', 'error');
+                            return;
+                          }
+                          await saveAdminCatalogDoc({
+                            ...editingCatalogDoc,
+                            title: editingCatalogDoc.title,
+                            grade: (editingCatalogDoc.grade as Grade) || 8,
+                            domain: (editingCatalogDoc.domain as SubjectDomain) || 'hoa-hoc',
+                          });
+                          setEditingCatalogDoc(null);
+                          await loadAllData();
+                          showToast('Đã lưu tài liệu vào kho đề cương!');
+                        }}
+                        className="px-4 py-2 rounded-xl bg-teal-700 text-white font-bold"
+                      >
+                        Lưu tài liệu
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {catalogDocs.map((doc) => (
                     <div
                       key={doc.id}
-                      className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                      className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3"
                     >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <span
-                          className={`text-xs font-bold uppercase px-2.5 py-1 rounded-xl ${
-                            doc.format === 'pptx'
-                              ? 'bg-orange-100 dark:bg-orange-950 text-orange-700 dark:text-orange-300'
-                              : doc.format === 'pdf'
-                              ? 'bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300'
-                              : 'bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300'
+                      <div className="space-y-1 text-xs">
+                        <div className="flex items-center gap-2">
+                          <span className="px-2 py-0.5 rounded bg-teal-50 dark:bg-teal-950 text-teal-700 font-bold uppercase">
+                            {doc.format}
+                          </span>
+                          <span className="font-bold text-slate-600">
+                            Lớp {doc.grade} • {DOMAINS.find((d) => d.id === doc.domain)?.shortName} • {doc.fileSize}
+                          </span>
+                        </div>
+                        <h4 className="font-extrabold text-sm text-slate-800 dark:text-white">{doc.title}</h4>
+                        <p className="text-slate-500 line-clamp-1">{doc.description}</p>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={() => setEditingCatalogDoc(doc)}
+                          className="p-1.5 rounded-lg text-teal-600 hover:bg-teal-50"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={async () => {
+                            await deleteAdminCatalogDoc(doc.id);
+                            await loadAllData();
+                            showToast('Đã xóa tài liệu.');
+                          }}
+                          className="p-1.5 rounded-lg text-red-600 hover:bg-red-50"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {docSubTab === 'storage' && (
+              <div className="space-y-6">
+                <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+                  <h3 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                    <FileUp className="w-5 h-5 text-teal-600" />
+                    Tải Lên Tệp Đính Kèm (PPTX, PDF, DOCX, Hình ảnh)
+                  </h3>
+                  <AssetUploader
+                    lessonId="general-library"
+                    onAssetUploaded={(newDoc) => {
+                      setDocuments((prev) => [newDoc, ...prev]);
+                      showToast(`Đã tải lên tài liệu: "${newDoc.title}"`);
+                      loadAllData();
+                    }}
+                  />
+                </div>
+
+                <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-bold">Danh sách tệp đính kèm ({filteredDocuments.length})</h3>
+                    <div className="flex items-center gap-1.5 text-xs">
+                      {(['all', 'pptx', 'pdf', 'docx', 'image'] as const).map((fmt) => (
+                        <button
+                          key={fmt}
+                          onClick={() => setDocFormatFilter(fmt)}
+                          className={`px-2.5 py-1 rounded-lg font-bold uppercase ${
+                            docFormatFilter === fmt
+                              ? 'bg-teal-700 text-white'
+                              : 'bg-slate-100 dark:bg-slate-800 text-slate-600'
                           }`}
                         >
-                          {doc.format}
-                        </span>
+                          {fmt === 'all' ? 'Tất cả' : fmt}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="space-y-2.5">
+                    {filteredDocuments.map((doc) => (
+                      <div
+                        key={doc.id}
+                        className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 flex items-center justify-between gap-3"
+                      >
                         <div className="min-w-0">
-                          <h4 className="font-bold text-xs sm:text-sm text-slate-800 dark:text-slate-100 truncate">
-                            {doc.title}
-                          </h4>
-                          <div className="text-[11px] text-slate-400 mt-0.5">
-                            {doc.type} • {doc.fileSize} {doc.lessonTitle && `• Bài: ${doc.lessonTitle}`}
+                          <h4 className="font-bold text-xs sm:text-sm truncate">{doc.title}</h4>
+                          <div className="text-[11px] text-slate-400">
+                            {doc.format.toUpperCase()} • {doc.fileSize} {doc.lessonTitle && `• Bài: ${doc.lessonTitle}`}
                           </div>
                         </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
-                        {doc.fileUrl && doc.fileUrl !== '#' && (
-                          <a
-                            href={doc.fileUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-1"
-                          >
-                            <ExternalLink className="w-3.5 h-3.5" /> Mở tệp
-                          </a>
-                        )}
-
                         <button
                           onClick={() =>
                             setDeleteModalState({
@@ -862,261 +2800,197 @@ $$;`,
                               storagePath: doc.storagePath,
                             })
                           }
-                          className="p-2 rounded-xl text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/60 border border-red-200 dark:border-red-900 transition"
-                          title="Xóa tài liệu khỏi Storage"
+                          className="p-2 rounded-xl text-red-600 hover:bg-red-50"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         )}
 
         {/* ============================================================== */}
-        {/* TAB 3: OVERVIEW */}
+        {/* TAB 9: USERS & ROLES MANAGEMENT */}
         {/* ============================================================== */}
-        {activeTab === 'overview' && (
-          <div className="space-y-6">
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-1">
-                <span className="text-xs text-slate-500 dark:text-slate-400 font-semibold">Tổng bài giảng</span>
-                <div className="text-3xl font-extrabold text-teal-600 dark:text-teal-400 font-mono">
-                  {totalLessonsCount}
-                </div>
-                <div className="text-[11px] text-slate-400">
-                  {publishedCount} đã xuất bản • {draftCount} bản nháp
-                </div>
-              </div>
-
-              <div className="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-1">
-                <span className="text-xs text-slate-500 dark:text-slate-400 font-semibold">Trạm mô phỏng 3D</span>
-                <div className="text-3xl font-extrabold text-blue-600 dark:text-blue-400 font-mono">
-                  {SIMULATIONS_3D.length}
-                </div>
-                <div className="text-[11px] text-slate-400">WebGL Three.js mượt mà</div>
-              </div>
-
-              <div className="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-1">
-                <span className="text-xs text-slate-500 dark:text-slate-400 font-semibold">Học liệu PPT & PDF</span>
-                <div className="text-3xl font-extrabold text-purple-600 dark:text-purple-400 font-mono">
-                  {totalDocsCount}
-                </div>
-                <div className="text-[11px] text-slate-400">Đã lưu trữ Supabase Storage</div>
-              </div>
-
-              <div className="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-1">
-                <span className="text-xs text-slate-500 dark:text-slate-400 font-semibold">Giới hạn Storage Free</span>
-                <div className="text-3xl font-extrabold text-emerald-600 dark:text-emerald-400 font-mono">
-                  50 MB
-                </div>
-                <div className="text-[11px] text-slate-400">Tối đa mỗi tệp tải lên</div>
-              </div>
-            </div>
-
-            {/* Quick Actions Card */}
-            <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
-              <h3 className="text-base font-bold text-[#0B1F3A] dark:text-white">
-                Thao tác quản trị nhanh
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <button
-                  onClick={handleOpenCreate}
-                  className="p-4 rounded-2xl bg-teal-50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800 text-left hover:bg-teal-100 dark:hover:bg-teal-950/70 transition space-y-1"
-                >
-                  <Plus className="w-5 h-5 text-teal-600 dark:text-teal-400" />
-                  <div className="font-bold text-xs sm:text-sm text-teal-900 dark:text-teal-200">
-                    Soạn bài học mới
-                  </div>
-                  <p className="text-[11px] text-teal-700 dark:text-teal-400">
-                    Thêm bài giảng, chọn mạch GDPT 2018 và sinh slug
-                  </p>
-                </button>
-
-                <button
-                  onClick={() => setActiveTab('docs')}
-                  className="p-4 rounded-2xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 text-left hover:bg-blue-100 dark:hover:bg-blue-950/70 transition space-y-1"
-                >
-                  <UploadCloud className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                  <div className="font-bold text-xs sm:text-sm text-blue-900 dark:text-blue-200">
-                    Tải tài liệu lên Storage
-                  </div>
-                  <p className="text-[11px] text-blue-700 dark:text-blue-400">
-                    Upload tệp PPTX, PDF (giới hạn 50MB an toàn)
-                  </p>
-                </button>
-
-                <button
-                  onClick={() => setActiveTab('schema')}
-                  className="p-4 rounded-2xl bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800 text-left hover:bg-purple-100 dark:hover:bg-purple-950/70 transition space-y-1"
-                >
-                  <ShieldCheck className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-                  <div className="font-bold text-xs sm:text-sm text-purple-900 dark:text-purple-200">
-                    Kiểm tra RLS & Schema
-                  </div>
-                  <p className="text-[11px] text-purple-700 dark:text-purple-400">
-                    Xem 14 bảng dữ liệu, RPC chấm điểm và quyền giáo viên
-                  </p>
-                </button>
-              </div>
-            </div>
-
-            {/* Cloudflare Pages Deploy Instructions */}
-            <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
-              <h3 className="text-base font-bold text-[#0B1F3A] dark:text-white">
-                Hướng dẫn triển khai Cloudflare Pages & GitHub
-              </h3>
-              <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                Ứng dụng hoàn toàn sẵn sàng chạy trên Cloudflare Pages miễn phí. Thiết lập biến môi trường sau trên dashboard Cloudflare Pages:
-              </p>
-              <pre className="p-4 rounded-2xl bg-slate-950 text-teal-300 font-mono text-xs overflow-x-auto border border-slate-800 leading-relaxed">
-{`# 1. Cloudflare Pages Settings:
-Framework: Vite
-Build command: npm run build
-Output directory: dist
-
-# 2. Environment Variables:
-VITE_SUPABASE_URL = "https://your-project.supabase.co"
-VITE_SUPABASE_ANON_KEY = "eyJh..."`}
-              </pre>
-            </div>
-          </div>
-        )}
-
-        {/* ============================================================== */}
-        {/* TAB 4: 3D SIMULATIONS */}
-        {/* ============================================================== */}
-        {activeTab === 'sims' && (
-          <SimulationManager lessons={lessons} showToast={showToast} />
-        )}
-
-        {/* ============================================================== */}
-        {/* TAB 5: SCHEMA & SECURITY */}
-        {/* ============================================================== */}
-        {activeTab === 'schema' && (
-          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-slate-800 shadow-sm space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        {activeTab === 'users' && (
+          <div className="space-y-4">
+            <div className="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <h3 className="text-lg font-bold text-[#0B1F3A] dark:text-white">
-                  Kiến Trúc Cơ Sở Dữ Liệu & Bảo Mật Supabase RLS
+                <h3 className="text-base font-extrabold text-slate-800 dark:text-white">
+                  Quản Lý Học Sinh, Giáo Viên & Phân Quyền Hệ Thống
                 </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Tất cả bảng dữ liệu và Storage buckets đều được kiểm soát bởi Row Level Security (RLS).
+                <p className="text-xs text-slate-500">
+                  Thêm mới tài khoản, phân quyền (Admin / Giáo viên / Học sinh) hoặc chuyển đổi nhanh tài khoản đang đăng nhập.
                 </p>
               </div>
-
               <button
-                onClick={() => copySql(sqlSnippets[activeSqlTab])}
-                className="px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs shadow-md transition flex items-center gap-1.5 self-start sm:self-center"
+                onClick={() =>
+                  setEditingUser({
+                    fullName: '',
+                    email: '',
+                    role: 'student',
+                    grade: 8,
+                    school: 'THCS Đà Nẵng, Việt Nam',
+                  })
+                }
+                className="px-4 py-2 rounded-xl bg-teal-700 text-white text-xs font-bold flex items-center gap-1.5 self-start sm:self-center"
               >
-                <Copy className="w-4 h-4" />
-                <span>{copiedSql ? 'Đã sao chép SQL!' : 'Sao chép đoạn mã SQL'}</span>
+                <Plus className="w-4 h-4" /> Thêm tài khoản
               </button>
             </div>
 
-            {/* Subtabs for migrations */}
-            <div className="flex gap-2 overflow-x-auto pb-1 border-b border-slate-200 dark:border-slate-800">
-              <button
-                onClick={() => setActiveSqlTab('006')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap ${
-                  activeSqlTab === '006'
-                    ? 'bg-teal-600 text-white'
-                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
-                }`}
-              >
-                006: Hệ thống Huy hiệu (Master of Physics / Lab Pioneer)
-              </button>
-              <button
-                onClick={() => setActiveSqlTab('005')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap ${
-                  activeSqlTab === '005'
-                    ? 'bg-teal-600 text-white'
-                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
-                }`}
-              >
-                005: Quiz & Tiến độ học sinh (Server RPC)
-              </button>
-              <button
-                onClick={() => setActiveSqlTab('004')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap ${
-                  activeSqlTab === '004'
-                    ? 'bg-teal-600 text-white'
-                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
-                }`}
-              >
-                004: Mô phỏng 3D & GLB
-              </button>
-              <button
-                onClick={() => setActiveSqlTab('003')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap ${
-                  activeSqlTab === '003'
-                    ? 'bg-teal-600 text-white'
-                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
-                }`}
-              >
-                003: Mở rộng Admin & Giới hạn 50MB
-              </button>
-              <button
-                onClick={() => setActiveSqlTab('000')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
-                  activeSqlTab === '000'
-                    ? 'bg-teal-600 text-white'
-                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
-                }`}
-              >
-                000: Schema 14 Bảng & RLS
-              </button>
-              <button
-                onClick={() => setActiveSqlTab('001')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
-                  activeSqlTab === '001'
-                    ? 'bg-teal-600 text-white'
-                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
-                }`}
-              >
-                001: Dữ liệu mẫu GDPT 2018
-              </button>
-              <button
-                onClick={() => setActiveSqlTab('002')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
-                  activeSqlTab === '002'
-                    ? 'bg-teal-600 text-white'
-                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
-                }`}
-              >
-                002: Cấu hình Storage
-              </button>
-            </div>
-
-            {/* SQL Snippet box */}
-            <pre className="p-4 sm:p-6 rounded-2xl bg-slate-950 text-teal-300 font-mono text-xs overflow-x-auto border border-slate-800 leading-relaxed max-h-96">
-              {sqlSnippets[activeSqlTab]}
-            </pre>
-
-            {/* Security Audit Explanation */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 space-y-1.5">
-                <div className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
-                  <ShieldCheck className="w-4 h-4 text-teal-600 dark:text-teal-400" />
-                  Bảo vệ chống nâng quyền trái phép
+            {editingUser && (
+              <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border-2 border-teal-600/60 space-y-4 text-xs">
+                <h4 className="font-extrabold text-sm">
+                  {editingUser.id ? 'Chỉnh sửa Tài khoản' : 'Thêm Tài khoản mới'}
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div>
+                    <label className="font-bold">Họ và tên</label>
+                    <input
+                      type="text"
+                      value={editingUser.fullName || ''}
+                      onChange={(e) => setEditingUser({ ...editingUser, fullName: e.target.value })}
+                      placeholder="VD: Trần Minh Khoa"
+                      className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-semibold"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-bold">Email đăng nhập</label>
+                    <input
+                      type="email"
+                      value={editingUser.email || ''}
+                      onChange={(e) => setEditingUser({ ...editingUser, email: e.target.value })}
+                      placeholder="email@gmail.com"
+                      className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-bold">Vai trò hệ thống</label>
+                    <select
+                      value={editingUser.role || 'student'}
+                      onChange={(e) => setEditingUser({ ...editingUser, role: e.target.value as any })}
+                      className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                    >
+                      <option value="admin">Quản trị viên (Admin)</option>
+                      <option value="teacher">Giáo viên (Teacher)</option>
+                      <option value="student">Học sinh (Student)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="font-bold">Khối lớp</label>
+                    <select
+                      value={editingUser.grade || 8}
+                      onChange={(e) => setEditingUser({ ...editingUser, grade: Number(e.target.value) as Grade })}
+                      className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                    >
+                      <option value={6}>Lớp 6</option>
+                      <option value={7}>Lớp 7</option>
+                      <option value={8}>Lớp 8</option>
+                      <option value={9}>Lớp 9</option>
+                    </select>
+                  </div>
                 </div>
-                <p className="text-slate-500 dark:text-slate-400 leading-relaxed">
-                  Bảng <code>user_roles</code> hoàn toàn tách biệt khỏi <code>profiles</code>. Khi học sinh đăng ký tài khoản mới, trigger PostgreSQL tự động khóa cứng vai trò <code>student</code>. Bảng <code>user_roles</code> chỉ chấp nhận INSERT/UPDATE/DELETE từ tài khoản có vai trò <code>admin</code>.
-                </p>
-              </div>
-
-              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 space-y-1.5">
-                <div className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
-                  <Lock className="w-4 h-4 text-teal-600 dark:text-teal-400" />
-                  Bảo vệ đáp án & Giới hạn Storage 50MB
+                <div className="flex justify-end gap-2">
+                  <button
+                    onClick={() => setEditingUser(null)}
+                    className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 font-bold"
+                  >
+                    Hủy
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (!editingUser.fullName?.trim() || !editingUser.email?.trim()) {
+                        showToast('Vui lòng nhập họ tên và email!', 'error');
+                        return;
+                      }
+                      await saveAdminUser({
+                        ...editingUser,
+                        fullName: editingUser.fullName,
+                        email: editingUser.email,
+                        role: (editingUser.role as any) || 'student',
+                      });
+                      setEditingUser(null);
+                      await loadAllData();
+                      showToast('Đã lưu thông tin tài khoản!');
+                    }}
+                    className="px-4 py-2 rounded-xl bg-teal-700 text-white font-bold"
+                  >
+                    Lưu tài khoản
+                  </button>
                 </div>
-                <p className="text-slate-500 dark:text-slate-400 leading-relaxed">
-                  Bảng <code>answer_keys</code> khóa quyền SELECT đối với học sinh. Chấm điểm được thực hiện bằng function RPC an toàn <code>submit_quiz_attempt</code>. Đồng thời, dung lượng tệp tải lên Supabase Storage được giới hạn ở 50MB/tệp, ngăn ngừa chi phí lưu trữ phát sinh.
-                </p>
               </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {usersList.map((u) => {
+                const isCurrent = user?.email === u.email;
+                return (
+                  <div
+                    key={u.id}
+                    className={`p-5 rounded-2xl border bg-white dark:bg-slate-900 shadow-sm flex items-center justify-between gap-3 ${
+                      isCurrent
+                        ? 'border-teal-600 dark:border-teal-500'
+                        : 'border-slate-200 dark:border-slate-800'
+                    }`}
+                  >
+                    <div className="space-y-1 text-xs">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`px-2 py-0.5 rounded font-bold uppercase text-[10px] ${
+                            u.role === 'admin'
+                              ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300'
+                              : u.role === 'teacher'
+                              ? 'bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300'
+                              : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                          }`}
+                        >
+                          {u.role === 'admin' ? 'Admin' : u.role === 'teacher' ? 'Giáo viên' : `Học sinh Lớp ${u.grade || 8}`}
+                        </span>
+                        {isCurrent && (
+                          <span className="text-[11px] font-bold text-teal-600">• Đang sử dụng</span>
+                        )}
+                      </div>
+                      <h4 className="font-extrabold text-sm text-slate-800 dark:text-white">{u.fullName}</h4>
+                      <div className="text-slate-500">{u.email} • {u.school || 'Đà Nẵng, Việt Nam'}</div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {!isCurrent && (
+                        <button
+                          onClick={() => handleSwitchUserAccount(u)}
+                          className="px-2.5 py-1.5 rounded-xl bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800 text-xs font-bold flex items-center gap-1"
+                          title="Chuyển sang tài khoản này"
+                        >
+                          <UserCheck className="w-3.5 h-3.5" /> Dùng TK
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setEditingUser(u)}
+                        className="p-1.5 rounded-lg text-teal-600 hover:bg-teal-50"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+                      {!isCurrent && (
+                        <button
+                          onClick={async () => {
+                            await deleteAdminUser(u.id);
+                            await loadAllData();
+                            showToast('Đã xóa tài khoản.');
+                          }}
+                          className="p-1.5 rounded-lg text-red-600 hover:bg-red-50"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
@@ -1133,7 +3007,7 @@ VITE_SUPABASE_ANON_KEY = "eyJh..."`}
               ? `Đã cập nhật bài học: "${savedLesson.title}"`
               : `Đã tạo mới bài học: "${savedLesson.title}"`
           );
-          loadLessons();
+          loadAllData();
         }}
       />
 
@@ -1142,12 +3016,26 @@ VITE_SUPABASE_ANON_KEY = "eyJh..."`}
         isOpen={deleteModalState.isOpen}
         title={`Xác nhận xóa ${deleteModalState.itemType}`}
         itemName={deleteModalState.name}
-        itemType={deleteModalState.itemType}
+        itemType={deleteModalState.itemType as any}
         isDeleting={isDeleting}
         onConfirm={handleConfirmDelete}
         onCancel={() =>
           setDeleteModalState({ isOpen: false, itemType: 'bài học', id: '', name: '' })
         }
+      />
+
+      {/* Word Question Import Modal */}
+      <WordQuestionImportModal
+        isOpen={isWordImportOpen}
+        onClose={() => setIsWordImportOpen(false)}
+        onImported={async ({ savedQuestions, createdQuiz }) => {
+          await loadAllData();
+          showToast(
+            createdQuiz
+              ? `Đã nhập ${savedQuestions.length} câu hỏi từ Word và tạo đề "${createdQuiz.title}"!`
+              : `Đã nhập thành công ${savedQuestions.length} câu hỏi kèm giải thích chi tiết từ Word!`
+          );
+        }}
       />
     </div>
   );

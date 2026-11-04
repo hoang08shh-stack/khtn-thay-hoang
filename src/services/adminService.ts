@@ -1,7 +1,36 @@
-import { supabase, isSupabaseConfigured } from '../lib/supabase.ts';
-import { Grade, SubjectDomain } from '../types/index.ts';
-import { LESSONS, DOCUMENTS, TOPICS } from '../data/mockData.ts';
+import { supabase, isSupabaseConfigured, DEMO_USERS } from '../lib/supabase.ts';
+import {
+  Grade,
+  SubjectDomain,
+  Topic,
+  DocumentItem,
+  VideoLesson,
+  QuizQuestion,
+  QuizMeta,
+  AppUser,
+} from '../types/index.ts';
+import {
+  LESSONS,
+  DOCUMENTS,
+  TOPICS,
+  VIDEOS,
+  QUIZ_QUESTIONS,
+  LESSON_QUIZZES,
+} from '../data/mockData.ts';
+import {
+  SciencePairItem,
+  CrosswordRowItem,
+  DetectivePuzzleItem,
+  SCIENCE_PAIR_BANK,
+  CROSSWORD_ROW_BANK,
+  DETECTIVE_PUZZLE_BANK,
+  normalizeCrosswordInput,
+} from '../utils/scienceGameEngine.ts';
 import { deleteStorageFile } from './storageService.ts';
+import {
+  generateStepByStepSolution,
+  generateDetailedExplanation,
+} from '../utils/wordQuestionParser.ts';
 
 export interface LessonAssetItem {
   id: string;
@@ -39,8 +68,44 @@ export interface AdminLesson {
   simulationIds?: string[];
 }
 
-const LOCAL_STORAGE_KEY_LESSONS = 'khtn_admin_lessons_v2';
-const LOCAL_STORAGE_KEY_ASSETS = 'khtn_admin_assets_v2';
+export interface SiteSettings {
+  siteName: string;
+  labName: string;
+  bookSeries: string;
+  location: string;
+  email: string;
+  zalo: string;
+  domainsLabel: string;
+  allowStudentRegister: boolean;
+  maintenanceMode: boolean;
+}
+
+export const STORAGE_KEYS = {
+  LESSONS: 'khtn_admin_lessons_v2',
+  ASSETS: 'khtn_admin_assets_v2',
+  TOPICS: 'khtn_admin_topics_v2',
+  QUESTIONS: 'khtn_admin_questions_v2',
+  QUIZZES: 'khtn_admin_quizzes_v2',
+  VIDEOS: 'khtn_admin_videos_v2',
+  CATALOG_DOCS: 'khtn_admin_catalog_docs_v2',
+  GAME_PAIRS: 'khtn_admin_game_pairs_v2',
+  GAME_CROSSWORDS: 'khtn_admin_game_crosswords_v2',
+  GAME_DETECTIVE: 'khtn_admin_game_detective_v2',
+  USERS: 'khtn_admin_users_v2',
+  SETTINGS: 'khtn_admin_site_settings_v2',
+} as const;
+
+export const DEFAULT_SITE_SETTINGS: SiteSettings = {
+  siteName: 'KHOA HỌC TỰ NHIÊN',
+  labName: 'KHOA HỌC SỐ KHTN',
+  bookSeries: 'Kết nối tri thức với cuộc sống',
+  location: 'Đà Nẵng, Việt Nam',
+  email: 'hoang08shh@gmail.com',
+  zalo: '0793565756',
+  domainsLabel: 'Vật lí • Hóa học • Sinh học',
+  allowStudentRegister: true,
+  maintenanceMode: false,
+};
 
 /**
  * Generate standard URL slug from Vietnamese string
@@ -65,32 +130,52 @@ export function extractYouTubeId(urlOrId: string): string | null {
   if (!urlOrId) return null;
   const trimmed = urlOrId.trim();
 
-  // If already standard 11 alphanumeric characters
   if (/^[a-zA-Z0-9_-]{11}$/.test(trimmed)) {
     return trimmed;
   }
 
-  // Common YouTube URL regex
-  const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i;
+  const regex = /(?:youtube\.com\/(?:[^/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?/\s]{11})/i;
   const match = trimmed.match(regex);
   return match ? match[1] : null;
 }
 
-/**
- * Initialize default local data from mock data
- */
-function getInitialLocalLessons(): AdminLesson[] {
+function safeReadLocal<T>(key: string, fallback: T): T {
   try {
-    const raw = localStorage.getItem(LOCAL_STORAGE_KEY_LESSONS);
+    if (typeof localStorage === 'undefined') return fallback;
+    const raw = localStorage.getItem(key);
     if (raw) {
-      return JSON.parse(raw);
+      const parsed = JSON.parse(raw);
+      if (parsed !== null && parsed !== undefined) {
+        return parsed as T;
+      }
     }
   } catch (e) {
-    console.warn('Could not read lessons from localStorage:', e);
+    console.warn(`Could not read ${key} from localStorage:`, e);
+  }
+  return fallback;
+}
+
+function safeWriteLocal<T>(key: string, data: T): void {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    localStorage.setItem(key, JSON.stringify(data));
+  } catch (e) {
+    console.warn(`Failed to write ${key} to localStorage:`, e);
+  }
+}
+
+/**
+ * ============================================================================
+ * 1. LESSONS MANAGEMENT
+ * ============================================================================
+ */
+function getInitialLocalLessons(): AdminLesson[] {
+  const cached = safeReadLocal<AdminLesson[] | null>(STORAGE_KEYS.LESSONS, null);
+  if (cached && Array.isArray(cached) && cached.length > 0) {
+    return cached;
   }
 
-  // Pre-populate from mock data
-  const initial = LESSONS.map((l, index) => ({
+  const initial: AdminLesson[] = LESSONS.map((l, index) => ({
     id: l.id,
     topicId: l.topicId || 'topic-default',
     grade: l.grade,
@@ -99,10 +184,12 @@ function getInitialLocalLessons(): AdminLesson[] {
     slug: generateSlug(l.title),
     title: l.title,
     summary: l.summary,
-    content: l.sections?.map((s) => `### ${s.title}\n${s.content.join('\n')}`).join('\n\n') || l.summary,
+    content:
+      l.sections?.map((s) => `### ${s.title}\n${s.content.join('\n')}`).join('\n\n') ||
+      l.summary,
     durationMinutes: l.durationMinutes || 45,
     orderIndex: index + 1,
-    isPublished: true, // Default lessons are published
+    isPublished: true,
     thumbnailUrl: l.thumbnailUrl,
     videoUrl: l.videoUrl || 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
     viewCount: l.viewCount || 120,
@@ -135,47 +222,25 @@ function getInitialLocalLessons(): AdminLesson[] {
     ],
   }));
 
-  try {
-    localStorage.setItem(LOCAL_STORAGE_KEY_LESSONS, JSON.stringify(initial));
-  } catch (e) {
-    // Ignore storage quota errors
-  }
-
+  safeWriteLocal(STORAGE_KEYS.LESSONS, initial);
   return initial;
 }
 
 function saveLocalLessons(lessons: AdminLesson[]) {
-  try {
-    localStorage.setItem(LOCAL_STORAGE_KEY_LESSONS, JSON.stringify(lessons));
-  } catch (e) {
-    console.warn('Failed to save lessons to localStorage:', e);
-  }
+  safeWriteLocal(STORAGE_KEYS.LESSONS, lessons);
 }
 
-/**
- * Fetch all lessons for Admin / Teacher (including Drafts)
- */
 export async function fetchAdminLessons(): Promise<AdminLesson[]> {
   if (isSupabaseConfigured && supabase) {
     try {
-      // 1. Fetch lessons
       const { data: lessonsData, error: lessonsError } = await supabase
         .from('lessons')
         .select('*')
         .order('order_index', { ascending: true });
 
-      if (lessonsError) {
-        console.warn('Supabase fetch lessons failed:', lessonsError);
-      } else if (lessonsData && lessonsData.length > 0) {
-        // 2. Fetch all lesson_assets
-        const { data: assetsData } = await supabase
-          .from('lesson_assets')
-          .select('*');
-
-        // 3. Fetch lesson_simulations
-        const { data: simLinks } = await supabase
-          .from('lesson_simulations')
-          .select('*');
+      if (!lessonsError && lessonsData && lessonsData.length > 0) {
+        const { data: assetsData } = await supabase.from('lesson_assets').select('*');
+        const { data: simLinks } = await supabase.from('lesson_simulations').select('*');
 
         return lessonsData.map((l: any) => {
           const lessonAssets: LessonAssetItem[] = (assetsData || [])
@@ -228,9 +293,6 @@ export async function fetchAdminLessons(): Promise<AdminLesson[]> {
   return getInitialLocalLessons();
 }
 
-/**
- * Check if a slug is available/unique
- */
 export async function checkSlugAvailable(
   slug: string,
   excludeId?: string
@@ -239,31 +301,6 @@ export async function checkSlugAvailable(
     return { available: false, reason: 'Slug phải có ít nhất 2 ký tự.' };
   }
 
-  if (isSupabaseConfigured && supabase) {
-    try {
-      let query = supabase
-        .from('lessons')
-        .select('id, slug, code')
-        .or(`slug.eq.${slug},code.eq.${slug}`);
-
-      if (excludeId) {
-        query = query.neq('id', excludeId);
-      }
-
-      const { data, error } = await query;
-      if (!error && data && data.length > 0) {
-        return {
-          available: false,
-          reason: `Đường dẫn/mã "${slug}" đã được sử dụng bởi một bài học khác.`,
-        };
-      }
-      return { available: true };
-    } catch (err) {
-      console.warn('Supabase slug check fallback to local check:', err);
-    }
-  }
-
-  // Local check
   const localLessons = getInitialLocalLessons();
   const exists = localLessons.some(
     (l) => (l.slug === slug || l.code === slug) && l.id !== excludeId
@@ -278,9 +315,6 @@ export async function checkSlugAvailable(
   return { available: true };
 }
 
-/**
- * Save Lesson (Create or Update) + sync assets and simulations
- */
 export async function saveAdminLesson(
   lessonData: {
     id?: string;
@@ -304,125 +338,6 @@ export async function saveAdminLesson(
   const finalSlug = lessonData.slug?.trim() || generateSlug(lessonData.title);
   const now = new Date().toISOString();
 
-  // 1. Supabase live database save
-  if (isSupabaseConfigured && supabase) {
-    try {
-      let savedLessonId = lessonData.id;
-
-      if (savedLessonId) {
-        // UPDATE
-        const { error: updateError } = await supabase
-          .from('lessons')
-          .update({
-            topic_id: lessonData.topicId || null,
-            grade: lessonData.grade,
-            domain: lessonData.domain,
-            code: lessonData.code,
-            slug: finalSlug,
-            title: lessonData.title,
-            summary: lessonData.summary,
-            content: lessonData.content,
-            duration_minutes: lessonData.durationMinutes,
-            order_index: lessonData.orderIndex,
-            is_published: lessonData.isPublished,
-            thumbnail_url: lessonData.thumbnailUrl || null,
-            video_url: lessonData.videoUrl || null,
-            updated_at: now,
-          })
-          .eq('id', savedLessonId);
-
-        if (updateError) throw new Error(updateError.message);
-      } else {
-        // INSERT
-        const { data: insertData, error: insertError } = await supabase
-          .from('lessons')
-          .insert({
-            topic_id: lessonData.topicId || null,
-            grade: lessonData.grade,
-            domain: lessonData.domain,
-            code: lessonData.code,
-            slug: finalSlug,
-            title: lessonData.title,
-            summary: lessonData.summary,
-            content: lessonData.content,
-            duration_minutes: lessonData.durationMinutes,
-            order_index: lessonData.orderIndex,
-            is_published: lessonData.isPublished,
-            thumbnail_url: lessonData.thumbnailUrl || null,
-            video_url: lessonData.videoUrl || null,
-            created_at: now,
-            updated_at: now,
-          })
-          .select('id')
-          .single();
-
-        if (insertError) throw new Error(insertError.message);
-        savedLessonId = insertData.id;
-      }
-
-      // Sync lesson_assets
-      if (savedLessonId) {
-        // Delete old assets not in current list
-        const currentAssetIds = assets.map((a) => a.id).filter(Boolean);
-        if (currentAssetIds.length > 0) {
-          await supabase
-            .from('lesson_assets')
-            .delete()
-            .eq('lesson_id', savedLessonId)
-            .not('id', 'in', `(${currentAssetIds.join(',')})`);
-        } else {
-          await supabase
-            .from('lesson_assets')
-            .delete()
-            .eq('lesson_id', savedLessonId);
-        }
-
-        // Upsert assets
-        for (const asset of assets) {
-          await supabase.from('lesson_assets').upsert({
-            id: asset.id.startsWith('temp-') ? undefined : asset.id,
-            lesson_id: savedLessonId,
-            title: asset.title,
-            format: asset.format,
-            type: asset.type,
-            file_size: asset.fileSize,
-            file_url: asset.fileUrl,
-            storage_path: asset.storagePath || null,
-            downloads_count: asset.downloadsCount || 0,
-          });
-        }
-
-        // Sync lesson_simulations
-        await supabase
-          .from('lesson_simulations')
-          .delete()
-          .eq('lesson_id', savedLessonId);
-
-        if (simulationIds.length > 0) {
-          const simRows = simulationIds.map((simId) => ({
-            lesson_id: savedLessonId,
-            simulation_id: simId,
-          }));
-          await supabase.from('lesson_simulations').insert(simRows);
-        }
-      }
-
-      return {
-        id: savedLessonId || lessonData.id || ('lesson_' + Date.now()),
-        ...lessonData,
-        slug: finalSlug,
-        viewCount: 0,
-        createdAt: now,
-        updatedAt: now,
-        assets,
-        simulationIds,
-      };
-    } catch (err: any) {
-      console.warn('Supabase saveLesson failed, using local store:', err);
-    }
-  }
-
-  // 2. Local fallback save
   const local = getInitialLocalLessons();
   const id = lessonData.id || `custom-lesson-${Date.now()}`;
 
@@ -463,27 +378,10 @@ export async function saveAdminLesson(
   return savedLesson;
 }
 
-/**
- * Toggle Publish / Draft status of a lesson
- */
 export async function toggleLessonPublish(
   lessonId: string,
   isPublished: boolean
 ): Promise<boolean> {
-  if (isSupabaseConfigured && supabase) {
-    try {
-      const { error } = await supabase
-        .from('lessons')
-        .update({ is_published: isPublished, updated_at: new Date().toISOString() })
-        .eq('id', lessonId);
-
-      if (error) throw error;
-      return true;
-    } catch (err) {
-      console.warn('Supabase togglePublish failed, updating local:', err);
-    }
-  }
-
   const local = getInitialLocalLessons();
   const target = local.find((l) => l.id === lessonId);
   if (target) {
@@ -495,48 +393,13 @@ export async function toggleLessonPublish(
   return false;
 }
 
-/**
- * Delete a lesson and all associated files/records
- */
 export async function deleteAdminLesson(lessonId: string): Promise<boolean> {
-  if (isSupabaseConfigured && supabase) {
-    try {
-      // Find assets to delete files from storage
-      const { data: assets } = await supabase
-        .from('lesson_assets')
-        .select('storage_path')
-        .eq('lesson_id', lessonId);
-
-      if (assets) {
-        for (const a of assets) {
-          if (a.storage_path) {
-            await deleteStorageFile('lesson-documents', a.storage_path);
-          }
-        }
-      }
-
-      // Delete from DB (cascades to lesson_assets, lesson_simulations)
-      const { error } = await supabase
-        .from('lessons')
-        .delete()
-        .eq('id', lessonId);
-
-      if (error) throw error;
-      return true;
-    } catch (err) {
-      console.warn('Supabase deleteLesson failed, falling back to local:', err);
-    }
-  }
-
   const local = getInitialLocalLessons();
   const filtered = local.filter((l) => l.id !== lessonId);
   saveLocalLessons(filtered);
   return true;
 }
 
-/**
- * Fetch all documents across all lessons
- */
 export async function fetchAllAdminDocuments(): Promise<LessonAssetItem[]> {
   const lessons = await fetchAdminLessons();
   const allDocs: LessonAssetItem[] = [];
@@ -555,9 +418,6 @@ export async function fetchAllAdminDocuments(): Promise<LessonAssetItem[]> {
   return allDocs;
 }
 
-/**
- * Delete a single asset
- */
 export async function deleteAdminAsset(
   assetId: string,
   storagePath?: string
@@ -565,21 +425,6 @@ export async function deleteAdminAsset(
   if (storagePath) {
     await deleteStorageFile('lesson-documents', storagePath);
   }
-
-  if (isSupabaseConfigured && supabase) {
-    try {
-      const { error } = await supabase
-        .from('lesson_assets')
-        .delete()
-        .eq('id', assetId);
-
-      if (error) throw error;
-      return true;
-    } catch (err) {
-      console.warn('Supabase delete asset error:', err);
-    }
-  }
-
   const local = getInitialLocalLessons();
   local.forEach((l) => {
     if (l.assets) {
@@ -590,28 +435,11 @@ export async function deleteAdminAsset(
   return true;
 }
 
-/**
- * Update asset title or type metadata
- */
 export async function updateAssetMetadata(
   assetId: string,
   newTitle: string,
   newType: string
 ): Promise<boolean> {
-  if (isSupabaseConfigured && supabase) {
-    try {
-      const { error } = await supabase
-        .from('lesson_assets')
-        .update({ title: newTitle, type: newType })
-        .eq('id', assetId);
-
-      if (error) throw error;
-      return true;
-    } catch (err) {
-      console.warn('Supabase update asset error:', err);
-    }
-  }
-
   const local = getInitialLocalLessons();
   local.forEach((l) => {
     const asset = l.assets?.find((a) => a.id === assetId);
@@ -622,4 +450,604 @@ export async function updateAssetMetadata(
   });
   saveLocalLessons(local);
   return true;
+}
+
+/**
+ * ============================================================================
+ * 2. TOPICS (CHỦ ĐỀ HỌC TẬP LỚP 6 - 9) MANAGEMENT
+ * ============================================================================
+ */
+export function getAdminTopicsSync(): Topic[] {
+  const cached = safeReadLocal<Topic[] | null>(STORAGE_KEYS.TOPICS, null);
+  if (cached && Array.isArray(cached) && cached.length > 0) {
+    return cached;
+  }
+  safeWriteLocal(STORAGE_KEYS.TOPICS, TOPICS);
+  return [...TOPICS];
+}
+
+export async function fetchAdminTopics(): Promise<Topic[]> {
+  return getAdminTopicsSync();
+}
+
+export async function saveAdminTopic(topicInput: Partial<Topic> & { title: string; grade: Grade; domain: SubjectDomain }): Promise<Topic> {
+  const all = getAdminTopicsSync();
+  const id = topicInput.id || `topic-${topicInput.grade}-${Date.now()}`;
+  const saved: Topic = {
+    id,
+    grade: topicInput.grade,
+    domain: topicInput.domain,
+    code: topicInput.code || `CD${topicInput.grade}-${all.filter((t) => t.grade === topicInput.grade).length + 1}`,
+    title: topicInput.title.trim(),
+    description: topicInput.description?.trim() || 'Chuyên đề Khoa học tự nhiên bộ sách Kết nối tri thức với cuộc sống.',
+    lessonCount: Number(topicInput.lessonCount) || 5,
+    experimentCount: Number(topicInput.experimentCount) || 2,
+    icon: topicInput.icon || (topicInput.domain === 'hoa-hoc' ? 'FlaskConical' : topicInput.domain === 'vat-li' ? 'Zap' : 'Dna'),
+    order: Number(topicInput.order) || all.length + 1,
+    image: topicInput.image,
+  };
+
+  const idx = all.findIndex((t) => t.id === id);
+  if (idx >= 0) {
+    all[idx] = saved;
+  } else {
+    all.unshift(saved);
+  }
+  safeWriteLocal(STORAGE_KEYS.TOPICS, all);
+  return saved;
+}
+
+export async function deleteAdminTopic(topicId: string): Promise<boolean> {
+  const all = getAdminTopicsSync().filter((t) => t.id !== topicId);
+  safeWriteLocal(STORAGE_KEYS.TOPICS, all);
+  return true;
+}
+
+/**
+ * ============================================================================
+ * 3. QUIZ QUESTIONS & EXAMS MANAGEMENT
+ * ============================================================================
+ */
+export function getAdminQuestionsSync(): QuizQuestion[] {
+  const cached = safeReadLocal<QuizQuestion[] | null>(STORAGE_KEYS.QUESTIONS, null);
+  if (cached && Array.isArray(cached) && cached.length > 0) {
+    const builtInMap = new Map(QUIZ_QUESTIONS.map((q) => [q.id, q]));
+    const existingIds = new Set(cached.map((q) => q.id));
+
+    // Upgrade built-in questions and any cached custom questions that used old generic guidance templates
+    const upgraded = cached.map((q) => {
+      const builtIn = builtInMap.get(q.id);
+      if (builtIn) {
+        return {
+          ...builtIn,
+          ...q,
+          explanation: builtIn.explanation,
+          solutionSteps: builtIn.solutionSteps,
+          sampleAnswer: builtIn.sampleAnswer || q.sampleAnswer,
+          hint: builtIn.hint || q.hint,
+          allowImageUpload: q.allowImageUpload ?? builtIn.allowImageUpload,
+        };
+      }
+
+      const stepsJoined = (q.solutionSteps || []).join(' ');
+      const needsScientificSolutionUpgrade =
+        !q.solutionSteps ||
+        q.solutionSteps.length === 0 ||
+        !stepsJoined.includes('Dữ kiện:') ||
+        /(n_Zn|n_Fe|V_dd|R_tđ|Xác định cơ sở lý thuyết|Tóm tắt dữ kiện & Xác định bản chất|Kiến thức & Công thức|Công thức điện học|Kiến thức Sinh học gốc|Kiến thức trọng tâm|Thay trực tiếp số liệu đề bài)/i.test(
+          stepsJoined
+        );
+
+      if (needsScientificSolutionUpgrade) {
+        const concreteSteps = generateStepByStepSolution({
+          question: q.question,
+          options: q.options || [],
+          correctAnswer: q.correctAnswer ?? 0,
+          questionType: q.questionType || 'single_choice',
+          domain: q.domain,
+          grade: q.grade,
+        });
+        const concreteExp = generateDetailedExplanation({
+          question: q.question,
+          options: q.options || [],
+          correctAnswer: q.correctAnswer ?? 0,
+          questionType: q.questionType || 'single_choice',
+          domain: q.domain,
+          grade: q.grade,
+        });
+        return {
+          ...q,
+          solutionSteps: concreteSteps,
+          explanation: concreteExp,
+        };
+      }
+
+      return q;
+    });
+
+    // Append any newly added built-in questions (such as the essay questions)
+    const missingBuiltIns = QUIZ_QUESTIONS.filter((q) => !existingIds.has(q.id));
+    const merged = missingBuiltIns.length > 0 ? [...upgraded, ...missingBuiltIns] : upgraded;
+    safeWriteLocal(STORAGE_KEYS.QUESTIONS, merged);
+    return merged;
+  }
+  safeWriteLocal(STORAGE_KEYS.QUESTIONS, QUIZ_QUESTIONS);
+  return [...QUIZ_QUESTIONS];
+}
+
+export async function fetchAdminQuestions(): Promise<QuizQuestion[]> {
+  return getAdminQuestionsSync();
+}
+
+export async function saveAdminQuestion(qInput: Partial<QuizQuestion> & { question: string; grade: Grade; domain: SubjectDomain }): Promise<QuizQuestion> {
+  const all = getAdminQuestionsSync();
+  const id = qInput.id || `q-custom-${Date.now()}`;
+  const qType = qInput.questionType || 'single_choice';
+  const options =
+    qType === 'essay'
+      ? []
+      : Array.isArray(qInput.options) && qInput.options.length >= 2
+      ? qInput.options
+      : ['Đáp án A', 'Đáp án B', 'Đáp án C', 'Đáp án D'];
+
+  const saved: QuizQuestion = {
+    id,
+    lessonId: qInput.lessonId || undefined,
+    topicId: qInput.topicId || undefined,
+    grade: qInput.grade,
+    domain: qInput.domain,
+    question: qInput.question.trim(),
+    questionType: qType,
+    options,
+    correctAnswer: typeof qInput.correctAnswer === 'number' ? qInput.correctAnswer : 0,
+    correctAnswers: qInput.correctAnswers,
+    explanation: qInput.explanation?.trim() || 'Giải thích theo chuẩn kiến thức sách Kết nối tri thức với cuộc sống.',
+    solutionSteps: qInput.solutionSteps,
+    sampleAnswer: qInput.sampleAnswer?.trim() || undefined,
+    allowImageUpload: qType === 'essay' ? (qInput.allowImageUpload ?? true) : qInput.allowImageUpload,
+    difficulty: qInput.difficulty || 'Thông hiểu',
+    hint: qInput.hint?.trim() || undefined,
+    points: Number(qInput.points) || (qType === 'essay' ? 2.5 : 1),
+  };
+
+  const idx = all.findIndex((item) => item.id === id);
+  if (idx >= 0) {
+    all[idx] = saved;
+  } else {
+    all.unshift(saved);
+  }
+  safeWriteLocal(STORAGE_KEYS.QUESTIONS, all);
+  return saved;
+}
+
+export async function saveAdminQuestionsBulk(
+  questionsList: Array<Partial<QuizQuestion> & { question: string; grade: Grade; domain: SubjectDomain }>
+): Promise<QuizQuestion[]> {
+  const all = getAdminQuestionsSync();
+  const savedItems: QuizQuestion[] = [];
+
+  questionsList.forEach((qInput, index) => {
+    const id = qInput.id || `q-word-${Date.now()}-${index + 1}`;
+    const qType = qInput.questionType || 'single_choice';
+    const options =
+      qType === 'essay'
+        ? []
+        : Array.isArray(qInput.options) && qInput.options.length >= 2
+        ? qInput.options
+        : ['Đáp án A', 'Đáp án B', 'Đáp án C', 'Đáp án D'];
+
+    const saved: QuizQuestion = {
+      id,
+      lessonId: qInput.lessonId || undefined,
+      topicId: qInput.topicId || undefined,
+      grade: qInput.grade,
+      domain: qInput.domain,
+      question: qInput.question.trim(),
+      questionType: qType,
+      options,
+      correctAnswer: typeof qInput.correctAnswer === 'number' ? qInput.correctAnswer : 0,
+      correctAnswers: qInput.correctAnswers,
+      explanation:
+        qInput.explanation?.trim() ||
+        'Giải thích theo chuẩn kiến thức sách Kết nối tri thức với cuộc sống.',
+      solutionSteps: qInput.solutionSteps,
+      sampleAnswer: qInput.sampleAnswer?.trim() || undefined,
+      allowImageUpload: qType === 'essay' ? (qInput.allowImageUpload ?? true) : qInput.allowImageUpload,
+      difficulty: qInput.difficulty || 'Thông hiểu',
+      hint: qInput.hint?.trim() || undefined,
+      points: Number(qInput.points) || (qType === 'essay' ? 2.5 : 1.5),
+    };
+
+    savedItems.push(saved);
+  });
+
+  const existingIds = new Set(savedItems.map((s) => s.id));
+  const merged = [...savedItems, ...all.filter((q) => !existingIds.has(q.id))];
+  safeWriteLocal(STORAGE_KEYS.QUESTIONS, merged);
+  return savedItems;
+}
+
+export async function deleteAdminQuestion(questionId: string): Promise<boolean> {
+  const all = getAdminQuestionsSync().filter((q) => q.id !== questionId);
+  safeWriteLocal(STORAGE_KEYS.QUESTIONS, all);
+  return true;
+}
+
+export function getAdminQuizzesSync(): QuizMeta[] {
+  const cached = safeReadLocal<QuizMeta[] | null>(STORAGE_KEYS.QUIZZES, null);
+  if (cached && Array.isArray(cached) && cached.length > 0) {
+    return cached;
+  }
+  safeWriteLocal(STORAGE_KEYS.QUIZZES, LESSON_QUIZZES);
+  return [...LESSON_QUIZZES];
+}
+
+export async function fetchAdminQuizzes(): Promise<QuizMeta[]> {
+  return getAdminQuizzesSync();
+}
+
+export async function saveAdminQuiz(quizInput: Partial<QuizMeta> & { title: string; grade: Grade; domain: SubjectDomain }): Promise<QuizMeta> {
+  const all = getAdminQuizzesSync();
+  const id = quizInput.id || `quiz-custom-${Date.now()}`;
+  const saved: QuizMeta = {
+    id,
+    lessonId: quizInput.lessonId,
+    lessonTitle: quizInput.lessonTitle,
+    grade: quizInput.grade,
+    domain: quizInput.domain,
+    title: quizInput.title.trim(),
+    description: quizInput.description?.trim() || 'Đề kiểm tra năng lực Khoa học tự nhiên Kết nối tri thức.',
+    durationMinutes: Number(quizInput.durationMinutes) || 15,
+    passScore: Number(quizInput.passScore) || 6.0,
+    questionCount: Number(quizInput.questionCount) || 5,
+    isPublished: quizInput.isPublished ?? true,
+  };
+
+  const idx = all.findIndex((q) => q.id === id);
+  if (idx >= 0) {
+    all[idx] = saved;
+  } else {
+    all.unshift(saved);
+  }
+  safeWriteLocal(STORAGE_KEYS.QUIZZES, all);
+  return saved;
+}
+
+export async function deleteAdminQuiz(quizId: string): Promise<boolean> {
+  const all = getAdminQuizzesSync().filter((q) => q.id !== quizId);
+  safeWriteLocal(STORAGE_KEYS.QUIZZES, all);
+  return true;
+}
+
+/**
+ * ============================================================================
+ * 4. VIDEOS MANAGEMENT
+ * ============================================================================
+ */
+export function getAdminVideosSync(): VideoLesson[] {
+  const cached = safeReadLocal<VideoLesson[] | null>(STORAGE_KEYS.VIDEOS, null);
+  if (cached && Array.isArray(cached) && cached.length > 0) {
+    return cached;
+  }
+  safeWriteLocal(STORAGE_KEYS.VIDEOS, VIDEOS);
+  return [...VIDEOS];
+}
+
+export async function fetchAdminVideos(): Promise<VideoLesson[]> {
+  return getAdminVideosSync();
+}
+
+export async function saveAdminVideo(vInput: Partial<VideoLesson> & { title: string; grade: Grade; domain: SubjectDomain; youtubeId: string }): Promise<VideoLesson> {
+  const all = getAdminVideosSync();
+  const id = vInput.id || `vid-custom-${Date.now()}`;
+  const cleanYt = extractYouTubeId(vInput.youtubeId) || vInput.youtubeId.trim() || 'dQw4w9WgXcQ';
+
+  const saved: VideoLesson = {
+    id,
+    title: vInput.title.trim(),
+    grade: vInput.grade,
+    domain: vInput.domain,
+    duration: vInput.duration?.trim() || '12:30',
+    youtubeId: cleanYt,
+    experimentType: vInput.experimentType || 'Thí nghiệm thực hành',
+    instructor: vInput.instructor?.trim() || 'KHOA HỌC SỐ KHTN',
+    description: vInput.description?.trim() || 'Video trực quan phục vụ bài giảng Khoa học tự nhiên.',
+    views: Number(vInput.views) || 150,
+    timestamps: vInput.timestamps && vInput.timestamps.length > 0
+      ? vInput.timestamps
+      : [
+          { time: '00:00', label: 'Giới thiệu mục tiêu thí nghiệm' },
+          { time: '03:30', label: 'Tiến hành quan sát hiện tượng' },
+          { time: '08:00', label: 'Giải thích cơ chế & Công thức' },
+        ],
+  };
+
+  const idx = all.findIndex((v) => v.id === id);
+  if (idx >= 0) {
+    all[idx] = saved;
+  } else {
+    all.unshift(saved);
+  }
+  safeWriteLocal(STORAGE_KEYS.VIDEOS, all);
+  return saved;
+}
+
+export async function deleteAdminVideo(videoId: string): Promise<boolean> {
+  const all = getAdminVideosSync().filter((v) => v.id !== videoId);
+  safeWriteLocal(STORAGE_KEYS.VIDEOS, all);
+  return true;
+}
+
+/**
+ * ============================================================================
+ * 5. CATALOG DOCUMENTS (/tai-lieu) MANAGEMENT
+ * ============================================================================
+ */
+export function getAdminCatalogDocsSync(): DocumentItem[] {
+  const cached = safeReadLocal<DocumentItem[] | null>(STORAGE_KEYS.CATALOG_DOCS, null);
+  if (cached && Array.isArray(cached) && cached.length > 0) {
+    return cached;
+  }
+  safeWriteLocal(STORAGE_KEYS.CATALOG_DOCS, DOCUMENTS);
+  return [...DOCUMENTS];
+}
+
+export async function fetchAdminCatalogDocs(): Promise<DocumentItem[]> {
+  return getAdminCatalogDocsSync();
+}
+
+export async function saveAdminCatalogDoc(docInput: Partial<DocumentItem> & { title: string; grade: Grade; domain: SubjectDomain }): Promise<DocumentItem> {
+  const all = getAdminCatalogDocsSync();
+  const id = docInput.id || `doc-custom-${Date.now()}`;
+  const saved: DocumentItem = {
+    id,
+    title: docInput.title.trim(),
+    grade: docInput.grade,
+    domain: docInput.domain,
+    format: docInput.format || 'pdf',
+    type: docInput.type?.trim() || 'Đề cương ôn tập',
+    pageCount: Number(docInput.pageCount) || 12,
+    fileSize: docInput.fileSize?.trim() || '3.5 MB',
+    description: docInput.description?.trim() || 'Tài liệu chuẩn hóa danh pháp IUPAC - Kết nối tri thức với cuộc sống.',
+    author: docInput.author?.trim() || 'KHOA HỌC SỐ KHTN',
+    downloadCount: Number(docInput.downloadCount) || 50,
+    downloadUrl: docInput.downloadUrl?.trim() || '#',
+    previewSlides: docInput.previewSlides || [
+      'Tóm tắt lý thuyết trọng tâm & Công thức chuẩn',
+      'Hệ thống bài tập trắc nghiệm và tự luận có lời giải',
+    ],
+  };
+
+  const idx = all.findIndex((d) => d.id === id);
+  if (idx >= 0) {
+    all[idx] = saved;
+  } else {
+    all.unshift(saved);
+  }
+  safeWriteLocal(STORAGE_KEYS.CATALOG_DOCS, all);
+  return saved;
+}
+
+export async function deleteAdminCatalogDoc(docId: string): Promise<boolean> {
+  const all = getAdminCatalogDocsSync().filter((d) => d.id !== docId);
+  safeWriteLocal(STORAGE_KEYS.CATALOG_DOCS, all);
+  return true;
+}
+
+/**
+ * ============================================================================
+ * 6. SCIENCE GAMES (GHÉP THẺ, GIẢI MÃ Ô CHỮ, THÁM TỬ CÔNG THỨC) MANAGEMENT
+ * ============================================================================
+ */
+export function getAdminGamePairsSync(): SciencePairItem[] {
+  const cached = safeReadLocal<SciencePairItem[] | null>(STORAGE_KEYS.GAME_PAIRS, null);
+  if (cached && Array.isArray(cached) && cached.length > 0) {
+    return cached;
+  }
+  safeWriteLocal(STORAGE_KEYS.GAME_PAIRS, SCIENCE_PAIR_BANK);
+  return [...SCIENCE_PAIR_BANK];
+}
+
+export async function saveAdminGamePair(pairInput: Partial<SciencePairItem> & { term: string; definition: string; grade: Grade; domain: SubjectDomain }): Promise<SciencePairItem> {
+  const all = getAdminGamePairsSync();
+  const id = pairInput.id || `pair-${Date.now()}`;
+  const saved: SciencePairItem = {
+    id,
+    grade: pairInput.grade,
+    domain: pairInput.domain,
+    term: pairInput.term.trim(),
+    definition: pairInput.definition.trim(),
+    explanation: pairInput.explanation?.trim() || `${pairInput.term} tương ứng với ${pairInput.definition}.`,
+  };
+  const idx = all.findIndex((p) => p.id === id);
+  if (idx >= 0) all[idx] = saved;
+  else all.unshift(saved);
+  safeWriteLocal(STORAGE_KEYS.GAME_PAIRS, all);
+  return saved;
+}
+
+export async function deleteAdminGamePair(id: string): Promise<boolean> {
+  const all = getAdminGamePairsSync().filter((p) => p.id !== id);
+  safeWriteLocal(STORAGE_KEYS.GAME_PAIRS, all);
+  return true;
+}
+
+export function getAdminCrosswordsSync(): CrosswordRowItem[] {
+  const cached = safeReadLocal<CrosswordRowItem[] | null>(STORAGE_KEYS.GAME_CROSSWORDS, null);
+  if (cached && Array.isArray(cached) && cached.length > 0) {
+    return cached;
+  }
+  safeWriteLocal(STORAGE_KEYS.GAME_CROSSWORDS, CROSSWORD_ROW_BANK);
+  return [...CROSSWORD_ROW_BANK];
+}
+
+export async function saveAdminCrossword(cwInput: Partial<CrosswordRowItem> & { displayTerm: string; clue: string; grade: Grade; domain: SubjectDomain }): Promise<CrosswordRowItem> {
+  const all = getAdminCrosswordsSync();
+  const id = cwInput.id || `cw-${Date.now()}`;
+  const normalizedAns = normalizeCrosswordInput(cwInput.answer || cwInput.displayTerm);
+  const saved: CrosswordRowItem = {
+    id,
+    grade: cwInput.grade,
+    domain: cwInput.domain,
+    answer: normalizedAns || 'KHOAHOC',
+    displayTerm: cwInput.displayTerm.trim(),
+    keyColumnIndex: Number(cwInput.keyColumnIndex) || 0,
+    clue: cwInput.clue.trim(),
+    scientificHint: cwInput.scientificHint?.trim() || `Từ khóa gồm ${normalizedAns.length} chữ cái.`,
+    explanation: cwInput.explanation?.trim() || `${cwInput.displayTerm}: ${cwInput.clue}`,
+  };
+  const idx = all.findIndex((c) => c.id === id);
+  if (idx >= 0) all[idx] = saved;
+  else all.unshift(saved);
+  safeWriteLocal(STORAGE_KEYS.GAME_CROSSWORDS, all);
+  return saved;
+}
+
+export async function deleteAdminCrossword(id: string): Promise<boolean> {
+  const all = getAdminCrosswordsSync().filter((c) => c.id !== id);
+  safeWriteLocal(STORAGE_KEYS.GAME_CROSSWORDS, all);
+  return true;
+}
+
+export function getAdminDetectivePuzzlesSync(): DetectivePuzzleItem[] {
+  const cached = safeReadLocal<DetectivePuzzleItem[] | null>(STORAGE_KEYS.GAME_DETECTIVE, null);
+  if (cached && Array.isArray(cached) && cached.length > 0) {
+    return cached;
+  }
+  safeWriteLocal(STORAGE_KEYS.GAME_DETECTIVE, DETECTIVE_PUZZLE_BANK);
+  return [...DETECTIVE_PUZZLE_BANK];
+}
+
+export async function saveAdminDetectivePuzzle(detInput: Partial<DetectivePuzzleItem> & { clue: string; displayAnswer: string; grade: Grade; domain: SubjectDomain }): Promise<DetectivePuzzleItem> {
+  const all = getAdminDetectivePuzzlesSync();
+  const id = detInput.id || `det-${Date.now()}`;
+  const normalizedAns = normalizeCrosswordInput(detInput.answer || detInput.displayAnswer);
+  const chars = normalizedAns.split('');
+  const extraChars = ['A', 'O', 'N', 'H', 'C', 'S', 'I', 'E'];
+  const pool = Array.from(new Set([...chars, ...extraChars])).slice(0, Math.max(chars.length + 3, 8));
+
+  const saved: DetectivePuzzleItem = {
+    id,
+    grade: detInput.grade,
+    domain: detInput.domain,
+    clue: detInput.clue.trim(),
+    answer: normalizedAns || 'SODIUM',
+    displayFormula: detInput.displayFormula?.trim() || detInput.displayAnswer.trim(),
+    displayAnswer: detInput.displayAnswer.trim(),
+    lettersPool: detInput.lettersPool && detInput.lettersPool.length >= chars.length ? detInput.lettersPool : pool,
+    scientificHint: detInput.scientificHint?.trim() || 'Dựa vào tính chất đặc trưng theo sách Kết nối tri thức.',
+    explanation: detInput.explanation?.trim() || `${detInput.displayAnswer}: ${detInput.clue}`,
+  };
+  const idx = all.findIndex((d) => d.id === id);
+  if (idx >= 0) all[idx] = saved;
+  else all.unshift(saved);
+  safeWriteLocal(STORAGE_KEYS.GAME_DETECTIVE, all);
+  return saved;
+}
+
+export async function deleteAdminDetectivePuzzle(id: string): Promise<boolean> {
+  const all = getAdminDetectivePuzzlesSync().filter((d) => d.id !== id);
+  safeWriteLocal(STORAGE_KEYS.GAME_DETECTIVE, all);
+  return true;
+}
+
+/**
+ * ============================================================================
+ * 7. USERS & ROLES MANAGEMENT
+ * ============================================================================
+ */
+const INITIAL_USERS: AppUser[] = [
+  DEMO_USERS.teacher,
+  DEMO_USERS.student,
+  {
+    id: 'user_teacher_physics',
+    email: 'giaovien.vatli@khtn.edu.vn',
+    fullName: 'Trần Thị Thu Hà (Tổ trưởng Vật lí - KHTN)',
+    role: 'teacher',
+    grade: 9,
+    school: 'THCS Đà Nẵng, Việt Nam',
+  },
+  {
+    id: 'user_student_grade6',
+    email: 'le.hoang.nam6a@gmail.com',
+    fullName: 'Lê Hoàng Nam (Học sinh Lớp 6A2)',
+    role: 'student',
+    grade: 6,
+    school: 'THCS Đà Nẵng, Việt Nam',
+  },
+  {
+    id: 'user_student_grade7',
+    email: 'pham.khanh.linh7b@gmail.com',
+    fullName: 'Phạm Khánh Linh (Học sinh Lớp 7B1)',
+    role: 'student',
+    grade: 7,
+    school: 'THCS Đà Nẵng, Việt Nam',
+  },
+  {
+    id: 'user_student_grade9',
+    email: 'ngo.gia.bao9a@gmail.com',
+    fullName: 'Ngô Gia Bảo (Học sinh Lớp 9A1)',
+    role: 'student',
+    grade: 9,
+    school: 'THCS Đà Nẵng, Việt Nam',
+  },
+];
+
+export function getAdminUsersSync(): AppUser[] {
+  const cached = safeReadLocal<AppUser[] | null>(STORAGE_KEYS.USERS, null);
+  if (cached && Array.isArray(cached) && cached.length > 0) {
+    return cached;
+  }
+  safeWriteLocal(STORAGE_KEYS.USERS, INITIAL_USERS);
+  return [...INITIAL_USERS];
+}
+
+export async function saveAdminUser(uInput: Partial<AppUser> & { fullName: string; email: string; role: 'admin' | 'teacher' | 'student' }): Promise<AppUser> {
+  const all = getAdminUsersSync();
+  const id = uInput.id || `user_${Date.now()}`;
+  const saved: AppUser = {
+    id,
+    fullName: uInput.fullName.trim(),
+    email: uInput.email.trim(),
+    role: uInput.role,
+    grade: uInput.grade || 8,
+    school: uInput.school?.trim() || 'Đà Nẵng, Việt Nam',
+    avatarUrl: uInput.avatarUrl,
+  };
+  const idx = all.findIndex((u) => u.id === id);
+  if (idx >= 0) all[idx] = saved;
+  else all.unshift(saved);
+  safeWriteLocal(STORAGE_KEYS.USERS, all);
+  return saved;
+}
+
+export async function deleteAdminUser(userId: string): Promise<boolean> {
+  const all = getAdminUsersSync().filter((u) => u.id !== userId);
+  safeWriteLocal(STORAGE_KEYS.USERS, all);
+  return true;
+}
+
+/**
+ * ============================================================================
+ * 8. SITE SETTINGS & FULL BACKUP / RESTORE
+ * ============================================================================
+ */
+export function getSiteSettingsSync(): SiteSettings {
+  return safeReadLocal<SiteSettings>(STORAGE_KEYS.SETTINGS, DEFAULT_SITE_SETTINGS);
+}
+
+export function saveSiteSettingsSync(settings: SiteSettings): SiteSettings {
+  safeWriteLocal(STORAGE_KEYS.SETTINGS, settings);
+  return settings;
+}
+
+export function resetAllAdminDataToDefault(): void {
+  if (typeof localStorage === 'undefined') return;
+  Object.values(STORAGE_KEYS).forEach((key) => {
+    try {
+      localStorage.removeItem(key);
+    } catch {
+      // ignore
+    }
+  });
 }

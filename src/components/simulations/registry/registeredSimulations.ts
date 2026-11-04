@@ -4,41 +4,41 @@ import { H2O_CONSTANTS } from '../../../utils/waterMoleculeMath.ts';
 
 /**
  * Water Molecule (H2O) Simulation Module Definition
- * Standard: GDPT 2018 - KHTN Grade 7 (Chủ đề 2: Phân tử - Đơn chất - Hợp chất)
+ * Standard: Kết nối tri thức với cuộc sống - KHTN Grade 7 (Phân tử - Đơn chất - Hợp chất)
  */
 export const WaterMoleculeModule: LabSimulationModule = {
   id: 'h2o-water-molecule',
   slug: 'cau-tao-phan-tu-nuoc-h2o',
   title: 'Cấu Tạo Phân Tử Nước (H₂O)',
-  subtitle: 'Hình học gấp khúc 104.5° & Liên kết cộng hóa trị có cực',
+  subtitle: 'Hình học gấp khúc 104.5° & Liên kết cộng hóa trị phân cực',
   domain: 'hoa-hoc',
   grade: 7,
   category: 'Cấu tạo chất & Phân tử vi mô',
   difficulty: 'Cơ bản',
-  tags: ['H₂O', 'Liên kết cộng hóa trị', 'Phân tử', 'VSEPR', 'Độ âm điện', 'Liên kết Hydro'],
+  tags: ['H₂O', 'Liên kết cộng hóa trị', 'Phân tử', 'VSEPR', 'Độ âm điện', 'Hydrogen', 'Oxygen'],
   thumbnailUrl: 'https://images.unsplash.com/photo-1548839140-29a749e1bc4e?auto=format&fit=crop&w=800&q=80',
   summary:
-    'Khám phá không gian 3D cấu tạo phân tử nước (H₂O) gồm 1 nguyên tử Oxy và 2 nguyên tử Hydro liên kết dạng gấp khúc 104.5°. Tìm hiểu lý do VSEPR ép góc liên kết và bản chất lưỡng cực điện của nước.',
-  curriculumCode: 'GDPT 2018 - KHTN 7 (Chủ đề 2: Phân tử - Đơn chất - Hợp chất)',
+    'Khám phá không gian 3D cấu tạo phân tử nước (H₂O) gồm 1 nguyên tử Oxygen và 2 nguyên tử Hydrogen liên kết dạng gấp khúc 104.5°. Tìm hiểu lý do VSEPR ép góc liên kết và bản chất lưỡng cực điện của nước.',
+  curriculumCode: 'Kết nối tri thức - KHTN 7 (Chủ đề: Phân tử - Đơn chất - Hợp chất)',
   learningObjectives: [
-    'Trình bày được thành phần phân tử nước gồm 1 nguyên tử Oxy và 2 nguyên tử Hydro (H₂O).',
+    'Trình bày được thành phần phân tử nước gồm 1 nguyên tử Oxygen và 2 nguyên tử Hydrogen (H₂O).',
     'Mô tả được dạng hình học phân tử nước là dạng gấp khúc với góc liên kết xấp xỉ 104.5°.',
-    'Giải thích được bản chất liên kết cộng hóa trị có cực do chênh lệch độ âm điện giữa O và H (Δχ = 1.24).',
+    'Giải thích được bản chất liên kết cộng hóa trị phân cực do chênh lệch độ âm điện giữa O và H (Δχ = 1.24).',
     'Phân biệt được mô hình trực quan Quả cầu & que nối (Ball-and-stick) với mô hình Không gian đặc (Space-filling / bán kính van der Waals).',
-    'Nhận biết được vai trò của cấu trúc phân cực và liên kết hydro đối với các tính chất đặc biệt của nước trên Trái Đất.',
+    'Nhận biết được vai trò của cấu trúc phân cực và liên kết hydrogen đối với các tính chất đặc biệt của nước.',
   ],
   keyConcepts: [
     {
-      term: 'Liên kết cộng hóa trị có cực',
-      definition: 'Liên kết được hình thành do cặp electron dùng chung bị lệch về phía nguyên tử có độ âm điện lớn hơn (Oxy).',
+      term: 'Liên kết cộng hóa trị phân cực',
+      definition: 'Liên kết được hình thành do cặp electron dùng chung bị lệch về phía nguyên tử có độ âm điện lớn hơn (Oxygen).',
     },
     {
       term: 'Góc liên kết 104.5°',
-      definition: 'Góc tạo bởi hai liên kết O-H trong không gian, nhỏ hơn góc tứ diện đều 109.5° do lực đẩy mạnh của 2 cặp electron tự do trên nguyên tử Oxy.',
+      definition: 'Góc tạo bởi hai liên kết O-H trong không gian, nhỏ hơn góc tứ diện đều 109.5° do lực đẩy mạnh của 2 cặp electron tự do trên nguyên tử Oxygen.',
     },
     {
       term: 'Mômen lưỡng cực điện (μ = 1.85 D)',
-      definition: 'Đại lượng đặc trưng cho độ phân cực của phân tử, hướng từ trọng tâm điện tích dương (+ tail) về trọng tâm điện tích âm (nguyên tử Oxy).',
+      definition: 'Đại lượng đặc trưng cho độ phân cực của phân tử, hướng từ trọng tâm điện tích dương về trọng tâm điện tích âm (nguyên tử Oxygen).',
     },
     {
       term: 'Mô hình không gian đặc (Space-filling)',
@@ -47,58 +47,58 @@ export const WaterMoleculeModule: LabSimulationModule = {
   ],
   scientificExplanation: {
     overview:
-      'Nước (H₂O) là hợp chất phổ biến và quan trọng bậc nhất cho sự sống. Về mặt hóa học, phân tử nước được tạo thành từ 1 nguyên tử Oxy lai hóa sp³ liên kết với 2 nguyên tử Hydro. Do cấu trúc gấp khúc và chênh lệch độ âm điện, nước là một phân tử có cực mạnh.',
+      'Nước (H₂O) là hợp chất phổ biến và quan trọng bậc nhất cho sự sống. Về mặt hóa học, phân tử nước được tạo thành từ 1 nguyên tử Oxygen liên kết cộng hóa trị với 2 nguyên tử Hydrogen. Do cấu trúc gấp khúc và chênh lệch độ âm điện, nước là một phân tử phân cực mạnh.',
     keyPoints: [
       {
         title: 'Cặp electron tự do & Thuyết VSEPR',
         content:
-          'Oxy thuộc nhóm VIA có 6 electron hóa trị. Trong H₂O, Oxy dùng 2 electron để tạo 2 liên kết đơn với 2 nguyên tử H, còn lại 4 electron ghép thành 2 cặp electron tự do (lone pairs). Lực đẩy giữa các cặp electron tự do lớn hơn lực đẩy giữa các cặp electron liên kết, ép góc H-O-H từ 109.5° xuống 104.5°.',
+          'Oxygen thuộc nhóm VIA có 6 electron hóa trị. Trong H₂O, Oxygen dùng 2 electron để tạo 2 liên kết đơn với 2 nguyên tử Hydrogen, còn lại 4 electron ghép thành 2 cặp electron tự do (lone pairs). Lực đẩy giữa các cặp electron tự do lớn hơn lực đẩy giữa các cặp electron liên kết, ép góc H-O-H từ 109.5° xuống 104.5°.',
       },
       {
         title: 'Độ âm điện & Điện tích riêng phần',
         content:
-          'Oxy có độ âm điện 3.44, Hydro có độ âm điện 2.20. Chênh lệch Δχ = 1.24 làm mật độ electron dồn về Oxy, tạo điện tích 2δ⁻ trên O và δ⁺ trên mỗi H.',
+          'Oxygen có độ âm điện 3.44, Hydrogen có độ âm điện 2.20. Chênh lệch Δχ = 1.24 làm mật độ electron dồn về Oxygen, tạo điện tích 2δ⁻ trên O và δ⁺ trên mỗi H.',
       },
       {
         title: 'Ý nghĩa tự nhiên & Sinh học',
         content:
-          'Tính phân cực cho phép nước tạo mạng lưới liên kết hydro liên phân tử. Khi đóng băng ở 0°C, các liên kết hydro định hướng tạo cấu trúc rỗng làm thể tích tăng và khối lượng riêng giảm, do đó băng nổi trên mặt nước lỏng.',
+          'Tính phân cực cho phép nước tạo mạng lưới liên kết hydrogen liên phân tử. Khi đóng băng ở 0°C, các liên kết hydrogen định hướng tạo cấu trúc rỗng làm thể tích tăng và khối lượng riêng giảm, do đó nước đá nổi trên mặt nước lỏng.',
       },
     ],
     realWorldApplication:
-      'Hiểu cấu trúc phân tử nước giúp giải thích khả năng hòa tan vô số muối khoáng trong máu và tế bào chất, tính dẫn điện khi có ion, cơ chế thoát hơi nước ở lá cây, và vai trò điều hòa nhiệt độ khí quyển toàn cầu.',
+      'Hiểu cấu trúc phân tử nước giúp giải thích khả năng hòa tan muối khoáng trong máu và tế bào chất, tính dẫn điện khi có ion, và cơ chế vận chuyển nước ở thực vật.',
   },
   discoveryQuestions: [
     {
       id: 'q1',
       question: 'Tại sao góc liên kết H-O-H trong phân tử nước (104.5°) lại nhỏ hơn góc tứ diện đều lý thuyết (109.5°)?',
       options: [
-        { id: 'a', text: 'Do nguyên tử Oxy hút electron quá yếu nên hai nguyên tử H tự động dạt ra xa.', isCorrect: false },
-        { id: 'b', text: 'Do 2 cặp electron tự do của Oxy chiếm không gian lớn, tạo lực đẩy ép góc liên kết lại.', isCorrect: true },
-        { id: 'c', text: 'Do hai nguyên tử Hydro có điện tích trái dấu hút chặt vào nhau.', isCorrect: false },
+        { id: 'a', text: 'Do nguyên tử Oxygen hút electron quá yếu nên hai nguyên tử H tự động dạt ra xa.', isCorrect: false },
+        { id: 'b', text: 'Do 2 cặp electron tự do của Oxygen chiếm không gian lớn, tạo lực đẩy ép góc liên kết lại.', isCorrect: true },
+        { id: 'c', text: 'Do hai nguyên tử Hydrogen có điện tích trái dấu hút chặt vào nhau.', isCorrect: false },
         { id: 'd', text: 'Do áp suất khí quyển nén phân tử nước lại trong điều kiện chuẩn.', isCorrect: false },
       ],
       explanation:
-        'Chính xác! Theo thuyết VSEPR, 2 cặp electron tự do (lone pairs) trên nguyên tử O chiếm khoảng không gian lớn hơn và đẩy 2 cặp electron liên kết O-H co lại, khiến góc liên kết giảm từ 109.5° xuống 104.5°.',
+        'Chính xác! Theo thuyết VSEPR, 2 cặp electron tự do (lone pairs) trên nguyên tử Oxygen chiếm khoảng không gian lớn hơn và đẩy 2 cặp electron liên kết O-H co lại, khiến góc liên kết giảm từ 109.5° xuống 104.5°.',
     },
     {
       id: 'q2',
       question: 'Phân tử nước có cực hay không cực? Đặc điểm nào quyết định điều này?',
       options: [
         { id: 'a', text: 'Không cực, vì tổng số proton bằng tổng số electron (phân tử trung hòa điện).', isCorrect: false },
-        { id: 'b', text: 'Có cực, vì Oxy có độ âm điện lớn hơn Hydro và phân tử có dạng gấp khúc không đối xứng.', isCorrect: true },
+        { id: 'b', text: 'Có cực, vì Oxygen có độ âm điện lớn hơn Hydrogen và phân tử có dạng gấp khúc không đối xứng.', isCorrect: true },
         { id: 'c', text: 'Không cực, vì liên kết O-H là liên kết ion hoàn toàn.', isCorrect: false },
         { id: 'd', text: 'Có cực, nhưng chỉ khi phân tử nước ở thể lỏng, còn thể rắn thì không cực.', isCorrect: false },
       ],
       explanation:
-        'Chính xác! Hiệu độ âm điện Δχ = 1.24 tạo 2 liên kết có cực mạnh. Do phân tử có cấu trúc gấp khúc 104.5°, 2 vector phân cực không triệt tiêu mà cộng hưởng tạo mômen lưỡng cực tổng μ = 1.85 Debye.',
+        'Chính xác! Hiệu độ âm điện Δχ = 1.24 tạo 2 liên kết phân cực mạnh. Do phân tử có cấu trúc gấp khúc 104.5°, 2 vector phân cực không triệt tiêu mà cộng hưởng tạo mômen lưỡng cực tổng μ = 1.85 Debye.',
     },
     {
       id: 'q3',
       question: 'Trong mô hình không gian đặc (Space-filling), nhận xét nào sau đây là ĐÚNG?',
       options: [
         { id: 'a', text: 'Các quả cầu thể hiện bán kính van der Waals thực tế và tiếp xúc xen phủ nhau, không còn que nối cơ học.', isCorrect: true },
-        { id: 'b', text: 'Nguyên tử Hydro to hơn nguyên tử Oxy gấp đôi do khối lượng nhẹ hơn.', isCorrect: false },
+        { id: 'b', text: 'Nguyên tử Hydrogen to hơn nguyên tử Oxygen gấp đôi do khối lượng nhẹ hơn.', isCorrect: false },
         { id: 'c', text: 'Mô hình không gian đặc chỉ áp dụng được cho đơn chất, không áp dụng được cho hợp chất.', isCorrect: false },
         { id: 'd', text: 'Các electron được vẽ chuyển động thành vòng tròn quanh hạt nhân giống như hệ Mặt Trời.', isCorrect: false },
       ],

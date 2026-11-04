@@ -1,6 +1,13 @@
 import { Grade, SubjectDomain } from '../types/index.ts';
 
-export type QuestionType = 'single_choice' | 'multiple_choice' | 'true_false';
+export type QuestionType = 'single_choice' | 'multiple_choice' | 'true_false' | 'essay';
+
+export interface UploadedEssayImage {
+  id: string;
+  name: string;
+  dataUrl: string;
+  sizeLabel?: string;
+}
 
 export interface QuizOptionItem {
   id: string;
@@ -18,20 +25,27 @@ export interface QuizQuestionItem {
   order_index: number;
   difficulty?: 'Nhận biết' | 'Thông hiểu' | 'Vận dụng';
   hint?: string;
-  // NOTE: In student-facing questions, explanation and correct answers are strictly omitted!
+  allow_image_upload?: boolean;
+  // NOTE: In student-facing questions, explanation and correct answers are strictly omitted before submission!
   explanation?: string;
+  solution_steps?: string[];
+  sample_answer?: string;
 }
 
 export interface StudentAnswerItem {
   question_id: string;
   selected_option_id?: string | null; // For single_choice and true_false
   selected_option_ids?: string[]; // For multiple_choice
+  essay_text?: string; // For essay questions
+  essay_images?: UploadedEssayImage[]; // Uploaded student work images for essay questions
 }
 
 export interface AnswerKeyEntry {
   question_id: string;
   correct_option_ids: string[]; // 1 id for single/true_false, >=1 for multiple_choice
   explanation: string;
+  solution_steps?: string[];
+  sample_answer?: string;
 }
 
 export interface QuestionGradingDetail {
@@ -44,6 +58,10 @@ export interface QuestionGradingDetail {
   selected_option_ids: string[];
   correct_option_ids: string[];
   explanation: string;
+  solution_steps?: string[];
+  sample_answer?: string;
+  essay_text?: string;
+  essay_images?: UploadedEssayImage[];
 }
 
 export interface ServerGradingResult {
@@ -62,6 +80,41 @@ export interface ServerGradingResult {
   time_spent_seconds: number;
   details: QuestionGradingDetail[];
 }
+
+export interface UserAnswerSelection {
+  questionId: string;
+  selectedOptionId?: string;
+  selectedOptionIds?: string[];
+  essayText?: string;
+  essayImages?: UploadedEssayImage[];
+}
+
+export interface LessonQuizConfig {
+  id: string;
+  lessonId?: string;
+  title: string;
+  grade: Grade;
+  domain: SubjectDomain;
+  timeLimitMinutes: number;
+  passingScore: number;
+  questions: Array<{
+    id: string;
+    question: string;
+    type: QuestionType;
+    difficulty: 'Nhận biết' | 'Thông hiểu' | 'Vận dụng';
+    points: number;
+    hint?: string;
+    allowImageUpload?: boolean;
+    solutionSteps?: string[];
+    sampleAnswer?: string;
+    explanation?: string;
+    options: Array<{
+      id: string;
+      content: string;
+    }>;
+  }>;
+}
+
 
 /**
  * PURE SCORING ENGINE (Authority: Server / RPC)
@@ -99,6 +152,8 @@ export function gradeQuizSubmission(
 
     const correctOptionIds = key ? [...key.correct_option_ids].sort() : [];
     const explanation = key?.explanation || q.explanation || 'Không có giải thích chi tiết.';
+    const solutionSteps = key?.solution_steps || q.solution_steps;
+    const sampleAnswer = key?.sample_answer || q.sample_answer;
 
     // Normalize student selected options
     let selectedOptionIds: string[] = [];
@@ -113,7 +168,12 @@ export function gradeQuizSubmission(
 
     let isCorrect = false;
 
-    if (q.question_type === 'multiple_choice') {
+    if (q.question_type === 'essay') {
+      // Essay question is marked completed/awarded points if student uploaded at least 1 image or wrote a solution
+      const hasEssayText = Boolean(ans?.essay_text && ans.essay_text.trim().length > 0);
+      const hasEssayImage = Boolean(ans?.essay_images && ans.essay_images.length > 0);
+      isCorrect = hasEssayText || hasEssayImage;
+    } else if (q.question_type === 'multiple_choice') {
       // Must match EXACT set of correct options
       if (
         selectedOptionIds.length === correctOptionIds.length &&
@@ -148,6 +208,10 @@ export function gradeQuizSubmission(
       selected_option_ids: selectedOptionIds,
       correct_option_ids: correctOptionIds,
       explanation,
+      solution_steps: solutionSteps,
+      sample_answer: sampleAnswer,
+      essay_text: ans?.essay_text,
+      essay_images: ans?.essay_images,
     });
   }
 
@@ -194,8 +258,11 @@ export function sanitizeQuestionsForStudent(
     order_index: q.order_index,
     difficulty: q.difficulty,
     hint: q.hint,
+    allow_image_upload: q.allow_image_upload ?? (q.question_type === 'essay' ? true : undefined),
     // explanation is removed for student before submission
     explanation: undefined,
+    solution_steps: undefined,
+    sample_answer: undefined,
   }));
 }
 

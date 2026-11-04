@@ -272,7 +272,7 @@ export const CircuitSimulation: React.FC<CircuitSimulationProps> = ({
       {/* Top Left Spec Badge */}
       <div className="absolute top-4 left-4 z-10 flex flex-wrap items-center gap-2">
         <span className="px-3 py-1 text-xs font-semibold uppercase tracking-wider rounded-lg bg-blue-500/20 text-blue-300 border border-blue-500/40">
-          Phòng thí nghiệm Mạch điện & Định luật Ôm
+          KHOA HỌC SỐ KHTN: Mạch điện & Định luật Ohm
         </span>
         <div className="px-3 py-1 text-xs font-medium rounded-lg bg-slate-900/80 text-white border border-slate-700 backdrop-blur-md">
           Trạng thái mạch: <strong className={isSwitchClosed ? 'text-emerald-400' : 'text-red-400'}>

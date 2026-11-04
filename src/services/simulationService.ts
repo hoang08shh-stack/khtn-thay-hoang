@@ -1,877 +1,511 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase.ts';
 import { SimulationManifest } from '../types/simulationManifest.ts';
-import { validateSimulationManifest } from '../utils/manifestValidator.ts';
-import { formatBytes, MAX_FILE_SIZE_BYTES } from './storageService.ts';
+import { DEFAULT_CONTROLS_CONFIG, validateSimulationManifest } from '../utils/manifestValidator.ts';
+import { uploadScienceAsset } from './storageService.ts';
 
-const LOCAL_STORAGE_KEY_SIMULATIONS = 'khtn_admin_simulations_v4';
+const domainChemImg = '/assets/images/domain_chemistry_bright_1793629233529.jpg';
+const domainPhysImg = '/assets/images/domain_physics_bright_1793629235212.jpg';
+const domainBioImg = '/assets/images/domain_biology_bright_1793629236067.jpg';
 
-/**
- * Initial educational seed simulations (GDPT 2018)
- */
+const LOCAL_STORAGE_KEY_SIMS = 'khtn_simulations_manifests_v3';
+
 export const SEED_SIMULATIONS: SimulationManifest[] = [
   {
     schemaVersion: '1.0.0',
-    id: 'sim-water-molecule',
-    slug: 'cau-tao-phan-tu-nuoc-h2o',
-    title: 'Cấu Tạo Phân Tử Nước (H₂O)',
-    subtitle: 'Hình học gấp khúc 104.5° & Liên kết cộng hóa trị có cực',
-    version: '1.2.0',
+    id: 'sim-chemical-equation-3d',
+    slug: 'can-bang-phuong-trinh-hoa-hoc-3d',
+    title: 'Cân Bằng Phương Trình Hóa Học 3D (Định Luật Bảo Toàn Khối Lượng)',
+    subtitle: 'Tương tác phân tử 3D cân bằng hệ số nguyên tử trước và sau phản ứng theo chuẩn IUPAC',
+    version: '1.0.0',
+    mode: 'external_embed',
+    externalUrl: 'https://c-n-b-ng-ph-ng-tr-nh-h-a-h-c-3d.ai.studio',
+    status: 'published',
+    grade: 8,
+    domain: 'hoa-hoc',
+    category: 'Phản ứng Hóa học & Định luật Bảo toàn Khối lượng',
+    difficulty: 'Trung bình',
+    curriculumCode: 'Kết nối tri thức - KHTN 8 (Bài 4 & Bài 5: Định luật bảo toàn khối lượng và Phương trình hóa học)',
+    tags: ['Cân bằng PTHH', 'Bảo toàn khối lượng', 'Phản ứng hóa học', 'Hydrogen', 'Oxygen', 'IUPAC', '3D'],
+    thumbnailUrl: domainChemImg,
+    summary: 'Trực quan hóa quá trình cân bằng phương trình hóa học trong không gian 3D: điều chỉnh hệ số phân tử các chất tham gia và sản phẩm sao cho số nguyên tử của mỗi nguyên tố (Hydrogen, Oxygen, Carbon, Nitrogen, Iron, Copper...) được bảo toàn tuyệt đối.',
+    learningObjectives: [
+      'Nêu được khái niệm phương trình hóa học và ý nghĩa của hệ số tỉ lượng giữa các chất tham gia và sản phẩm.',
+      'Vận dụng Định luật bảo toàn khối lượng để cân bằng số nguyên tử của mỗi nguyên tố ở hai vế phương trình.',
+    ],
+    keyConcepts: [
+      { term: 'Định luật bảo toàn khối lượng', definition: 'Trong một phản ứng hóa học, tổng khối lượng của các chất sản phẩm bằng tổng khối lượng của các chất tham gia phản ứng.' },
+      { term: 'Nguyên tắc cân bằng PTHH', definition: 'Số nguyên tử của mỗi nguyên tố trước và sau phản ứng luôn bằng nhau; chỉ đặt hệ số trước công thức hóa học, không thay đổi chỉ số nguyên tử.' },
+    ],
+    controlsConfig: DEFAULT_CONTROLS_CONFIG,
+    annotations: [],
+    scientificExplanation: {
+      overview: 'Trong phản ứng hóa học, chỉ có liên kết giữa các nguyên tử thay đổi làm phân tử này biến đổi thành phân tử khác, còn số nguyên tử mỗi nguyên tố giữ nguyên không đổi.',
+      keyPoints: [
+        { title: 'Quy tắc 3 bước lập PTHH', content: 'Bước 1: Viết sơ đồ phản ứng; Bước 2: Cân bằng số nguyên tử mỗi nguyên tố; Bước 3: Viết phương trình hóa học hoàn chỉnh.' },
+      ],
+      realWorldApplication: 'Tính toán chính xác lượng nguyên liệu cần dùng và lượng sản phẩm thu được trong công nghiệp sản xuất Ammonia (NH₃), Sulfuric acid (H₂SO₄) và luyện kim.',
+    },
+    discoveryQuestions: [
+      {
+        id: 'dq-chem-eq-1',
+        question: 'Khi cân bằng phương trình hóa học đốt cháy khí Hydrogen trong khí Oxygen tạo thành Nước: x H₂ + y O₂ → z H₂O, bộ hệ số tối giản (x, y, z) lần lượt là:',
+        options: [
+          { id: 'a', text: '2, 1, 2 (2H₂ + O₂ → 2H₂O)', isCorrect: true },
+          { id: 'b', text: '1, 1, 1 (H₂ + O₂ → H₂O)', isCorrect: false },
+          { id: 'c', text: '2, 2, 2 (2H₂ + 2O₂ → 2H₂O)', isCorrect: false },
+        ],
+        explanation: 'Chính xác! Với hệ số (2, 1, 2), cả hai vế đều có 4 nguyên tử Hydrogen (H) và 2 nguyên tử Oxygen (O).',
+      },
+    ],
+    relatedLessonIds: ['khtn-8-bai-5'],
+    createdAt: '2025-02-22T08:00:00.000Z',
+    updatedAt: '2025-02-22T08:00:00.000Z',
+    author: 'KHOA HỌC SỐ KHTN',
+  },
+  {
+    schemaVersion: '1.0.0',
+    id: 'sim-atom-bohr',
+    slug: 'nguyen-tu-rutherford-bohr',
+    title: 'Mô hình Nguyên tử Rutherford - Bohr 3D (IUPAC)',
+    subtitle: 'Tương tác hạt Proton, Neutron, Electron theo danh pháp quốc tế IUPAC',
+    version: '1.0.0',
     mode: 'custom_tsx',
     status: 'published',
     grade: 7,
     domain: 'hoa-hoc',
-    category: 'Cấu tạo chất & Phân tử vi mô',
+    category: 'Nguyên tử & Bảng tuần hoàn',
     difficulty: 'Cơ bản',
-    curriculumCode: 'GDPT 2018 - KHTN 7 (Chủ đề 2: Phân tử - Đơn chất - Hợp chất)',
-    tags: ['H₂O', 'Liên kết cộng hóa trị', 'Phân tử', 'VSEPR', 'Độ âm điện'],
-    thumbnailUrl: 'https://images.unsplash.com/photo-1548839140-29a749e1bc4e?auto=format&fit=crop&w=800&q=80',
-    summary:
-      'Khám phá không gian 3D cấu tạo phân tử nước (H₂O) gồm 1 nguyên tử Oxy và 2 nguyên tử Hydro liên kết dạng gấp khúc 104.5°. Tìm hiểu lý do VSEPR ép góc liên kết và bản chất lưỡng cực điện của nước.',
+    curriculumCode: 'Kết nối tri thức - KHTN 7 (Bài 2: Nguyên tử)',
+    tags: ['Hydrogen', 'Carbon', 'Oxygen', 'Sodium', 'Chlorine', 'Bohr'],
+    thumbnailUrl: domainChemImg,
+    summary: 'Khảo sát cấu trúc nguyên tử Rutherford - Bohr của các nguyên tố Hydrogen (H), Helium (He), Carbon (C), Nitrogen (N), Oxygen (O), Sodium (Na), Chlorine (Cl) và sự phân bố Electron trên các lớp vỏ.',
     learningObjectives: [
-      'Trình bày được thành phần phân tử nước gồm 1 nguyên tử Oxy và 2 nguyên tử Hydro (H₂O).',
-      'Mô tả được dạng hình học phân tử nước là dạng gấp khúc với góc liên kết xấp xỉ 104.5°.',
-      'Giải thích được bản chất liên kết cộng hóa trị có cực do chênh lệch độ âm điện giữa O và H (Δχ = 1.24).',
-      'Phân biệt được mô hình Quả cầu & que nối với mô hình Không gian đặc (Space-filling).',
+      'Trình bày được mô hình nguyên tử Rutherford - Bohr gồm hạt nhân ở tâm và vỏ Electron.',
+      'Đọc đúng tên nguyên tố theo chuẩn quốc tế IUPAC (Hydrogen, Carbon, Oxygen, Sodium, Chlorine...).',
     ],
     keyConcepts: [
-      {
-        term: 'Liên kết cộng hóa trị có cực',
-        definition: 'Liên kết mà cặp electron dùng chung bị lệch về phía nguyên tử có độ âm điện lớn hơn (Oxy).',
-      },
-      {
-        term: 'Góc liên kết 104.5°',
-        definition: 'Góc tạo bởi hai liên kết O-H trong không gian, bị co lại do lực đẩy của 2 cặp electron tự do trên Oxy.',
-      },
-      {
-        term: 'Mômen lưỡng cực điện (μ = 1.85 D)',
-        definition: 'Đại lượng đặc trưng cho độ phân cực của phân tử, hướng về phía nguyên tử Oxy mang điện tích âm cục bộ.',
-      },
+      { term: 'Hạt nhân nguyên tử', definition: 'Gồm hạt Proton mang điện tích dương (+1) và hạt Neutron không mang điện.' },
+      { term: 'Lớp vỏ Electron', definition: 'Các hạt Electron mang điện tích âm (-1) chuyển động xung quanh hạt nhân theo từng lớp K, L, M.' },
     ],
-    controlsConfig: {
-      enableAutoRotate: true,
-      defaultAutoRotate: true,
-      autoRotateSpeed: 1.0,
-      enableWireframeToggle: false,
-      defaultWireframe: false,
-      enableExplode: false,
-      maxExplodeDistance: 2.0,
-      enableClipping: false,
-      clippingAxis: 'y',
-      lightingPreset: 'lab',
-      ambientLightIntensity: 1.2,
-      directionalLightIntensity: 1.5,
-      enableAnimations: true,
-      defaultAnimationSpeed: 1.0,
-      cameraPosition: [0, 0, 4.5],
-      cameraTarget: [0, 0, 0],
-      fov: 45,
-      minZoomDistance: 1.5,
-      maxZoomDistance: 10.0,
-    },
-    annotations: [
-      {
-        id: 'pin-o',
-        title: 'Nguyên tử Oxy (O)',
-        description: 'Bán kính lớn hơn, độ âm điện cao (χ = 3.44), mang điện tích âm riêng phần (2δ⁻).',
-        position: [0, 0.4, 0],
-        color: '#EF4444',
-      },
-      {
-        id: 'pin-h1',
-        title: 'Nguyên tử Hydro thứ nhất (H₁)',
-        description: 'Bán kính nhỏ hơn, độ âm điện thấp (χ = 2.20), mang điện tích dương riêng phần (δ⁺).',
-        position: [-1.2, -0.6, 0],
-        color: '#E2E8F0',
-      },
-      {
-        id: 'pin-h2',
-        title: 'Nguyên tử Hydro thứ hai (H₂)',
-        description: 'Liên kết đơn O-H độ dài 95.84 pm, tạo góc 104.5° so với liên kết O-H₁.',
-        position: [1.2, -0.6, 0],
-        color: '#E2E8F0',
-      },
-    ],
+    controlsConfig: DEFAULT_CONTROLS_CONFIG,
+    annotations: [],
     scientificExplanation: {
-      overview:
-        'Nước (H₂O) là hợp chất phân cực mạnh có hình học gấp khúc, mang các tính chất sinh học và hóa học đặc biệt bảo đảm sự sống.',
+      overview: 'Nguyên tử trung hòa về điện nên số Proton trong hạt nhân luôn bằng số Electron ở lớp vỏ (Z = p = e).',
       keyPoints: [
-        {
-          title: 'Thuyết VSEPR',
-          content: 'Oxy lai hóa sp³ có 2 cặp e liên kết và 2 cặp e tự do; lực đẩy của các cặp e tự do ép góc liên kết xuống 104.5°.',
-        },
-        {
-          title: 'Mômen lưỡng cực',
-          content: 'Tổng hợp 2 vector phân cực của liên kết O-H tạo nên vector lưỡng cực phân tử hướng về phía Oxy.',
-        },
+        { title: 'Khối lượng nguyên tử (amu)', content: 'Khối lượng nguyên tử tập trung hầu hết ở hạt nhân: A ≈ p + n (amu).' },
       ],
-      realWorldApplication:
-        'Tính phân cực giúp nước hòa tan muối khoáng trong dịch tế bào và duy trì sự sống của sinh vật trên Trái Đất.',
+      realWorldApplication: 'Giải thích tính chất hóa học đặc trưng của kim loại kiềm Sodium (Na) và phi kim Oxygen (O), Chlorine (Cl).',
     },
     discoveryQuestions: [
       {
-        id: 'q1',
-        question: 'Tại sao góc liên kết H-O-H trong phân tử nước (104.5°) lại nhỏ hơn góc tứ diện đều (109.5°)?',
+        id: 'dq-atom-1',
+        question: 'Nguyên tử Sodium (Na) có số đơn vị điện tích hạt nhân Z = 11. Sự phân bố Electron trên các lớp K, L, M của Sodium là:',
         options: [
-          { id: 'a', text: 'Do 2 cặp electron tự do của Oxy chiếm thể tích lớn và đẩy ép góc liên kết lại.', isCorrect: true },
-          { id: 'b', text: 'Do Oxy hút electron quá yếu làm 2 nguyên tử H tự do chuyển động.', isCorrect: false },
-          { id: 'c', text: 'Do hai nguyên tử Hydro mang điện tích trái dấu hút nhau.', isCorrect: false },
+          { id: 'a', text: '2 - 8 - 1 (3 lớp Electron, 1 Electron lớp ngoài cùng)', isCorrect: true },
+          { id: 'b', text: '2 - 9 (2 lớp Electron)', isCorrect: false },
+          { id: 'c', text: '2 - 8 - 2 (3 lớp Electron)', isCorrect: false },
         ],
-        explanation: 'Theo thuyết VSEPR, 2 cặp electron tự do trên O chiếm không gian lớn và đẩy mạnh 2 liên kết O-H co lại còn 104.5°.',
+        explanation: 'Chính xác! Lớp K chứa tối đa 2e, lớp L chứa tối đa 8e, còn lại 1e ở lớp ngoài cùng M.',
       },
     ],
-    relatedLessonIds: ['khtn-7-bai-2'],
-    createdAt: '2026-03-01T08:00:00Z',
-    updatedAt: '2026-03-01T08:00:00Z',
-    author: 'Thầy Hoàng KHTN',
+    relatedLessonIds: ['b7-nguyen-tu'],
+    createdAt: '2025-01-15T08:00:00.000Z',
+    updatedAt: '2025-02-20T08:00:00.000Z',
+    author: 'KHOA HỌC SỐ KHTN',
+  },
+  {
+    schemaVersion: '1.0.0',
+    id: 'sim-acid-base-ph',
+    slug: 'chuan-do-acid-base-ph',
+    title: 'Thí nghiệm Chuẩn độ Acid - Base & Thang đo pH',
+    subtitle: 'Phản ứng trung hòa giữa Hydrochloric acid (HCl) và Sodium hydroxide (NaOH)',
+    version: '1.0.0',
+    mode: 'custom_tsx',
+    status: 'published',
+    grade: 8,
+    domain: 'hoa-hoc',
+    category: 'Acid - Base - pH - Oxide - Muối',
+    difficulty: 'Trung bình',
+    curriculumCode: 'Kết nối tri thức - KHTN 8 (Bài 8 & Bài 9: Acid - Base - Thang pH)',
+    tags: ['Acid', 'Base', 'pH', 'Hydrochloric acid', 'Sodium hydroxide'],
+    thumbnailUrl: domainChemImg,
+    summary: 'Thực hành nhỏ từ từ dung dịch Sodium hydroxide (NaOH 0,1M) từ Buret vào bình tam giác chứa Hydrochloric acid (HCl 0,1M) và quan sát sự biến đổi giá trị pH cùng màu sắc chất chỉ thị.',
+    learningObjectives: [
+      'Phân biệt môi trường Acid (pH < 7), môi trường trung tính (pH = 7) và môi trường Base (pH > 7).',
+      'Viết được phương trình hóa học của phản ứng trung hòa: HCl + NaOH → NaCl + H₂O.',
+    ],
+    keyConcepts: [
+      { term: 'Acid (IUPAC)', definition: 'Hợp chất phân li trong nước tạo ra ion H⁺, làm quỳ tím hóa đỏ (pH < 7).' },
+      { term: 'Base (IUPAC)', definition: 'Hợp chất phân li trong nước tạo ra ion OH⁻, làm quỳ tím hóa xanh và Phenolphthalein hóa hồng (pH > 7).' },
+    ],
+    controlsConfig: DEFAULT_CONTROLS_CONFIG,
+    annotations: [],
+    scientificExplanation: {
+      overview: 'Khi nhỏ dung dịch Base (NaOH) vào dung dịch Acid (HCl), ion OH⁻ kết hợp với ion H⁺ tạo thành phân tử nước H₂O làm giá trị pH tăng dần.',
+      keyPoints: [
+        { title: 'Điểm tương đương (pH = 7.0)', content: 'Khi số mol NaOH bằng số mol HCl ban đầu, dung dịch thu được là muối Sodium chloride (NaCl) trung tính.' },
+      ],
+      realWorldApplication: 'Ứng dụng trong kiểm tra độ pH của đất trồng, nước sinh hoạt và xử lý nước thải công nghiệp.',
+    },
+    discoveryQuestions: [
+      {
+        id: 'dq-ph-1',
+        question: 'Khi nhỏ dung dịch Sodium hydroxide (NaOH) dư vào cốc chứa dung dịch Hydrochloric acid (HCl) có pha sẵn vài giọt Phenolphthalein, màu của dung dịch chuyển đổi như thế nào?',
+        options: [
+          { id: 'a', text: 'Từ không màu chuyển sang màu hồng cánh sen (khi pH > 8,2)', isCorrect: true },
+          { id: 'b', text: 'Từ màu hồng chuyển sang không màu', isCorrect: false },
+          { id: 'c', text: 'Từ không màu chuyển sang màu vàng lục', isCorrect: false },
+        ],
+        explanation: 'Chính xác! Trong môi trường Acid và trung tính, Phenolphthalein không màu; khi NaOH dư (môi trường Base kiềm), Phenolphthalein chuyển sang màu hồng.',
+      },
+    ],
+    relatedLessonIds: ['b8-acid-base-ph'],
+    createdAt: '2025-01-18T08:00:00.000Z',
+    updatedAt: '2025-02-20T08:00:00.000Z',
+    author: 'KHOA HỌC SỐ KHTN',
+  },
+  {
+    schemaVersion: '1.0.0',
+    id: 'sim-electric-circuit',
+    slug: 'mach-dien-dinh-luat-ohm',
+    title: 'Phòng Lab Mạch Điện & Định Luật Ohm (I = U / R)',
+    subtitle: 'Khảo sát sự phụ thuộc của cường độ dòng điện vào hiệu điện thế và điện trở',
+    version: '1.0.0',
+    mode: 'custom_tsx',
+    status: 'published',
+    grade: 9,
+    domain: 'vat-li',
+    category: 'Điện học & Định luật Ohm',
+    difficulty: 'Trung bình',
+    curriculumCode: 'Kết nối tri thức - KHTN 9 (Bài 8: Điện trở & Định luật Ohm)',
+    tags: ['Ohm', 'Mạch điện', 'Ampe kế', 'Vôn kế', 'Công suất'],
+    thumbnailUrl: domainPhysImg,
+    summary: 'Thiết kế mạch điện thực nghiệm 3D với nguồn điện một chiều, khóa K, điện trở, bóng đèn dây tóc và đồng hồ đo vạn năng (Volt - Ampere - Watt).',
+    learningObjectives: [
+      'Phát biểu và vận dụng được hệ thức định luật Ohm: I = U / R.',
+      'Tính được công suất điện tiêu thụ của bóng đèn theo công thức P = U × I.',
+    ],
+    keyConcepts: [
+      { term: 'Định luật Ohm', definition: 'Cường độ dòng điện I (A) chạy qua đoạn dây dẫn tỉ lệ thuận với hiệu điện thế U (V) và tỉ lệ nghịch với điện trở R (Ω).' },
+    ],
+    controlsConfig: DEFAULT_CONTROLS_CONFIG,
+    annotations: [],
+    scientificExplanation: {
+      overview: 'Khi tăng hiệu điện thế U hoặc giảm điện trở R của biến trở, cường độ dòng điện I chạy qua dây tóc bóng đèn tăng lên làm bóng đèn sáng mạnh hơn.',
+      keyPoints: [
+        { title: 'Công thức chuẩn', content: 'I = U / R và P = U × I = I² × R.' },
+      ],
+      realWorldApplication: 'Tính toán tiết diện dây dẫn Copper (Cu), thiết kế cầu chì và thiết bị chiếu sáng tiết kiệm năng lượng.',
+    },
+    discoveryQuestions: [
+      {
+        id: 'dq-ohm-1',
+        question: 'Nếu giữ nguyên hiệu điện thế U = 12 V và tăng điện trở R từ 6 Ω lên 12 Ω thì cường độ dòng điện I trong mạch thay đổi như thế nào?',
+        options: [
+          { id: 'a', text: 'Giảm đi 2 lần (từ 2,0 A xuống 1,0 A)', isCorrect: true },
+          { id: 'b', text: 'Tăng lên 2 lần (từ 2,0 A lên 4,0 A)', isCorrect: false },
+          { id: 'c', text: 'Không thay đổi', isCorrect: false },
+        ],
+        explanation: 'Theo định luật Ohm I = U / R, khi R tăng gấp đôi và U không đổi thì I giảm đi một nửa.',
+      },
+    ],
+    relatedLessonIds: ['b9-dinh-luat-ohm'],
+    createdAt: '2025-01-20T08:00:00.000Z',
+    updatedAt: '2025-02-20T08:00:00.000Z',
+    author: 'KHOA HỌC SỐ KHTN',
+  },
+  {
+    schemaVersion: '1.0.0',
+    id: 'sim-light-refraction',
+    slug: 'khuc-xa-anh-sang-snell',
+    title: 'Quang Học: Khúc Xạ Ánh Sáng & Tán Sắc Qua Lăng Kính',
+    subtitle: 'Định luật khúc xạ ánh sáng Snell và phản xạ toàn phần',
+    version: '1.0.0',
+    mode: 'custom_tsx',
+    status: 'published',
+    grade: 9,
+    domain: 'vat-li',
+    category: 'Ánh sáng & Quang hình học',
+    difficulty: 'Trung bình',
+    curriculumCode: 'Kết nối tri thức - KHTN 9 (Bài 4: Khúc xạ ánh sáng)',
+    tags: ['Khúc xạ', 'Tán sắc', 'Snell', 'Laser', 'Quang học'],
+    thumbnailUrl: domainPhysImg,
+    summary: 'Chiếu tia Laser đơn sắc hoặc chùm ánh sáng trắng qua bản bán trụ trong suốt để đo góc tới i, góc khúc xạ r và quan sát dải quang phổ 7 màu.',
+    learningObjectives: [
+      'Hiểu hiện tượng khúc xạ ánh sáng khi truyền xiên góc qua mặt phân cách giữa hai môi trường.',
+      'Giải thích hiện tượng tán sắc ánh sáng trắng thành dải màu cầu vồng.',
+    ],
+    keyConcepts: [
+      { term: 'Định luật khúc xạ Snell', definition: 'n₁ · sin(i) = n₂ · sin(r), trong đó n₁, n₂ là chiết suất tuyệt đối của hai môi trường.' },
+    ],
+    controlsConfig: DEFAULT_CONTROLS_CONFIG,
+    annotations: [],
+    scientificExplanation: {
+      overview: 'Khi tia sáng truyền từ không khí (n₁ = 1,0) vào thủy tinh (n₂ = 1,5), tia khúc xạ lệch lại gần pháp tuyến hơn so với tia tới (r < i).',
+      keyPoints: [
+        { title: 'Chiết suất môi trường', content: 'Chiết suất n = c / v đặc trưng cho tốc độ truyền ánh sáng trong môi trường đó.' },
+      ],
+      realWorldApplication: 'Chế tạo cáp quang học truyền dẫn Internet tốc độ cao, kính thiên văn, kính hiển vi và thấu kính máy ảnh.',
+    },
+    discoveryQuestions: [
+      {
+        id: 'dq-optics-1',
+        question: 'Khi tia sáng truyền vuông góc với mặt phân cách giữa không khí và nước (góc tới i = 0°) thì góc khúc xạ r bằng bao nhiêu?',
+        options: [
+          { id: 'a', text: 'r = 0° (Tia sáng truyền thẳng không bị đổi hướng)', isCorrect: true },
+          { id: 'b', text: 'r = 45°', isCorrect: false },
+          { id: 'c', text: 'r = 90°', isCorrect: false },
+        ],
+        explanation: 'Khi i = 0° thì sin(i) = 0 ⇒ sin(r) = 0 ⇒ r = 0°, tia sáng truyền thẳng qua mặt phân cách.',
+      },
+    ],
+    relatedLessonIds: ['b7-toc-do-anh-sang'],
+    createdAt: '2025-01-22T08:00:00.000Z',
+    updatedAt: '2025-02-20T08:00:00.000Z',
+    author: 'KHOA HỌC SỐ KHTN',
+  },
+  {
+    schemaVersion: '1.0.0',
+    id: 'sim-microscope-cell',
+    slug: 'kinh-hien-vi-te-bao',
+    title: 'Kính Hiển Vi Quang Học 3D: Tế Bào Thực Vật & Động Vật',
+    subtitle: 'Quan sát cấu trúc hiển vi của Lục lạp, Ti thể, Nhân tế bào chứa DNA và thành Cellulose',
+    version: '1.0.0',
+    mode: 'custom_tsx',
+    status: 'published',
+    grade: 6,
+    domain: 'sinh-hoc',
+    category: 'Tế bào học & Kính hiển vi',
+    difficulty: 'Cơ bản',
+    curriculumCode: 'Kết nối tri thức - KHTN 6 (Bài 18 & Bài 19: Tế bào)',
+    tags: ['Tế bào', 'Lục lạp', 'Ti thể', 'Cellulose', 'DNA'],
+    thumbnailUrl: domainBioImg,
+    summary: 'Khám phá mô hình giải phẫu 3D tế bào thực vật và tế bào động vật. Bật/tắt từng bào quan để tìm hiểu chức năng quang hợp của lục lạp và hô hấp tế bào của ti thể.',
+    learningObjectives: [
+      'Nhận biết được 3 thành phần chính của tế bào: màng tế bào, tế bào chất và nhân tế bào.',
+      'Phân biệt tế bào thực vật (có thành Cellulose, lục lạp, không bào lớn) và tế bào động vật.',
+    ],
+    keyConcepts: [
+      { term: 'Lục lạp (Chloroplast)', definition: 'Bào quan chỉ có ở tế bào thực vật, chứa diệp lục hấp thụ ánh sáng để tổng hợp Glucose và giải phóng Oxygen.' },
+    ],
+    controlsConfig: DEFAULT_CONTROLS_CONFIG,
+    annotations: [],
+    scientificExplanation: {
+      overview: 'Mọi cơ thể sinh vật (thực vật, động vật, con người, vi sinh vật) đều được cấu tạo từ những đơn vị nhỏ bé gọi là tế bào.',
+      keyPoints: [
+        { title: 'Nhân tế bào (Nucleus)', content: 'Chứa vật chất di truyền DNA điều khiển mọi hoạt động sống của tế bào.' },
+      ],
+      realWorldApplication: 'Ứng dụng trong nuôi cấy mô tế bào thực vật nhân giống cây trồng sạch bệnh năng suất cao.',
+    },
+    discoveryQuestions: [
+      {
+        id: 'dq-cell-1',
+        question: 'Thành phần nào sau đây giúp tế bào thực vật có hình dạng đa giác cứng cáp và ổn định?',
+        options: [
+          { id: 'a', text: 'Thành tế bào bằng Cellulose bao bên ngoài màng sinh chất', isCorrect: true },
+          { id: 'b', text: 'Ribosome trong chất tế bào', isCorrect: false },
+          { id: 'c', text: 'Trung thể', isCorrect: false },
+        ],
+        explanation: 'Thành tế bào bằng Cellulose vững chắc quy định hình dạng cố định và bảo vệ tế bào thực vật.',
+      },
+    ],
+    relatedLessonIds: ['b6-te-bao'],
+    createdAt: '2025-01-25T08:00:00.000Z',
+    updatedAt: '2025-02-20T08:00:00.000Z',
+    author: 'KHOA HỌC SỐ KHTN',
   },
   {
     schemaVersion: '1.0.0',
     id: 'sim-dna-double-helix',
-    slug: 'cau-truc-dna-xoan-kep',
-    title: 'Mô Hình Không Gian DNA Xoắn Kép (Watson - Crick)',
-    subtitle: 'Chuỗi xoắn kép 2 mạch song song ngược chiều & Cặp bazơ nitơ bổ sung',
+    slug: 'mo-hinh-dna-xoan-kep',
+    title: 'Mô Hình Phân Tử DNA Xoắn Kép & Phiên Mã RNA 3D',
+    subtitle: 'Cấu trúc không gian chuỗi xoắn kép Adenine - Thymine, Guanine - Cytosine',
     version: '1.0.0',
-    mode: 'declarative_glb',
+    mode: 'custom_tsx',
     status: 'published',
     grade: 9,
     domain: 'sinh-hoc',
-    category: 'Di truyền & Sinh học phân tử',
-    difficulty: 'Trung bình',
-    curriculumCode: 'GDPT 2018 - KHTN 9 (Chủ đề 8: Di truyền học)',
-    tags: ['DNA', 'Watson-Crick', 'Nuclêôtit', 'A-T', 'G-X', 'Gen'],
-    thumbnailUrl: 'https://images.unsplash.com/photo-1532094349884-543bc11b234d?auto=format&fit=crop&w=800&q=80',
-    summary:
-      'Mô hình 3D xoắn kép DNA theo tỷ lệ chuẩn: đường kính vòng xoắn 2nm, chiều cao 1 chu kỳ 3.4nm gồm 10 cặp nuclêôtit liên kết theo nguyên tắc bổ sung A-T và G-X.',
-    learningObjectives: [
-      'Trình bày được cấu tạo không gian của phân tử ADN gồm 2 mạch pôlinuclêôtit xoắn quanh trục.',
-      'Giải thích nguyên tắc bổ sung giữa các cặp bazơ nitơ: A liên kết với T bằng 2 liên kết hydro, G liên kết với X bằng 3 liên kết hydro.',
-      'Nhận biết ý nghĩa của cấu trúc tự nhân đôi bán bảo tồn trong bảo toàn thông tin di truyền.',
-    ],
-    keyConcepts: [
-      {
-        term: 'Nguyên tắc bổ sung',
-        definition: 'Quy luật kết cặp đặc hiệu giữa các bazơ nitơ: A luôn liên kết với T, G luôn liên kết với X qua liên kết hydro.',
-      },
-      {
-        term: 'Chu kỳ xoắn',
-        definition: 'Mỗi chu kỳ xoắn dài 34 Å (3.4 nm), gồm 10 cặp nuclêôtit với đường kính vòng xoắn 20 Å (2 nm).',
-      },
-    ],
-    modelAsset: {
-      url: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/DNA/glTF-Binary/DNA.glb',
-      fileName: 'dna_watson_crick_v1.glb',
-      fileSizeFormatted: '3.2 MB',
-      format: 'glb',
-    },
-    controlsConfig: {
-      enableAutoRotate: true,
-      defaultAutoRotate: true,
-      autoRotateSpeed: 1.2,
-      enableWireframeToggle: true,
-      defaultWireframe: false,
-      enableExplode: true,
-      maxExplodeDistance: 2.5,
-      enableClipping: true,
-      clippingAxis: 'y',
-      lightingPreset: 'lab',
-      ambientLightIntensity: 1.1,
-      directionalLightIntensity: 1.6,
-      enableAnimations: true,
-      defaultAnimationSpeed: 1.0,
-      cameraPosition: [0, 2, 5],
-      cameraTarget: [0, 0, 0],
-      fov: 45,
-      minZoomDistance: 1.5,
-      maxZoomDistance: 15.0,
-    },
-    annotations: [
-      {
-        id: 'pin-backbone',
-        title: 'Khung đường Đêoxiribôzơ - Axit Photphoric',
-        description: 'Tạo thành cột sống bên ngoài của phân tử, liên kết cộng hóa trị photphodieste bền vững.',
-        position: [1.1, 1.2, 0.4],
-        color: '#0D9488',
-      },
-      {
-        id: 'pin-basepair',
-        title: 'Cặp bazơ nitơ bổ sung (A-T & G-X)',
-        description: 'Hướng vào phía trong lòng chuỗi xoắn kép, giữ 2 mạch bằng các liên kết hydro yếu dễ tháo xoắn khi nhân đôi.',
-        position: [0, 0.2, 0],
-        color: '#0284C7',
-      },
-      {
-        id: 'pin-major-groove',
-        title: 'Rãnh lớn (Major Groove)',
-        description: 'Khoảng hở rộng trên bề mặt DNA cho phép các prôtêin điều hòa và enzym phiên mã nhận biết trình tự gen.',
-        position: [-0.9, -1.0, 0.5],
-        color: '#F59E0B',
-      },
-    ],
-    scientificExplanation: {
-      overview:
-        'Phân tử axit đêoxiribônuclêic (ADN) mang vật chất di truyền của hầu hết các sinh vật sống trên Trái Đất. Khám phá mô hình xoắn kép năm 1953 đã mở ra kỷ nguyên sinh học phân tử hiện đại.',
-      keyPoints: [
-        {
-          title: 'Nguyên tắc đa phân',
-          content: 'ADN cấu tạo theo nguyên tắc đa phân, đơn phân là 4 loại nuclêôtit: A, T, G, X (hoặc C).',
-        },
-        {
-          title: 'Tính bền vững & Linh hoạt',
-          content: 'Hàng triệu liên kết hydro cộng gộp tạo cấu trúc bền, nhưng có thể tách rời dễ dàng dưới tác dụng của enzym helicase.',
-        },
-      ],
-      realWorldApplication:
-        'Ứng dụng trong phân tích ADN huyết thống, công nghệ chỉnh sửa gen CRISPR, vaccine mRNA, và xét nghiệm y học chuẩn đoán sớm.',
-    },
-    discoveryQuestions: [
-      {
-        id: 'q1',
-        question: 'Một đoạn mạch DNA có trình tự bazơ nitơ: 5\'-A-T-G-X-T-3\'. Trình tự mạch bổ sung tương ứng là:',
-        options: [
-          { id: 'a', text: '3\'-T-A-X-G-A-5\'', isCorrect: true },
-          { id: 'b', text: '3\'-A-T-G-X-T-5\'', isCorrect: false },
-          { id: 'c', text: '3\'-U-A-X-G-A-5\'', isCorrect: false },
-          { id: 'd', text: '3\'-T-T-G-G-A-5\'', isCorrect: false },
-        ],
-        explanation: 'Chính xác! Theo nguyên tắc bổ sung A liên kết với T, T liên kết với A, G liên kết với X, X liên kết với G.',
-      },
-      {
-        id: 'q2',
-        question: 'Cặp bazơ nitơ Guanin (G) và Xitôzin (X) liên kết với nhau bằng bao nhiêu liên kết hydro?',
-        options: [
-          { id: 'a', text: '1 liên kết hydro', isCorrect: false },
-          { id: 'b', text: '2 liên kết hydro', isCorrect: false },
-          { id: 'c', text: '3 liên kết hydro', isCorrect: true },
-          { id: 'd', text: '4 liên kết hydro', isCorrect: false },
-        ],
-        explanation: 'Đúng! Cặp G-X liên kết bằng 3 liên kết hydro, do đó bền hơn cặp A-T (chỉ có 2 liên kết hydro).',
-      },
-    ],
-    relatedLessonIds: ['khtn-9-bai-4'],
-    createdAt: '2026-03-05T09:00:00Z',
-    updatedAt: '2026-03-05T09:00:00Z',
-    author: 'Thầy Hoàng KHTN',
-  },
-  {
-    schemaVersion: '1.0.0',
-    id: 'sim-plant-cell',
-    slug: 'cau-tao-te-bao-thuc-vat-luc-lap',
-    title: 'Cấu Trúc Tế Bào Thực Vật & Bào Quan Lục Lạp',
-    subtitle: 'Thành xenlulôzơ, không bào trung tâm và bộ máy quang hợp 3D',
-    version: '1.1.0',
-    mode: 'declarative_glb',
-    status: 'published',
-    grade: 6,
-    domain: 'sinh-hoc',
-    category: 'Tế bào - Đơn vị cơ sở của sự sống',
-    difficulty: 'Cơ bản',
-    curriculumCode: 'GDPT 2018 - KHTN 6 (Chủ đề 6: Tế bào)',
-    tags: ['Tế bào thực vật', 'Lục lạp', 'Quang hợp', 'Thành tế bào', 'Không bào'],
-    thumbnailUrl: 'https://images.unsplash.com/photo-1530595467537-0b5996c41f2d?auto=format&fit=crop&w=800&q=80',
-    summary:
-      'Mô hình giải phẫu cắt lớp tế bào thực vật: khám phá thành tế bào vững chắc, màng sinh chất, chất tế bào, nhân điều khiển, không bào dự trữ lớn và lục lạp thực hiện quang hợp.',
-    learningObjectives: [
-      'Chỉ ra và gọi tên được các thành phần chính của tế bào thực vật trên mô hình 3D.',
-      'Nêu được điểm khác biệt chính giữa tế bào thực vật và tế bào động vật (có thành xenlulôzơ, lục lạp, không bào lớn).',
-      'Giải thích được vai trò quang hợp của bào quan lục lạp.',
-    ],
-    keyConcepts: [
-      {
-        term: 'Thành tế bào (Cell Wall)',
-        definition: 'Lớp bảo vệ ngoài cùng cấu tạo từ xenlulôzơ giúp tế bào thực vật giữ hình dạng cố định.',
-      },
-      {
-        term: 'Lục lạp (Chloroplast)',
-        definition: 'Bào quan chứa chất diệp lục hấp thụ ánh sáng mặt trời để tổng hợp chất hữu cơ qua quang hợp.',
-      },
-    ],
-    modelAsset: {
-      url: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/BrainStem/glTF-Binary/BrainStem.glb',
-      fileName: 'plant_cell_anatomy.glb',
-      fileSizeFormatted: '5.4 MB',
-      format: 'glb',
-    },
-    controlsConfig: {
-      enableAutoRotate: true,
-      defaultAutoRotate: true,
-      autoRotateSpeed: 0.8,
-      enableWireframeToggle: true,
-      defaultWireframe: false,
-      enableExplode: true,
-      maxExplodeDistance: 2.2,
-      enableClipping: true,
-      clippingAxis: 'z',
-      lightingPreset: 'studio',
-      ambientLightIntensity: 1.3,
-      directionalLightIntensity: 1.5,
-      enableAnimations: false,
-      defaultAnimationSpeed: 1.0,
-      cameraPosition: [0, 2.5, 4.5],
-      cameraTarget: [0, 0, 0],
-      fov: 45,
-      minZoomDistance: 1.2,
-      maxZoomDistance: 12.0,
-    },
-    annotations: [
-      {
-        id: 'pin-wall',
-        title: 'Thành tế bào (Cell Wall)',
-        description: 'Vỏ xenlulôzơ cứng cáp bao bọc, bảo vệ và nâng đỡ toàn bộ cơ thể thực vật đứng vững.',
-        position: [1.3, 0.8, 0],
-        color: '#10B981',
-      },
-      {
-        id: 'pin-chloroplast',
-        title: 'Bào quan Lục lạp (Chloroplast)',
-        description: 'Chứa hạt diệp lục hấp thu photon ánh sáng, chuyển hóa CO₂ và H₂O thành đường glucôzơ và khí O₂.',
-        position: [0.6, -0.5, 0.7],
-        color: '#059669',
-      },
-      {
-        id: 'pin-nucleus',
-        title: 'Nhân tế bào (Nucleus)',
-        description: 'Chứa chất nhiễm sắc và ADN, là trung tâm chỉ huy mọi hoạt động sống và phân chia tế bào.',
-        position: [-0.4, 0.3, -0.2],
-        color: '#6366F1',
-      },
-      {
-        id: 'pin-vacuole',
-        title: 'Không bào trung tâm lớn (Vacuole)',
-        description: 'Chứa dịch tế bào gồm nước, đường, muối khoáng và sắc tố, duy trì áp suất thẩm thấu căng mọng của lá.',
-        position: [-0.6, -0.6, 0.4],
-        color: '#06B6D4',
-      },
-    ],
-    scientificExplanation: {
-      overview:
-        'Tế bào là đơn vị cơ bản cấu tạo nên mọi cơ thể sống. Tế bào thực vật có những cấu trúc độc đáo giúp chúng tự dưỡng quang hợp và tạo nên sự đa dạng sinh thái.',
-      keyPoints: [
-        {
-          title: '3 đặc điểm phân biệt',
-          content: 'Tế bào thực vật khác tế bào động vật ở 3 đặc điểm: có thành xenlulôzơ bên ngoài, có lục lạp quang hợp, và có không bào trung tâm rất lớn.',
-        },
-      ],
-      realWorldApplication:
-        'Lục lạp của thực vật là cỗ máy sinh học cung cấp toàn bộ oxy cho khí quyển và lương thực cho chuỗi thức ăn trên Trái Đất.',
-    },
-    discoveryQuestions: [
-      {
-        id: 'q1',
-        question: 'Bào quan nào sau đây CHỈ CÓ ở tế bào thực vật mà KHÔNG CÓ ở tế bào động vật?',
-        options: [
-          { id: 'a', text: 'Nhân tế bào', isCorrect: false },
-          { id: 'b', text: 'Lục lạp', isCorrect: true },
-          { id: 'c', text: 'Màng sinh chất', isCorrect: false },
-          { id: 'd', text: 'Ti thể', isCorrect: false },
-        ],
-        explanation: 'Chính xác! Lục lạp là bào quan đặc trưng cho cơ thể thực vật giúp chúng tự tổng hợp chất dinh dưỡng nhờ quang hợp.',
-      },
-    ],
-    relatedLessonIds: ['khtn-6-bai-2'],
-    createdAt: '2026-03-08T10:00:00Z',
-    updatedAt: '2026-03-08T10:00:00Z',
-    author: 'Thầy Hoàng KHTN',
-  },
-  {
-    schemaVersion: '1.0.0',
-    id: 'sim-electric-motor',
-    slug: 'dong-co-dien-mot-chieu-luc-tu',
-    title: 'Cấu Tạo Động Cơ Điện 1 Chiều (DC Motor) & Lực Điện Từ',
-    subtitle: 'Khung dây dẫn quay trong từ trường của nam châm & Cổ góp đổi chiều dòng điện',
-    version: '1.0.0',
-    mode: 'declarative_glb',
-    status: 'published',
-    grade: 9,
-    domain: 'vat-li',
-    category: 'Điện từ học & Ứng dụng kỹ thuật',
+    category: 'Di truyền học phân tử (DNA - RNA)',
     difficulty: 'Nâng cao',
-    curriculumCode: 'GDPT 2018 - KHTN 9 (Chủ đề: Điện từ học)',
-    tags: ['Động cơ điện', 'Lực từ', 'Từ trường', 'Cổ góp', 'Quy tắc bàn tay trái'],
-    thumbnailUrl: 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=800&q=80',
-    summary:
-      'Mô phỏng động cơ điện 1 chiều: quan sát cặp lực từ tác dụng lên 2 cạnh đối diện của khung dây dẫn theo quy tắc bàn tay trái, vai trò của cổ góp chổi quét để khung quay liên tục.',
+    curriculumCode: 'Kết nối tri thức - KHTN 9 (Bài 36 & Bài 37: Nucleic acid và Gene)',
+    tags: ['DNA', 'RNA', 'Nucleotide', 'Adenine', 'Thymine', 'Guanine', 'Cytosine'],
+    thumbnailUrl: domainBioImg,
+    summary: 'Tương tác 3D với cấu trúc phân tử Deoxyribonucleic acid (DNA) gồm hai mạch polynucleotide xoắn kép liên kết bổ sung (A - T, G - C) bằng liên kết Hydrogen.',
     learningObjectives: [
-      'Chỉ ra được hai bộ phận chính của động cơ điện một chiều: nam châm tạo từ trường (stato) và khung dây dẫn (roto).',
-      'Vận dụng quy tắc bàn tay trái xác định chiều của lực điện từ tác dụng lên đoạn dây dẫn.',
-      'Giải thích được tác dụng của bộ góp điện (cổ góp và chổi quét) trong việc đảo chiều dòng điện.',
+      'Mô tả được cấu trúc xoắn kép của DNA gồm 4 loại đơn phân Nucleotide: Adenine (A), Thymine (T), Guanine (G), Cytosine (C).',
+      'Vận dụng nguyên tắc bổ sung để tính số lượng Nucleotide và số liên kết Hydrogen (H = 2A + 3G).',
     ],
     keyConcepts: [
-      {
-        term: 'Quy tắc bàn tay trái',
-        definition: 'Đặt bàn tay trái sao cho các đường sức từ hướng vào lòng bàn tay, chiều từ cổ tay đến ngón giữa là chiều dòng điện, ngón cái choãi 90° chỉ chiều lực từ.',
-      },
-      {
-        term: 'Cổ góp điện',
-        definition: 'Gồm hai vành bán nguyệt cách điện giúp đổi chiều dòng điện trong khung dây mỗi nửa vòng quay để mômen quay luôn cùng chiều.',
-      },
+      { term: 'Nguyên tắc bổ sung (DNA)', definition: 'Adenine (A) liên kết với Thymine (T) bằng 2 liên kết Hydrogen; Guanine (G) liên kết với Cytosine (C) bằng 3 liên kết Hydrogen.' },
     ],
-    modelAsset: {
-      url: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/BoomBox/glTF-Binary/BoomBox.glb',
-      fileName: 'electric_dc_motor.glb',
-      fileSizeBytes: 3120000,
-      format: 'glb',
-      uploadedAt: '2026-03-10T14:00:00Z',
-    },
-    controlsConfig: {
-      enableAutoRotate: false,
-      defaultAutoRotate: false,
-      autoRotateSpeed: 1.0,
-      enableWireframeToggle: true,
-      defaultWireframe: false,
-      enableExplode: true,
-      maxExplodeDistance: 2.8,
-      enableClipping: false,
-      clippingAxis: 'x',
-      lightingPreset: 'studio',
-      ambientLightIntensity: 1.2,
-      directionalLightIntensity: 1.6,
-      enableAnimations: true,
-      defaultAnimationSpeed: 1.0,
-      cameraPosition: [2, 2, 4],
-      cameraTarget: [0, 0, 0],
-      fov: 45,
-      minZoomDistance: 1.5,
-      maxZoomDistance: 12.0,
-    },
-    annotations: [
-      {
-        id: 'pin-magnet',
-        title: 'Nam châm vĩnh cửu (Stato)',
-        description: 'Tạo từ trường đều giữa cực Bắc (N) và cực Nam (S), các đường sức từ đi từ cực N sang cực S.',
-        position: [-1.4, 0.4, 0],
-        color: '#DC2626',
-      },
-      {
-        id: 'pin-coil',
-        title: 'Khung dây dẫn quay (Roto)',
-        description: 'Khung dây bằng đồng có dòng điện chạy qua, chịu tác dụng của cặp lực từ ngược chiều làm khung quay.',
-        position: [0, 0.5, 0],
-        color: '#F59E0B',
-      },
-      {
-        id: 'pin-commutator',
-        title: 'Bộ góp điện (Cổ góp & Chổi than)',
-        description: 'Đổi chiều dòng điện trong khung dây khi khung vượt qua vị trí mặt phẳng trung hòa, giúp khung quay liên tục 1 chiều.',
-        position: [0.8, -0.6, 0.3],
-        color: '#0D9488',
-      },
-    ],
+    controlsConfig: DEFAULT_CONTROLS_CONFIG,
+    annotations: [],
     scientificExplanation: {
-      overview:
-        'Động cơ điện là thiết bị chuyển hóa điện năng thành cơ năng dựa trên tác dụng của từ trường lên khung dây dẫn có dòng điện chạy qua.',
+      overview: 'Mỗi chu kì xoắn của phân tử DNA dài 3,4 nm (34 Å), gồm 10 cặp Nucleotide và có đường kính vòng xoắn là 2 nm (20 Å).',
       keyPoints: [
-        {
-          title: 'Cơ chế quay liên tục',
-          content: 'Nếu không có cổ góp, khung dây chỉ quay nửa vòng rồi dừng lại ở vị trí cân bằng. Nhờ cổ góp đảo chiều đúng lúc, lực từ luôn duy trì mômen quay theo một chiều duy nhất.',
-        },
+        { title: 'Công thức trọng tâm', content: 'N = 2A + 2G; Chiều dài L = (N / 2) × 3,4 Å; Liên kết Hydrogen H = 2A + 3G.' },
       ],
-      realWorldApplication:
-        'Động cơ điện được ứng dụng trong quạt máy, xe đạp điện, máy bơm nước, tàu điện ngầm và các robot tự động hóa trong công nghiệp.',
+      realWorldApplication: 'Ứng dụng trong xét nghiệm huyết thống DNA, chẩn đoán bệnh di truyền và công nghệ gene hiện đại.',
     },
     discoveryQuestions: [
       {
-        id: 'q1',
-        question: 'Khi đổi chiều dòng điện chạy vào động cơ điện một chiều thì hiện tượng gì sẽ xảy ra?',
+        id: 'dq-dna-1',
+        question: 'Trong phân tử DNA mạch kép, giữa Nucleotide loại Guanine (G) ở mạch này với Nucleotide loại Cytosine (C) ở mạch kia liên kết với nhau bằng mấy liên kết Hydrogen?',
         options: [
-          { id: 'a', text: 'Động cơ đổi chiều quay.', isCorrect: true },
-          { id: 'b', text: 'Động cơ lập tức bị dừng lại và bốc cháy.', isCorrect: false },
-          { id: 'c', text: 'Động cơ vẫn quay cùng chiều như cũ.', isCorrect: false },
+          { id: 'a', text: '3 liên kết Hydrogen', isCorrect: true },
+          { id: 'b', text: '2 liên kết Hydrogen', isCorrect: false },
+          { id: 'c', text: '1 liên kết cộng hóa trị', isCorrect: false },
         ],
-        explanation: 'Chính xác! Theo quy tắc bàn tay trái, khi đổi chiều dòng điện thì chiều của lực điện từ đảo ngược, khiến động cơ quay theo chiều ngược lại.',
+        explanation: 'Trong phân tử DNA: A liên kết với T bằng 2 liên kết Hydrogen, còn G liên kết với C bằng 3 liên kết Hydrogen.',
       },
     ],
-    relatedLessonIds: ['khtn-8-bai-8'],
-    createdAt: '2026-03-10T14:00:00Z',
-    updatedAt: '2026-03-10T14:00:00Z',
-    author: 'Thầy Hoàng KHTN',
-  },
-  {
-    schemaVersion: '1.0.0',
-    id: 'sim-earth-layers',
-    slug: 'cau-truc-cac-tang-dia-chat-trai-dat',
-    title: 'Cấu Trúc Các Tầng Địa Chất & Trọng Lực Trái Đất',
-    subtitle: 'Vỏ Trái Đất, Lớp Manti, Nhân ngoài lỏng & Nhân trong kim loại đặc',
-    version: '1.0.0',
-    mode: 'declarative_glb',
-    status: 'draft', // Draft mode for testing admin view vs student view
-    grade: 6,
-    domain: 'trai-dat-vu-tru',
-    category: 'Trái Đất & Bầu trời',
-    difficulty: 'Cơ bản',
-    curriculumCode: 'GDPT 2018 - KHTN 6 (Chủ đề 10: Trái Đất)',
-    tags: ['Địa chất', 'Lớp Manti', 'Vỏ Trái Đất', 'Nhân Trái Đất', 'Kiến tạo mảng'],
-    thumbnailUrl: 'https://images.unsplash.com/photo-1614728894747-a83421e2b9c9?auto=format&fit=crop&w=800&q=80',
-    summary:
-      'Mô hình cắt lớp 1/4 Trái Đất: quan sát tầng vỏ Trái Đất mỏng (5-70km), lớp Manti quánh dẻo sinh ra dòng đối lưu dịch chuyển các mảng kiến tạo, và nhân kim loại sắt-niken nhiệt độ cao.',
-    learningObjectives: [
-      'Xác định được 3 lớp chính cấu tạo nên Trái Đất: Vỏ Trái Đất, Lớp Manti và Nhân Trái Đất.',
-      'Giải thích sơ lược nguyên nhân gây ra động đất và núi lửa do sự chuyển động của các mảng kiến tạo trên lớp Manti trên.',
-    ],
-    keyConcepts: [
-      {
-        term: 'Vỏ Trái Đất',
-        definition: 'Lớp đá cứng ngoài cùng mỏng nhất, nơi sinh sống của sinh vật và thực vật.',
-      },
-      {
-        term: 'Lớp Manti',
-        definition: 'Chiếm hơn 80% thể tích Trái Đất, vật chất ở trạng thái quánh dẻo với các dòng đối lưu nhiệt.',
-      },
-      {
-        term: 'Nhân Trái Đất',
-        definition: 'Gồm nhân ngoài thể lỏng (tạo ra từ trường Trái Đất) và nhân trong thể rắn chịu áp suất khổng lồ.',
-      },
-    ],
-    modelAsset: {
-      url: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/Duck/glTF-Binary/Duck.glb',
-      fileName: 'earth_geological_layers.glb',
-      fileSizeBytes: 1850000,
-      format: 'glb',
-      uploadedAt: '2026-03-10T14:30:00Z',
-    },
-    controlsConfig: {
-      enableAutoRotate: true,
-      defaultAutoRotate: true,
-      autoRotateSpeed: 0.6,
-      enableWireframeToggle: false,
-      defaultWireframe: false,
-      enableExplode: true,
-      maxExplodeDistance: 2.5,
-      enableClipping: true,
-      clippingAxis: 'y',
-      lightingPreset: 'warm',
-      ambientLightIntensity: 1.0,
-      directionalLightIntensity: 1.6,
-      enableAnimations: false,
-      defaultAnimationSpeed: 1.0,
-      cameraPosition: [0, 2, 4.5],
-      cameraTarget: [0, 0, 0],
-      fov: 45,
-      minZoomDistance: 1.5,
-      maxZoomDistance: 12.0,
-    },
-    annotations: [
-      {
-        id: 'pin-crust',
-        title: 'Vỏ Trái Đất (Crust)',
-        description: 'Độ dày từ 5km (dưới đại dương) đến 70km (dưới lục địa), chủ yếu là đá granit và bazan.',
-        position: [1.8, 0.4, 0],
-        color: '#10B981',
-      },
-      {
-        id: 'pin-mantle',
-        title: 'Lớp Manti (Mantle)',
-        description: 'Dày khoảng 2,900km, nhiệt độ từ 1,000°C đến 3,700°C, áp suất cực lớn sinh ra nham thạch macma.',
-        position: [1.0, 0.1, 0.2],
-        color: '#F97316',
-      },
-      {
-        id: 'pin-core',
-        title: 'Nhân Trái Đất (Core)',
-        description: 'Bán kính khoảng 3,400km, cấu tạo chính bởi Sắt và Niken, nhiệt độ vùng trung tâm lên tới 5,000°C.',
-        position: [0.1, 0, 0],
-        color: '#EAB308',
-      },
-    ],
-    scientificExplanation: {
-      overview:
-        'Cấu trúc nhiều lớp của Trái Đất được hình thành từ hàng tỷ năm trước do sự phân dị trọng lực của các nguyên tố nặng lắng xuống tâm.',
-      keyPoints: [
-        {
-          title: 'Từ trường Trái Đất',
-          content: 'Dòng đối lưu của sắt nóng chảy ở nhân ngoài tạo ra hiệu ứng dynamo sinh ra từ trường bảo vệ Trái Đất khỏi gió Mặt Trời.',
-        },
-      ],
-      realWorldApplication:
-        'Hiểu các tầng địa chất giúp các nhà khoa học dự báo động đất, núi lửa và thăm dò các mỏ khoáng sản quý.',
-    },
-    discoveryQuestions: [
-      {
-        id: 'q1',
-        question: 'Lớp nào của Trái Đất chiếm thể tích lớn nhất (trên 80% thể tích toàn cầu)?',
-        options: [
-          { id: 'a', text: 'Vỏ Trái Đất', isCorrect: false },
-          { id: 'b', text: 'Lớp Manti', isCorrect: true },
-          { id: 'c', text: 'Nhân trong', isCorrect: false },
-          { id: 'd', text: 'Thạch quyển', isCorrect: false },
-        ],
-        explanation: 'Chính xác! Lớp Manti dày khoảng 2,900 km và chiếm hơn 80% thể tích của toàn bộ quả địa cầu.',
-      },
-    ],
-    relatedLessonIds: ['khtn-6-bai-10'],
-    createdAt: '2026-03-12T16:00:00Z',
-    updatedAt: '2026-03-12T16:00:00Z',
-    author: 'Thầy Hoàng KHTN',
+    relatedLessonIds: ['b9-di-truyen-dna'],
+    createdAt: '2025-01-28T08:00:00.000Z',
+    updatedAt: '2025-02-20T08:00:00.000Z',
+    author: 'KHOA HỌC SỐ KHTN',
   },
 ];
 
-/**
- * Get stored simulations (localStorage fallback for demo/Cloudflare Pages)
- */
 function getLocalSimulations(): SimulationManifest[] {
   try {
-    const raw = localStorage.getItem(LOCAL_STORAGE_KEY_SIMULATIONS);
+    const raw = localStorage.getItem(LOCAL_STORAGE_KEY_SIMS);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
+        return parsed.filter((m: SimulationManifest) =>
+          ['hoa-hoc', 'vat-li', 'sinh-hoc'].includes(m.domain)
+        );
       }
     }
-  } catch (err) {
-    console.warn('Failed to parse local simulations:', err);
+  } catch (e) {
+    console.warn('Could not read local simulation manifests:', e);
   }
-  // Initialize with seed data
-  localStorage.setItem(LOCAL_STORAGE_KEY_SIMULATIONS, JSON.stringify(SEED_SIMULATIONS));
+  localStorage.setItem(LOCAL_STORAGE_KEY_SIMS, JSON.stringify(SEED_SIMULATIONS));
   return SEED_SIMULATIONS;
 }
 
-function saveLocalSimulations(sims: SimulationManifest[]): void {
+function saveLocalSimulations(list: SimulationManifest[]): void {
   try {
-    localStorage.setItem(LOCAL_STORAGE_KEY_SIMULATIONS, JSON.stringify(sims));
-  } catch (err) {
-    console.error('Failed to save simulations locally:', err);
+    localStorage.setItem(LOCAL_STORAGE_KEY_SIMS, JSON.stringify(list));
+  } catch (e) {
+    console.warn('Could not save local simulation manifests:', e);
   }
 }
 
-/**
- * Fetch all simulations.
- * - If includeDrafts is false (default, for students), only returns status === 'published'.
- * - If includeDrafts is true (for teachers/admins), returns all simulations.
- */
 export async function fetchSimulations(includeDrafts = false): Promise<SimulationManifest[]> {
-  // If Supabase is connected
   if (isSupabaseConfigured && supabase) {
     try {
       let query = supabase.from('simulations').select('*');
       if (!includeDrafts) {
         query = query.eq('status', 'published');
       }
-      const { data, error } = await query.order('created_at', { ascending: false });
-
+      const { data, error } = await query;
       if (!error && data && data.length > 0) {
-        return data.map((row: any) => {
-          if (row.manifest_data) {
-            return {
-              ...row.manifest_data,
-              id: row.id,
-              slug: row.slug || row.manifest_data.slug,
-              title: row.title || row.manifest_data.title,
-              status: row.status || row.manifest_data.status,
-            };
-          }
-          return row;
-        });
+        return data
+          .map((row: any) => row.manifest_json as SimulationManifest)
+          .filter((m: SimulationManifest) =>
+            Boolean(m) && ['hoa-hoc', 'vat-li', 'sinh-hoc'].includes(m.domain)
+          );
       }
     } catch (err) {
-      console.warn('Supabase simulations fetch failed, falling back to local storage:', err);
+      console.warn('Supabase fetchSimulations fallback to local:', err);
     }
   }
 
-  // Local fallback
   const all = getLocalSimulations();
-  if (includeDrafts) {
-    return all;
-  }
-  return all.filter((s) => s.status === 'published');
+  return includeDrafts ? all : all.filter((m) => m.status === 'published');
 }
 
-/**
- * Fetch a simulation by ID or Slug
- */
-export async function fetchSimulationByIdOrSlug(
-  idOrSlug: string,
-  includeDrafts = false
-): Promise<SimulationManifest | null> {
-  const all = await fetchSimulations(includeDrafts);
-  return all.find((s) => s.id === idOrSlug || s.slug === idOrSlug) || null;
-}
-
-/**
- * Save / Update a simulation (Admin only)
- */
-export async function saveSimulation(
-  manifest: SimulationManifest
-): Promise<{ success: boolean; error?: string; data?: SimulationManifest }> {
-  // 1. Validate manifest
-  const validation = validateSimulationManifest(manifest);
-  if (!validation.isValid) {
-    return {
-      success: false,
-      error: validation.errors.join(' | '),
-    };
+export async function saveSimulation(manifest: SimulationManifest): Promise<SimulationManifest> {
+  const check = validateSimulationManifest(manifest);
+  if (!check.isValid || !check.sanitized) {
+    throw new Error(check.errors.join(' '));
   }
 
-  const cleanManifest = validation.sanitized!;
-
-  // 2. Save to Supabase if configured
-  if (isSupabaseConfigured && supabase) {
-    try {
-      const payload = {
-        id: cleanManifest.id,
-        slug: cleanManifest.slug,
-        title: cleanManifest.title,
-        subtitle: cleanManifest.subtitle,
-        version: cleanManifest.version,
-        mode: cleanManifest.mode,
-        status: cleanManifest.status,
-        grade: cleanManifest.grade,
-        domain: cleanManifest.domain,
-        category: cleanManifest.category,
-        difficulty: cleanManifest.difficulty,
-        curriculum_code: cleanManifest.curriculumCode,
-        summary: cleanManifest.summary,
-        thumbnail_url: cleanManifest.thumbnailUrl,
-        model_url: cleanManifest.modelAsset?.url || null,
-        manifest_data: cleanManifest,
-        updated_at: new Date().toISOString(),
-      };
-
-      const { error } = await supabase.from('simulations').upsert(payload);
-      if (error) {
-        console.warn('Supabase simulation upsert error, falling back to local storage:', error.message);
-      }
-    } catch (err: any) {
-      console.warn('Supabase upsert failed:', err);
-    }
-  }
-
-  // 3. Always update local storage
-  const current = getLocalSimulations();
-  const index = current.findIndex((s) => s.id === cleanManifest.id);
-  let updatedList: SimulationManifest[];
-  if (index >= 0) {
-    updatedList = [...current];
-    updatedList[index] = cleanManifest;
-  } else {
-    updatedList = [cleanManifest, ...current];
-  }
-  saveLocalSimulations(updatedList);
-
-  return {
-    success: true,
-    data: cleanManifest,
-  };
-}
-
-/**
- * Delete a simulation (Admin only)
- */
-export async function deleteSimulation(id: string): Promise<{ success: boolean; error?: string }> {
-  if (isSupabaseConfigured && supabase) {
-    try {
-      const { error } = await supabase.from('simulations').delete().eq('id', id);
-      if (error) console.warn('Supabase delete error:', error.message);
-    } catch (err) {
-      console.warn('Supabase delete failed:', err);
-    }
-  }
-
-  const current = getLocalSimulations();
-  const filtered = current.filter((s) => s.id !== id);
-  saveLocalSimulations(filtered);
-
-  return { success: true };
-}
-
-/**
- * Quick toggle publish status (Admin only)
- */
-export async function toggleSimulationPublish(id: string, isPublished: boolean): Promise<boolean> {
-  const current = getLocalSimulations();
-  const target = current.find((s) => s.id === id);
-  if (!target) return false;
-
-  const updated: SimulationManifest = {
-    ...target,
-    status: isPublished ? 'published' : 'draft',
+  const sanitized = {
+    ...check.sanitized,
     updatedAt: new Date().toISOString(),
   };
 
-  const res = await saveSimulation(updated);
-  return res.success;
+  if (isSupabaseConfigured && supabase) {
+    try {
+      await supabase.from('simulations').upsert({
+        id: sanitized.id,
+        slug: sanitized.slug,
+        title: sanitized.title,
+        grade: sanitized.grade,
+        domain: sanitized.domain,
+        status: sanitized.status,
+        manifest_json: sanitized,
+      });
+    } catch (err) {
+      console.warn('Supabase saveSimulation error, saving locally:', err);
+    }
+  }
+
+  const current = getLocalSimulations();
+  const idx = current.findIndex((s) => s.id === sanitized.id);
+  if (idx >= 0) {
+    current[idx] = sanitized;
+  } else {
+    current.unshift(sanitized);
+  }
+  saveLocalSimulations(current);
+  return sanitized;
 }
 
-/**
- * Upload a 3D model (.glb / .gltf) to Supabase Storage
- * Strict validation: max 50MB, allowed extensions
- */
+export async function deleteSimulation(id: string): Promise<boolean> {
+  if (isSupabaseConfigured && supabase) {
+    try {
+      await supabase.from('simulations').delete().eq('id', id);
+    } catch (err) {
+      console.warn('Supabase deleteSimulation error:', err);
+    }
+  }
+
+  const current = getLocalSimulations().filter((s) => s.id !== id);
+  saveLocalSimulations(current);
+  return true;
+}
+
+export async function toggleSimulationPublish(
+  id: string,
+  newStatus: 'published' | 'draft'
+): Promise<boolean> {
+  const current = getLocalSimulations();
+  const target = current.find((s) => s.id === id);
+  if (target) {
+    target.status = newStatus;
+    target.updatedAt = new Date().toISOString();
+    saveLocalSimulations(current);
+  }
+  return true;
+}
+
 export async function upload3DModel(
   file: File,
-  simId: string,
+  simSlug: string,
   onProgress?: (percent: number) => void
-): Promise<{ url: string; sizeFormatted: string; format: 'glb' | 'gltf'; path: string }> {
-  if (!file) {
-    throw new Error('Chưa chọn tệp 3D.');
-  }
-
-  // Check 50MB limit
-  if (file.size > MAX_FILE_SIZE_BYTES) {
-    const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
-    throw new Error(
-      `Tệp 3D dung lượng ${sizeMB} MB vượt quá giới hạn 50 MB của gói Supabase Free. Vui lòng nén mesh hoặc textures.`
-    );
-  }
-
-  // Check extension
-  const ext = file.name.split('.').pop()?.toLowerCase();
-  if (ext !== 'glb' && ext !== 'gltf') {
-    throw new Error(`Định dạng .${ext} không hợp lệ. Chỉ chấp nhận tệp 3D chuẩn .glb hoặc .gltf.`);
-  }
-
-  const sizeFormatted = formatBytes(file.size);
-
-  // If local / preview mode
-  if (!isSupabaseConfigured || !supabase) {
-    if (onProgress) {
-      onProgress(30);
-      await new Promise((r) => setTimeout(r, 150));
-      onProgress(70);
-      await new Promise((r) => setTimeout(r, 150));
-      onProgress(100);
-    }
-    const mockUrl = URL.createObjectURL(file);
-    return {
-      url: mockUrl,
-      sizeFormatted,
-      format: ext as 'glb' | 'gltf',
-      path: `simulations/${simId}/${file.name}`,
-    };
-  }
-
-  // Upload to Supabase Storage bucket 'science-assets' or 'lesson-documents'
-  try {
-    if (onProgress) onProgress(20);
-    const cleanFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-    const storagePath = `3d-models/${simId}/${Date.now()}_${cleanFileName}`;
-
-    if (onProgress) onProgress(50);
-
-    const { data, error } = await supabase.storage
-      .from('science-assets')
-      .upload(storagePath, file, {
-        cacheControl: '86400',
-        upsert: true,
-      });
-
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    if (onProgress) onProgress(90);
-
-    const { data: urlData } = supabase.storage
-      .from('science-assets')
-      .getPublicUrl(data.path);
-
-    if (onProgress) onProgress(100);
-
-    return {
-      url: urlData.publicUrl,
-      sizeFormatted,
-      format: ext as 'glb' | 'gltf',
-      path: data.path,
-    };
-  } catch (err: any) {
-    console.error('Failed to upload 3D model to storage:', err);
-    throw new Error(err.message || 'Lỗi khi tải tệp mô hình 3D lên Supabase Storage.');
-  }
+): Promise<{
+  url: string;
+  storagePath: string;
+  fileSizeFormatted: string;
+  sizeFormatted: string;
+  format: 'glb' | 'gltf';
+}> {
+  if (onProgress) onProgress(50);
+  const result = await uploadScienceAsset(file, `models/${simSlug}`);
+  if (onProgress) onProgress(100);
+  const sizeMb = `${(file.size / (1024 * 1024)).toFixed(1)} MB`;
+  const ext = file.name.toLowerCase().endsWith('.gltf') ? 'gltf' : 'glb';
+  const url = result?.publicUrl || URL.createObjectURL(file);
+  const path = result?.path || `models/${simSlug}/${file.name}`;
+  return {
+    url,
+    storagePath: path,
+    fileSizeFormatted: sizeMb,
+    sizeFormatted: sizeMb,
+    format: ext,
+  };
 }
+

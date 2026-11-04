@@ -39,15 +39,15 @@ export const DEMO_USERS: Record<string, AppUser> = {
     fullName: 'Nguyễn Văn Minh (Học sinh Lớp 8A1)',
     role: 'student',
     grade: 8,
-    school: 'THCS Giảng Võ, Hà Nội',
+    school: 'THCS Đà Nẵng, Việt Nam',
     avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=256&q=80',
   },
   teacher: {
     id: 'user_teacher_hoang',
-    email: 'thayhoang.khtn@gmail.com',
-    fullName: 'Thầy Hoàng (ThS. Phương pháp giảng dạy KHTN)',
+    email: 'hoang08shh@gmail.com',
+    fullName: 'Quản trị viên KHOA HỌC SỐ KHTN',
     role: 'admin',
-    school: 'Chuyên Khoa học Tự nhiên',
+    school: 'Đà Nẵng, Việt Nam',
     avatarUrl: 'https://images.unsplash.com/photo-1568602471122-7832951cc4c5?auto=format&fit=crop&w=256&q=80',
   },
 };
@@ -77,12 +77,12 @@ export function getInitialProgress(userId: string): UserProgress {
     userId,
     completedLessons: ['khtn-8-bai-5', 'khtn-8-bai-8'],
     quizScores: {
-      'quiz-khtn-8-bai-5': { score: 9, total: 10, date: '2026-10-25' },
-      'quiz-khtn-8-bai-8': { score: 10, total: 10, date: '2026-10-27' },
+      'quiz-acid-8': { score: 9, total: 10, date: '2026-10-25' },
+      'quiz-atom-7': { score: 10, total: 10, date: '2026-10-27' },
     },
     completedSimulations: ['sim-atom-bohr', 'sim-electric-circuit'],
-    bookmarkedLessons: ['khtn-8-bai-10'],
-    badges: ['badge_explorer', 'badge_circuit_master'],
+    bookmarkedLessons: ['khtn-9-bai-8'],
+    badges: ['badge_explorer', 'badge_lab_pioneer'],
     studyTimeMinutes: 145,
     lastActive: new Date().toISOString(),
   };
@@ -118,7 +118,7 @@ export async function loginWithEmail(email: string, role: 'student' | 'teacher' 
     fullName: email.split('@')[0],
     role: email.includes('hoang') ? 'admin' : 'student',
     grade: 8,
-    school: 'THCS GDPT 2018',
+    school: 'THCS Đà Nẵng, Việt Nam',
   } as AppUser;
 
   localStorage.setItem(STORAGE_KEY_AUTH, JSON.stringify(user));
@@ -152,3 +152,14 @@ export function saveUserProgress(progress: UserProgress): void {
     console.error('Failed to save progress:', err);
   }
 }
+
+export function getYoutubeEmbedUrl(url?: string): string | null {
+  if (!url) return null;
+  if (url.includes('youtube.com/embed/')) return url;
+  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
+  const match = url.match(regExp);
+  return match && match[2].length === 11
+    ? `https://www.youtube.com/embed/${match[2]}`
+    : null;
+}
+

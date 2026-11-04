@@ -34,8 +34,16 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     return <Navigate to="/dang-nhap" state={{ from: location }} replace />;
   }
 
-  // Role check
-  if (allowedRoles && allowedRoles.length > 0 && !allowedRoles.includes(role)) {
+  // Role check (for admin route, strictly require hoang08shh@gmail.com)
+  const isHoangAdmin = Boolean(
+    user?.email && user.email.trim().toLowerCase() === 'hoang08shh@gmail.com'
+  );
+  const hasPermission =
+    !allowedRoles ||
+    allowedRoles.length === 0 ||
+    (allowedRoles.includes('admin') ? isHoangAdmin : allowedRoles.includes(role));
+
+  if (!hasPermission) {
     return (
       <div className="min-h-[70vh] flex items-center justify-center px-4 py-12">
         <div className="max-w-md w-full bg-white dark:bg-slate-900 rounded-3xl p-8 border border-slate-200 dark:border-slate-800 shadow-xl text-center space-y-5">
@@ -45,25 +53,25 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 
           <div>
             <h2 className="text-xl font-extrabold text-[#0B1F3A] dark:text-white">
-              Khu Vực Giới Hạn Quyền Truy Cập
+              Khu Vực Giới Hạn Quyền Quản Trị
             </h2>
             <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mt-2 leading-relaxed">
-              Trang này dành riêng cho <strong>{allowedRoles.map(r => r === 'admin' ? 'Quản trị viên' : 'Giáo viên').join(' hoặc ')}</strong>.
-              Tài khoản hiện tại của em đang ở vai trò <strong>Học sinh (student)</strong>.
+              Trang quản trị chỉ dành cho tài khoản Quản trị viên (<strong>hoang08shh@gmail.com</strong>).
+              Tài khoản hiện tại (<strong>{user?.email}</strong>) đang ở vai trò Học sinh nên không có quyền truy cập.
             </p>
           </div>
 
           <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 text-xs text-slate-500 dark:text-slate-400 flex items-center justify-between">
-            <span>Vai trò tài khoản:</span>
-            <span className="font-mono font-bold text-teal-600 dark:text-teal-400 uppercase">{role}</span>
+            <span>Tài khoản hiện tại:</span>
+            <span className="font-mono font-bold text-teal-600 dark:text-teal-400">{user?.email || role}</span>
           </div>
 
           <div className="flex flex-col sm:flex-row gap-2 pt-2">
             <Link
-              to="/tien-do"
-              className="flex-1 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs transition shadow-md shadow-teal-600/20 text-center"
+              to="/dang-nhap"
+              className="flex-1 py-2.5 rounded-xl bg-teal-700 hover:bg-teal-600 text-white font-bold text-xs transition shadow-sm text-center"
             >
-              Về Trang Tiến Độ Học Sinh
+              Đăng nhập Quản trị (hoang08shh@gmail.com)
             </Link>
             <Link
               to="/"

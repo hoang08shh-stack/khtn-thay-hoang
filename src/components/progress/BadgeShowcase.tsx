@@ -306,7 +306,7 @@ export const BadgeShowcase: React.FC<BadgeShowcaseProps> = ({
                   <div className="bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 space-y-2 text-xs">
                     <div className="flex items-center gap-1.5 font-bold text-slate-800 dark:text-slate-200">
                       <Info className="w-4 h-4 text-teal-500" />
-                      <span>Điều kiện đạt chuẩn GDPT 2018:</span>
+                      <span>Điều kiện đạt chuẩn KHTN:</span>
                     </div>
                     <p className="text-slate-600 dark:text-slate-300 pl-5">
                       {activeModalBadge.requiredCriteria}

@@ -1,33 +1,43 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { DOCUMENTS } from '../data/mockData.ts';
-import { DocumentItem, Grade } from '../types/index.ts';
+import { Grade, DocumentResource } from '../types/index.ts';
+import { getAllDocuments } from '../services/contentService.ts';
 import { Breadcrumbs } from '../components/common/Breadcrumbs.tsx';
 import {
   FileText,
   Download,
-  Eye,
   Search,
   Filter,
-  CheckCircle,
-  FileCheck,
+  BookOpen,
+  CheckCircle2,
+  ExternalLink,
   Sparkles,
-  X,
 } from 'lucide-react';
 
 export const DocumentsPage: React.FC = () => {
   const [selectedGrade, setSelectedGrade] = useState<Grade | 'all'>('all');
-  const [selectedFormat, setSelectedFormat] = useState<string>('all');
   const [selectedType, setSelectedType] = useState<string>('all');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [activePreviewDoc, setActivePreviewDoc] = useState<DocumentItem | null>(null);
-  const [downloadSuccessId, setDownloadSuccessId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [downloadedId, setDownloadedId] = useState<string | null>(null);
+  const [docsList, setDocsList] = useState<DocumentResource[]>(DOCUMENTS);
 
-  const filteredDocs = DOCUMENTS.filter((doc) => {
+  useEffect(() => {
+    let mounted = true;
+    getAllDocuments().then((data) => {
+      if (mounted) {
+        setDocsList(data);
+      }
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const filteredDocs = docsList.filter((doc) => {
     if (selectedGrade !== 'all' && doc.grade !== selectedGrade) return false;
-    if (selectedFormat !== 'all' && doc.format !== selectedFormat) return false;
     if (selectedType !== 'all' && doc.type !== selectedType) return false;
-    if (searchTerm) {
-      const q = searchTerm.toLowerCase();
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
       return (
         doc.title.toLowerCase().includes(q) ||
         doc.description.toLowerCase().includes(q)
@@ -36,246 +46,160 @@ export const DocumentsPage: React.FC = () => {
     return true;
   });
 
-  const handleDownload = (doc: DocumentItem) => {
-    setDownloadSuccessId(doc.id);
-    setTimeout(() => setDownloadSuccessId(null), 3000);
+  const handleDownload = (doc: DocumentResource) => {
+    setDownloadedId(doc.id);
+    if (doc.fileUrl && doc.fileUrl !== '#') {
+      window.open(doc.fileUrl, '_blank', 'noopener,noreferrer');
+    }
+    setTimeout(() => setDownloadedId(null), 3000);
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 py-8 text-slate-800 dark:text-slate-100">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <Breadcrumbs items={[{ label: 'Thư viện tài liệu PPT/PDF' }]} />
+    <div className="min-h-screen bg-gradient-to-b from-sky-50/60 via-white to-teal-50/40 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
+        <Breadcrumbs items={[{ label: 'Kho Tài Liệu & Học Liệu Số' }]} />
 
-        {/* Title Header */}
-        <div className="mb-8">
-          <div className="flex items-center gap-2 text-xs font-bold text-teal-600 dark:text-teal-400 uppercase tracking-wider">
-            <FileText className="w-4 h-4" />
-            <span>Học liệu số GDPT 2018</span>
+        {/* Header */}
+        <div className="bg-gradient-to-r from-teal-600 via-sky-600 to-indigo-700 rounded-3xl p-6 sm:p-10 text-white shadow-xl flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+          <div className="space-y-2 max-w-2xl">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/20 backdrop-blur-md text-xs font-extrabold uppercase tracking-wider">
+              <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+              <span>KHOA HỌC SỐ KHTN • Bộ sách Kết nối tri thức với cuộc sống</span>
+            </div>
+            <h1 className="text-2xl sm:text-4xl font-black text-white">
+              Kho Học Liệu & Tài Liệu KHTN (Lớp 6 – 9)
+            </h1>
+            <p className="text-sm sm:text-base text-white/90">
+              Tổng hợp giáo án điện tử PowerPoint, phiếu bài tập PDF, đề cương ôn tập học kì và sổ tay công thức theo bộ sách <strong>Kết nối tri thức với cuộc sống</strong> với danh pháp Hóa học quốc tế IUPAC.
+            </p>
           </div>
-          <h1 className="text-2xl sm:text-4xl font-extrabold text-[#0B1F3A] dark:text-white mt-1">
-            Thư Viện Tài Liệu PPT & PDF KHTN
-          </h1>
-          <p className="text-slate-600 dark:text-slate-400 text-sm mt-1 max-w-2xl">
-            Kho tài nguyên giáo án điện tử PowerPoint, phiếu giao nhiệm vụ học tập, sơ đồ tư duy Mindmap
-            và bộ đề kiểm tra đánh giá định kỳ do Thầy Hoàng biên tập.
-          </p>
+
+          <div className="relative w-full lg:w-96">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Tìm tài liệu, phiếu học tập, đề cương..."
+              className="w-full pl-10 pr-4 py-3 rounded-2xl bg-white text-slate-900 placeholder-slate-400 text-xs sm:text-sm font-medium shadow-lg focus:outline-none focus:ring-4 focus:ring-amber-300"
+            />
+          </div>
         </div>
 
-        {/* Filters Toolbar */}
-        <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm mb-8 space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
-            {/* Search Input */}
-            <div className="md:col-span-5">
-              <div className="relative">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  placeholder="Tìm slide bài giảng, phiếu bài tập..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-                />
-              </div>
-            </div>
-
-            {/* Grade Filter */}
-            <div className="md:col-span-7 flex flex-wrap items-center gap-1.5 justify-start md:justify-end">
-              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 mr-1">Khối lớp:</span>
+        {/* Filters */}
+        <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 border-2 border-slate-100 dark:border-slate-800 shadow-sm flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-extrabold text-slate-500 mr-1 flex items-center gap-1">
+              <Filter className="w-3.5 h-3.5 text-teal-600" /> Khối lớp:
+            </span>
+            {(['all', 6, 7, 8, 9] as const).map((g) => (
               <button
-                onClick={() => setSelectedGrade('all')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
-                  selectedGrade === 'all'
-                    ? 'bg-teal-600 text-white'
-                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                key={g}
+                onClick={() => setSelectedGrade(g)}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold transition cursor-pointer ${
+                  selectedGrade === g
+                    ? 'bg-gradient-to-r from-teal-600 to-sky-600 text-white'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-teal-50'
                 }`}
               >
-                Tất cả
+                {g === 'all' ? 'Tất cả' : `Lớp ${g}`}
               </button>
-              {[6, 7, 8, 9].map((g) => (
-                <button
-                  key={g}
-                  onClick={() => setSelectedGrade(g as Grade)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
-                    selectedGrade === g
-                      ? 'bg-teal-600 text-white'
-                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
-                  }`}
-                >
-                  Lớp {g}
-                </button>
-              ))}
-            </div>
+            ))}
           </div>
 
-          {/* Format & Type Filters */}
-          <div className="flex flex-wrap items-center gap-4 pt-3 border-t border-slate-100 dark:border-slate-800 text-xs">
-            <div className="flex items-center gap-2">
-              <span className="text-slate-500 dark:text-slate-400 font-semibold">Định dạng:</span>
-              {['all', 'pptx', 'pdf', 'docx'].map((fmt) => (
-                <button
-                  key={fmt}
-                  onClick={() => setSelectedFormat(fmt)}
-                  className={`px-2.5 py-1 rounded-lg uppercase font-bold transition ${
-                    selectedFormat === fmt
-                      ? 'bg-slate-800 dark:bg-teal-600 text-white'
-                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
-                  }`}
-                >
-                  {fmt === 'all' ? 'Tất cả' : fmt}
-                </button>
-              ))}
-            </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {(
+              [
+                'all',
+                'Giáo án điện tử',
+                'Phiếu học tập',
+                'Đề cương ôn tập',
+                'Sổ tay công thức',
+              ] as const
+            ).map((t) => (
+              <button
+                key={t}
+                onClick={() => setSelectedType(t)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition cursor-pointer ${
+                  selectedType === t
+                    ? 'bg-slate-900 dark:bg-teal-600 text-white'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200'
+                }`}
+              >
+                {t === 'all' ? 'Tất cả loại' : t}
+              </button>
+            ))}
+          </div>
+        </div>
 
-            <div className="flex items-center gap-2">
-              <span className="text-slate-500 dark:text-slate-400 font-semibold">Thể loại:</span>
-              {['all', 'Giáo án điện tử', 'Phiếu học tập', 'Sơ đồ tư duy', 'Đề kiểm tra 15p/1T'].map(
-                (type) => (
-                  <button
-                    key={type}
-                    onClick={() => setSelectedType(type)}
-                    className={`px-2.5 py-1 rounded-lg font-medium transition ${
-                      selectedType === type
-                        ? 'bg-teal-600 text-white'
-                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+        {/* Documents List */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredDocs.map((doc) => (
+            <div
+              key={doc.id}
+              className="bg-white dark:bg-slate-900 rounded-3xl p-6 border-2 border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-lg transition flex flex-col justify-between gap-4"
+            >
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span
+                    className={`text-xs font-extrabold uppercase px-2.5 py-1 rounded-lg ${
+                      doc.format === 'pptx'
+                        ? 'bg-orange-100 text-orange-800'
+                        : doc.format === 'pdf'
+                        ? 'bg-rose-100 text-rose-800'
+                        : 'bg-blue-100 text-blue-800'
                     }`}
                   >
-                    {type === 'all' ? 'Tất cả loại' : type}
-                  </button>
-                )
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Documents Cards Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredDocs.map((doc) => {
-            const formatBadgeColor =
-              doc.format === 'pptx'
-                ? 'bg-orange-100 text-orange-800 border-orange-200'
-                : doc.format === 'pdf'
-                ? 'bg-red-100 text-red-800 border-red-200'
-                : 'bg-blue-100 text-blue-800 border-blue-200';
-
-            return (
-              <div
-                key={doc.id}
-                className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm hover:shadow-lg dark:hover:border-slate-700 transition-all flex flex-col justify-between"
-              >
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-md border ${formatBadgeColor}`}>
-                      {doc.format} • {doc.type}
-                    </span>
-                    <span className="text-xs font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md">
-                      Lớp {doc.grade}
-                    </span>
-                  </div>
-
-                  <h3 className="font-bold text-sm sm:text-base text-slate-800 dark:text-slate-100 line-clamp-2 leading-snug">
-                    {doc.title}
-                  </h3>
-
-                  <p className="text-xs text-slate-600 dark:text-slate-400 mt-2 line-clamp-2 leading-relaxed">
-                    {doc.description}
-                  </p>
-
-                  <div className="mt-4 flex items-center gap-3 text-[11px] text-slate-400 dark:text-slate-500">
-                    <span>{doc.pageCount} trang / slide</span>
-                    <span>•</span>
-                    <span>Dung lượng: {doc.fileSize}</span>
-                    <span>•</span>
-                    <span>{doc.downloadCount} lượt tải</span>
-                  </div>
-                </div>
-
-                <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2">
-                  {doc.previewSlides && doc.previewSlides.length > 0 && (
-                    <button
-                      onClick={() => setActivePreviewDoc(doc)}
-                      className="flex-1 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold transition flex items-center justify-center gap-1.5"
-                    >
-                      <Eye className="w-3.5 h-3.5" />
-                      <span>Xem trước slide</span>
-                    </button>
-                  )}
-
-                  <button
-                    onClick={() => handleDownload(doc)}
-                    className="flex-1 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-md shadow-teal-600/20"
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                    <span>
-                      {downloadSuccessId === doc.id ? 'Đang tải...' : 'Tải tài liệu'}
-                    </span>
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Slide Preview Modal */}
-        {activePreviewDoc && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
-            <div className="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-slate-800 shadow-2xl relative animate-in fade-in zoom-in-95">
-              <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3 mb-4">
-                <div>
-                  <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-teal-100 dark:bg-teal-900/60 text-teal-800 dark:text-teal-300">
-                    Xem trước cấu trúc Slide
+                    {doc.format} • {doc.fileSize}
                   </span>
-                  <h3 className="font-bold text-base text-slate-900 dark:text-white mt-1">
-                    {activePreviewDoc.title}
-                  </h3>
+                  <span className="text-xs font-extrabold text-teal-700 bg-teal-50 px-2.5 py-0.5 rounded-lg">
+                    Lớp {doc.grade}
+                  </span>
                 </div>
-                <button
-                  onClick={() => setActivePreviewDoc(null)}
-                  className="p-1 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-                >
-                  <X className="w-5 h-5" />
-                </button>
+
+                <h3 className="font-extrabold text-base text-slate-900 dark:text-white leading-snug">
+                  {doc.title}
+                </h3>
+
+                <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                  {doc.description}
+                </p>
               </div>
 
-              <div className="space-y-3 my-4">
-                <h4 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                  Mục lục các slide trình chiếu:
-                </h4>
-                <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                  {activePreviewDoc.previewSlides?.map((slide, sIdx) => (
-                    <div
-                      key={sIdx}
-                      className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs text-slate-700 dark:text-slate-300 flex items-center gap-3"
-                    >
-                      <span className="w-6 h-6 rounded-lg bg-teal-600 text-white font-bold flex items-center justify-center text-[11px] shrink-0">
-                        {sIdx + 1}
-                      </span>
-                      <span className="font-medium">{slide}</span>
-                    </div>
-                  ))}
+              <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                <div className="text-xs text-slate-400">
+                  <span>{doc.downloadsCount} lượt tải</span>
+                  {doc.pagesCount && <span> • {doc.pagesCount} trang</span>}
                 </div>
-              </div>
 
-              <div className="pt-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-end gap-3">
                 <button
-                  onClick={() => setActivePreviewDoc(null)}
-                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                  onClick={() => handleDownload(doc)}
+                  className={`px-4 py-2 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition cursor-pointer ${
+                    downloadedId === doc.id
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-teal-600 hover:bg-teal-500 text-white shadow-sm'
+                  }`}
                 >
-                  Đóng
-                </button>
-                <button
-                  onClick={() => {
-                    handleDownload(activePreviewDoc);
-                    setActivePreviewDoc(null);
-                  }}
-                  className="px-5 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold shadow-md transition flex items-center gap-1.5"
-                >
-                  <Download className="w-4 h-4" />
-                  <span>Tải toàn bộ bộ slide (.pptx)</span>
+                  {downloadedId === doc.id ? (
+                    <>
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>Đang tải...</span>
+                    </>
+                  ) : (
+                    <>
+                      {doc.fileUrl && doc.fileUrl !== '#' ? (
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      ) : (
+                        <Download className="w-3.5 h-3.5" />
+                      )}
+                      <span>Tải tài liệu</span>
+                    </>
+                  )}
                 </button>
               </div>
             </div>
-          </div>
-        )}
+          ))}
+        </div>
       </div>
     </div>
   );

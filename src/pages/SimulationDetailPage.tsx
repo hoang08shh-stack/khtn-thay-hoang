@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { SIMULATIONS_3D, LESSONS, QUIZ_QUESTIONS } from '../data/mockData.ts';
 import { Breadcrumbs } from '../components/common/Breadcrumbs.tsx';
@@ -16,12 +16,34 @@ import {
 import { saveUserProgress, getInitialProgress, getInitialUser } from '../lib/supabase.ts';
 
 import { SimulationRegistry } from '../components/simulations/registry/SimulationRegistry.ts';
+import { fetchSimulations } from '../services/simulationService.ts';
+import { SimulationManifest } from '../types/simulationManifest.ts';
 import { Simulation3D } from '../types/index.ts';
 
 export const SimulationDetailPage: React.FC = () => {
   const { simId } = useParams<{ simId: string }>();
+  const [dynamicManifest, setDynamicManifest] = useState<SimulationManifest | undefined>(() =>
+    SimulationRegistry.getManifest(simId || '')
+  );
 
-  const registeredManifest = SimulationRegistry.getManifest(simId || '');
+  useEffect(() => {
+    let mounted = true;
+    fetchSimulations(true)
+      .then((list) => {
+        if (!mounted) return;
+        const found = list.find((m) => m.id === simId || m.slug === simId);
+        if (found) {
+          SimulationRegistry.registerManifest(found);
+          setDynamicManifest(found);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, [simId]);
+
+  const registeredManifest = dynamicManifest || SimulationRegistry.getManifest(simId || '');
   const legacySim = SIMULATIONS_3D.find((s) => s.id === simId);
 
   const simulation: Simulation3D = registeredManifest
@@ -35,7 +57,13 @@ export const SimulationDetailPage: React.FC = () => {
         learningGoal: registeredManifest.curriculumCode,
         keyConcepts: registeredManifest.keyConcepts.map((k) => k.term),
         thumbnail: registeredManifest.thumbnailUrl,
-        type: registeredManifest.id === 'sim-water-molecule' ? 'water-molecule' : 'declarative-model',
+        type:
+          registeredManifest.mode === 'external_embed' || registeredManifest.externalUrl
+            ? 'external-embed'
+            : registeredManifest.id === 'sim-water-molecule'
+            ? 'water-molecule'
+            : 'declarative-model',
+        externalUrl: registeredManifest.externalUrl,
         difficulty: registeredManifest.difficulty as any,
         relatedLessonId: registeredManifest.relatedLessonIds?.[0],
         controlsDescription: [

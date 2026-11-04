@@ -226,7 +226,6 @@ export const StudentProgressPage: React.FC<StudentProgressPageProps> = ({
     'hoa-hoc': 'Hóa học',
     'vat-li': 'Vật lí',
     'sinh-hoc': 'Sinh học',
-    'trai-dat-vu-tru': 'Trái Đất & Vũ trụ',
   };
 
   const earnedBadgeCount = Object.keys(earnedBadgesMap).length;
@@ -256,7 +255,7 @@ export const StudentProgressPage: React.FC<StudentProgressPageProps> = ({
                 </span>
               </div>
               <p className="text-xs sm:text-sm text-slate-400">
-                {currentUser?.school || 'THCS Giảng Võ, Hà Nội'} • Email: {currentUser?.email || 'hocsinh.khtn@gmail.com'}
+                {currentUser?.school || 'THCS Đà Nẵng, Việt Nam'} • Email: {currentUser?.email || 'hoang08shh@gmail.com'}
               </p>
               <div className="flex items-center gap-2 pt-1">
                 <span className="text-xs text-amber-400 font-bold flex items-center gap-1">
@@ -265,7 +264,7 @@ export const StudentProgressPage: React.FC<StudentProgressPageProps> = ({
                 </span>
                 <span className="text-xs text-slate-400">•</span>
                 <span className="text-xs text-teal-300 font-medium">
-                  GDPT 2018 Năng lực KHTN
+                  KHOA HỌC SỐ KHTN • Kết nối tri thức
                 </span>
               </div>
             </div>

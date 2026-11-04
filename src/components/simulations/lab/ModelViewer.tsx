@@ -134,7 +134,7 @@ export const ModelViewer: React.FC<ModelViewerProps> = ({ manifest, onComplete }
                 Lớp {manifest.grade} • v{manifest.version}
               </span>
               <span className="text-[10px] font-semibold text-emerald-400 flex items-center gap-1">
-                <CheckCircle2 className="w-3 h-3" /> Chuẩn GDPT 2018
+                <CheckCircle2 className="w-3 h-3" /> Kết nối tri thức
               </span>
             </div>
             <h2 className="text-sm sm:text-base font-extrabold text-white line-clamp-1">

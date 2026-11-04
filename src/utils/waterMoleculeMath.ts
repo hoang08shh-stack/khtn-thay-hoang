@@ -50,7 +50,7 @@ export const ATOM_DATABASE: Record<'O' | 'H1' | 'H2', AtomProperties> = {
   O: {
     id: 'O',
     name: 'Oxygen',
-    vietnameseName: 'Oxy (Oxygen)',
+    vietnameseName: 'Oxygen (O)',
     symbol: 'O',
     atomicNumber: 8,
     protons: 8,
@@ -71,7 +71,7 @@ export const ATOM_DATABASE: Record<'O' | 'H1' | 'H2', AtomProperties> = {
   H1: {
     id: 'H1',
     name: 'Hydrogen 1',
-    vietnameseName: 'Hydro 1 (Hydrogen)',
+    vietnameseName: 'Hydrogen 1 (H)',
     symbol: 'H',
     atomicNumber: 1,
     protons: 1,
@@ -87,12 +87,12 @@ export const ATOM_DATABASE: Record<'O' | 'H1' | 'H2', AtomProperties> = {
     partialChargeValue: +0.33,
     cpkColor: '#F8FAFC', // White/Light slate (CPK standard)
     description: 'Nguyên tử nhẹ nhất vũ trụ, chỉ có 1 electron lớp ngoài cùng, góp chung 1 electron với Oxygen.',
-    roleInWater: 'Tạo cực dương của phân tử, sẵn sàng tạo liên kết hydro liên phân tử với nguyên tử O của phân tử nước lân cận.',
+    roleInWater: 'Tạo cực dương của phân tử, sẵn sàng tạo liên kết hydrogen liên phân tử với nguyên tử O của phân tử nước lân cận.',
   },
   H2: {
     id: 'H2',
     name: 'Hydrogen 2',
-    vietnameseName: 'Hydro 2 (Hydrogen)',
+    vietnameseName: 'Hydrogen 2 (H)',
     symbol: 'H',
     atomicNumber: 1,
     protons: 1,
@@ -107,7 +107,7 @@ export const ATOM_DATABASE: Record<'O' | 'H1' | 'H2', AtomProperties> = {
     partialCharge: 'δ⁺',
     partialChargeValue: +0.33,
     cpkColor: '#F8FAFC', // White/Light slate (CPK standard)
-    description: 'Nguyên tử Hydro đối xứng qua mặt phẳng phân tử, tạo góc liên kết 104.5° với H1 qua tâm Oxy.',
+    description: 'Nguyên tử Hydrogen đối xứng qua mặt phẳng phân tử, tạo góc liên kết 104.5° với H1 qua tâm Oxygen.',
     roleInWater: 'Cùng với H1 tạo dạng hình học gấp khúc không đối xứng, làm cho phân tử có mômen lưỡng cực vĩnh viễn.',
   },
 };

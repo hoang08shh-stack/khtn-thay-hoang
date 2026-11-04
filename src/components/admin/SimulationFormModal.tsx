@@ -94,19 +94,22 @@ const SimulationFormModalContent: React.FC<Omit<SimulationFormModalProps, 'isOpe
   const [domain, setDomain] = useState<SubjectDomain>(simulation?.domain || 'hoa-hoc');
   const [category, setCategory] = useState(simulation?.category || 'Mô hình 3D tương tác');
   const [difficulty, setDifficulty] = useState<'Cơ bản' | 'Trung bình' | 'Nâng cao'>(simulation?.difficulty || 'Cơ bản');
-  const [curriculumCode, setCurriculumCode] = useState(simulation?.curriculumCode || `GDPT 2018 - KHTN ${grade}`);
+  const [curriculumCode, setCurriculumCode] = useState(simulation?.curriculumCode || `Kết nối tri thức - KHTN ${grade}`);
   const [summary, setSummary] = useState(simulation?.summary || '');
   const [thumbnailUrl, setThumbnailUrl] = useState(
     simulation?.thumbnailUrl ||
       'https://images.unsplash.com/photo-1532094349884-543bc11b234d?auto=format&fit=crop&w=800&q=80'
   );
-  const [tagsInput, setTagsInput] = useState(simulation?.tags?.join(', ') || '3D, GDPT 2018');
+  const [tagsInput, setTagsInput] = useState(simulation?.tags?.join(', ') || '3D, Kết nối tri thức');
 
   // Model Asset states (Mode 1)
   const [modelUrl, setModelUrl] = useState(simulation?.modelAsset?.url || '');
   const [modelFileName, setModelFileName] = useState(simulation?.modelAsset?.fileName || '');
   const [modelFileSizeFormatted, setModelFileSizeFormatted] = useState(simulation?.modelAsset?.fileSizeFormatted || '');
   const [modelFormat, setModelFormat] = useState<'glb' | 'gltf'>(simulation?.modelAsset?.format || 'glb');
+
+  // External Embed URL state (Mode 3)
+  const [externalUrl, setExternalUrl] = useState(simulation?.externalUrl || '');
 
   // Predefined Controls Config
   const [controls, setControls] = useState(simulation?.controlsConfig || { ...DEFAULT_CONTROLS_CONFIG });
@@ -193,6 +196,7 @@ const SimulationFormModalContent: React.FC<Omit<SimulationFormModalProps, 'isOpe
             format: modelFormat,
           }
         : undefined,
+    externalUrl: mode === 'external_embed' ? externalUrl.trim() : undefined,
     controlsConfig: controls,
     annotations,
     scientificExplanation: {
@@ -204,7 +208,7 @@ const SimulationFormModalContent: React.FC<Omit<SimulationFormModalProps, 'isOpe
     relatedLessonIds: selectedLessons,
     createdAt: simulation?.createdAt || new Date().toISOString(),
     updatedAt: new Date().toISOString(),
-    author: simulation?.author || 'Thầy Hoàng KHTN',
+    author: simulation?.author || 'KHOA HỌC SỐ KHTN',
   };
 
   // Realtime validate when switching to schema tab or submitting
@@ -263,12 +267,12 @@ const SimulationFormModalContent: React.FC<Omit<SimulationFormModalProps, 'isOpe
 
     setIsSubmitting(true);
     try {
-      const res = await saveSimulation(currentManifest);
-      if (res.success && res.data) {
-        onSaved(res.data);
+      const saved = await saveSimulation(currentManifest);
+      if (saved) {
+        onSaved(saved);
         onClose();
       } else {
-        alert(res.error || 'Không thể lưu mô phỏng vào hệ thống.');
+        alert('Không thể lưu mô phỏng vào hệ thống.');
       }
     } catch (err: any) {
       alert(`Lỗi lưu: ${err.message}`);
@@ -353,7 +357,38 @@ const SimulationFormModalContent: React.FC<Omit<SimulationFormModalProps, 'isOpe
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Mode 3: External Web 3D / AI Studio URL */}
+                <div
+                  onClick={() => setMode('external_embed')}
+                  className={`p-5 rounded-2xl border-2 cursor-pointer transition flex flex-col justify-between ${
+                    mode === 'external_embed'
+                      ? 'border-teal-500 bg-teal-50/50 dark:bg-teal-950/30'
+                      : 'border-slate-200 dark:border-slate-800 hover:border-slate-300'
+                  }`}
+                >
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-sky-600 text-white">
+                        Nhanh Nhất (Dán Link Web 3D)
+                      </span>
+                      {mode === 'external_embed' && (
+                        <CheckCircle2 className="w-5 h-5 text-teal-600 dark:text-teal-400" />
+                      )}
+                    </div>
+                    <h4 className="text-base font-extrabold text-slate-900 dark:text-white">
+                      Chế Độ Web 3D: Nhúng Link AI Studio / WebGL
+                    </h4>
+                    <p className="leading-relaxed text-slate-600 dark:text-slate-300">
+                      Dán trực tiếp đường dẫn ứng dụng mô phỏng 3D (ví dụ: <code>https://...ai.studio</code> hoặc PhET/WebGL). Trạm mô phỏng sẽ nhúng trực tiếp hoặc mở toàn màn hình cho học sinh thực hành.
+                    </p>
+                    <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px] text-sky-600 dark:text-sky-400 flex items-center gap-2">
+                      <ExternalLink className="w-4 h-4 shrink-0" />
+                      <span>Hỗ trợ mọi link Web 3D (.ai.studio, Vercel, Cloudflare...)</span>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Mode 1 */}
                 <div
                   onClick={() => setMode('declarative_glb')}
@@ -366,7 +401,7 @@ const SimulationFormModalContent: React.FC<Omit<SimulationFormModalProps, 'isOpe
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <span className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-teal-600 text-white">
-                        Khuyên Dùng (Zero-Code)
+                        Khuyên Dùng (File .GLB)
                       </span>
                       {mode === 'declarative_glb' && (
                         <CheckCircle2 className="w-5 h-5 text-teal-600 dark:text-teal-400" />
@@ -376,11 +411,11 @@ const SimulationFormModalContent: React.FC<Omit<SimulationFormModalProps, 'isOpe
                       Chế Độ 1: Upload GLB & Điều Khiển Tự Động
                     </h4>
                     <p className="leading-relaxed text-slate-600 dark:text-slate-300">
-                      Tải tệp mô hình 3D (.glb, .gltf) lên Supabase Storage. Hệ thống tự động căn chỉnh khung hình, cung cấp sẵn các bộ điều khiển 360°, bóc tách chi tiết (explode), mặt cắt và điểm ghim 3D (hotspots).
+                      Tải tệp mô hình 3D (.glb, .gltf) lên hệ thống. Tự động căn chỉnh khung hình, cung cấp sẵn các bộ điều khiển 360°, bóc tách chi tiết (explode), mặt cắt và điểm ghim 3D.
                     </p>
                     <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px] text-emerald-600 dark:text-emerald-400 flex items-center gap-2">
                       <ShieldCheck className="w-4 h-4 shrink-0" />
-                      <span>An toàn tuyệt đối: Không chạy JavaScript tùy ý từ bên ngoài.</span>
+                      <span>An toàn tuyệt đối: Không cần viết code.</span>
                     </div>
                   </div>
                 </div>
@@ -397,7 +432,7 @@ const SimulationFormModalContent: React.FC<Omit<SimulationFormModalProps, 'isOpe
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <span className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-purple-600 text-white">
-                        Lập Trình Viên (Git Review)
+                        Lập Trình Viên (TSX Code)
                       </span>
                       {mode === 'custom_tsx' && (
                         <CheckCircle2 className="w-5 h-5 text-teal-600 dark:text-teal-400" />
@@ -407,10 +442,10 @@ const SimulationFormModalContent: React.FC<Omit<SimulationFormModalProps, 'isOpe
                       Chế Độ 2: Mô Phỏng TSX Tùy Chỉnh (Code)
                     </h4>
                     <p className="leading-relaxed text-slate-600 dark:text-slate-300">
-                      Dành cho các hiện tượng khoa học phức tạp cần tính toán vật lý (ví dụ: góc liên kết phân tử nước 104.5°, dòng electron mạch điện, lăng kính khúc xạ ánh sáng).
+                      Dành cho các hiện tượng khoa học phức tạp cần tính toán vật lý trực tiếp trong mã nguồn React Three Fiber của ứng dụng.
                     </p>
                     <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px] text-purple-600 dark:text-purple-400">
-                      Mô phỏng TSX được viết mã nguồn tại <code>src/components/simulations/</code>, kiểm thử qua unit test và triển khai an toàn qua GitHub.
+                      Mô phỏng TSX được viết tại <code>src/components/simulations/</code>.
                     </div>
                   </div>
                 </div>
@@ -454,10 +489,55 @@ const SimulationFormModalContent: React.FC<Omit<SimulationFormModalProps, 'isOpe
             </div>
           )}
 
-          {/* TAB 2: MODEL ASSET & THUMBNAIL */}
+          {/* TAB 2: MODEL ASSET / EXTERNAL URL & THUMBNAIL */}
           {activeTab === 'model' && (
             <div className="space-y-6">
-              {mode === 'declarative_glb' ? (
+              {mode === 'external_embed' ? (
+                <div className="p-5 rounded-2xl bg-sky-50 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-800 space-y-4">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-1 flex items-center gap-2">
+                      <ExternalLink className="w-4 h-4 text-sky-600 dark:text-sky-400" />
+                      <span>Đường Dẫn URL Trạm Mô Phỏng Web 3D / AI Studio *</span>
+                    </h3>
+                    <p className="text-slate-500 dark:text-slate-400">
+                      Dán đường dẫn ứng dụng Web 3D của bạn (bắt đầu bằng <code>https://</code>). Học sinh có thể tương tác trực tiếp ngay trong khung 3D hoặc mở toàn màn hình.
+                    </p>
+                  </div>
+
+                  <input
+                    type="url"
+                    value={externalUrl}
+                    onChange={(e) => setExternalUrl(e.target.value)}
+                    placeholder="https://c-n-b-ng-ph-ng-tr-nh-h-a-h-c-3d.ai.studio"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-sky-300 dark:border-sky-700 font-mono text-xs text-slate-900 dark:text-white focus:ring-2 focus:ring-sky-500"
+                  />
+
+                  <div className="pt-1 flex flex-wrap items-center gap-2">
+                    <span className="text-[11px] font-semibold text-slate-500">Mẫu điền nhanh:</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setExternalUrl('https://c-n-b-ng-ph-ng-tr-nh-h-a-h-c-3d.ai.studio');
+                        if (!title) {
+                          setTitle('Cân Bằng Phương Trình Hóa Học 3D (Định Luật Bảo Toàn Khối Lượng)');
+                          setSlug('can-bang-phuong-trinh-hoa-hoc-3d');
+                          setId('sim-chemical-equation-3d');
+                          setGrade(8);
+                          setDomain('hoa-hoc');
+                          setCategory('Phản ứng Hóa học & Cân bằng PTHH');
+                          setSummary(
+                            'Trực quan hóa quá trình cân bằng phương trình hóa học 3D: điều chỉnh hệ số các phân tử chất tham gia và sản phẩm theo Định luật bảo toàn khối lượng.'
+                          );
+                        }
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-[11px] font-bold transition flex items-center gap-1.5 shadow-sm"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>Điền mẫu: Cân Bằng Phương Trình Hóa Học 3D (.ai.studio)</span>
+                    </button>
+                  </div>
+                </div>
+              ) : mode === 'declarative_glb' ? (
                 <div className="space-y-4">
                   <div>
                     <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-1">
@@ -1131,13 +1211,34 @@ const SimulationFormModalContent: React.FC<Omit<SimulationFormModalProps, 'isOpe
                     Xem Trước Trực Tiếp Mô Hình 3D Trong Trình Duyệt
                   </h3>
                   <p className="text-slate-500 dark:text-slate-400">
-                    Kiểm tra camera, ánh sáng và các điểm ghim trước khi lưu vào Supabase.
+                    Kiểm tra không gian 3D trước khi lưu vào hệ thống.
                   </p>
                 </div>
+                {mode === 'external_embed' && externalUrl && (
+                  <a
+                    href={externalUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-1.5 rounded-xl bg-sky-600 text-white font-bold flex items-center gap-1.5"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span>Mở trong tab mới</span>
+                  </a>
+                )}
               </div>
 
-              <div className="w-full h-[480px] rounded-2xl overflow-hidden border border-slate-300 dark:border-slate-800 shadow-xl">
-                <ModelViewer manifest={currentManifest} />
+              <div className="w-full h-[480px] rounded-2xl overflow-hidden border border-slate-300 dark:border-slate-800 shadow-xl bg-slate-950">
+                {mode === 'external_embed' && externalUrl ? (
+                  <iframe
+                    src={externalUrl}
+                    title={title || 'Xem trước Web 3D'}
+                    className="w-full h-full border-0"
+                    allow="fullscreen; accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  />
+                ) : (
+                  <ModelViewer manifest={currentManifest} />
+                )}
               </div>
             </div>
           )}

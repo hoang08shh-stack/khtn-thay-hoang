@@ -122,9 +122,9 @@ export const LabViewer: React.FC<LabViewerProps> = ({ initialGrade = 7, onComple
       id: 'q1',
       question: 'Tại sao góc liên kết H-O-H trong phân tử nước (104.5°) lại nhỏ hơn góc tứ diện đều lý thuyết (109.5°)?',
       options: [
-        { id: 'a', text: 'Do nguyên tử Oxy hút electron quá yếu nên hai nguyên tử H tự động dạt ra xa.' },
-        { id: 'b', text: 'Do 2 cặp electron tự do (lone pairs) của Oxy chiếm không gian lớn, tạo lực đẩy ép góc liên kết lại.', isCorrect: true },
-        { id: 'c', text: 'Do hai nguyên tử Hydro có điện tích trái dấu hút chặt vào nhau.' },
+        { id: 'a', text: 'Do nguyên tử Oxygen hút electron quá yếu nên hai nguyên tử H tự động dạt ra xa.' },
+        { id: 'b', text: 'Do 2 cặp electron tự do (lone pairs) của Oxygen chiếm không gian lớn, tạo lực đẩy ép góc liên kết lại.', isCorrect: true },
+        { id: 'c', text: 'Do hai nguyên tử Hydrogen có điện tích trái dấu hút chặt vào nhau.' },
         { id: 'd', text: 'Do áp suất khí quyển nén phân tử nước lại trong điều kiện chuẩn.' },
       ],
       explanation: 'Chính xác! Theo thuyết VSEPR (sức đẩy cặp electron hóa trị), nguyên tử O ở trạng thái lai hóa sp³ có 2 liên kết và 2 cặp electron tự do. Lực đẩy giữa các cặp electron tự do lớn hơn lực đẩy giữa các cặp electron liên kết, làm góc H-O-H bị ép từ 109.5° xuống còn 104.5°.',
@@ -134,18 +134,18 @@ export const LabViewer: React.FC<LabViewerProps> = ({ initialGrade = 7, onComple
       question: 'Phân tử nước có cực hay không cực? Đặc điểm nào quyết định điều này?',
       options: [
         { id: 'a', text: 'Không cực, vì tổng số proton bằng tổng số electron (phân tử trung hòa điện).' },
-        { id: 'b', text: 'Có cực, vì Oxy có độ âm điện lớn hơn Hydro và phân tử có dạng gấp khúc không đối xứng.', isCorrect: true },
+        { id: 'b', text: 'Có cực, vì Oxygen có độ âm điện lớn hơn Hydrogen và phân tử có dạng gấp khúc không đối xứng.', isCorrect: true },
         { id: 'c', text: 'Không cực, vì liên kết O-H là liên kết ion hoàn toàn.' },
         { id: 'd', text: 'Có cực, nhưng chỉ khi phân tử nước ở thể lỏng, còn thể rắn thì không cực.' },
       ],
-      explanation: 'Tuyệt vời! Hiệu độ âm điện Δχ = 3.44 - 2.20 = 1.24 (thuộc khoảng 0.4 đến 1.7) tạo nên 2 liên kết cộng hóa trị phân cực mạnh. Do cấu trúc gấp khúc (104.5°), hai vector phân cực không triệt tiêu mà hợp thành vector mômen lưỡng cực tổng cộng μ = 1.85 Debye hướng về Oxy.',
+      explanation: 'Tuyệt vời! Hiệu độ âm điện Δχ = 3.44 - 2.20 = 1.24 (thuộc khoảng 0.4 đến 1.7) tạo nên 2 liên kết cộng hóa trị phân cực mạnh. Do cấu trúc gấp khúc (104.5°), hai vector phân cực không triệt tiêu mà hợp thành vector mômen lưỡng cực tổng cộng μ = 1.85 Debye hướng về Oxygen.',
     },
     {
       id: 'q3',
       question: 'Trong mô hình không gian đặc (Space-filling), nhận xét nào sau đây là ĐÚNG?',
       options: [
         { id: 'a', text: 'Các quả cầu thể hiện bán kính van der Waals thực tế và tiếp xúc xen phủ nhau, không còn que nối cơ học.', isCorrect: true },
-        { id: 'b', text: 'Nguyên tử Hydro to hơn nguyên tử Oxy gấp đôi do khối lượng nhẹ hơn.' },
+        { id: 'b', text: 'Nguyên tử Hydrogen to hơn nguyên tử Oxygen gấp đôi do khối lượng nhẹ hơn.' },
         { id: 'c', text: 'Mô hình không gian đặc chỉ áp dụng được cho đơn chất, không áp dụng được cho hợp chất.' },
         { id: 'd', text: 'Các electron được vẽ chuyển động thành vòng tròn quanh hạt nhân giống như hệ Mặt Trời.' },
       ],
@@ -185,7 +185,7 @@ export const LabViewer: React.FC<LabViewerProps> = ({ initialGrade = 7, onComple
                 Cấu Tạo Phân Tử Nước (H₂O)
               </h2>
               <span className="hidden sm:inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-950 text-teal-300 border border-teal-700">
-                KHTN 7 • GDPT 2018
+                KHTN 7 • Kết nối tri thức
               </span>
             </div>
             <p className="text-xs text-slate-400 flex items-center gap-2">

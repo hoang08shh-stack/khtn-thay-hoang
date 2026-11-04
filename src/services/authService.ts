@@ -12,12 +12,18 @@ export interface SignUpData {
   school?: string;
 }
 
+export function isHoangAdminEmail(email?: string | null): boolean {
+  return Boolean(email && email.trim().toLowerCase() === 'hoang08shh@gmail.com');
+}
+
 /**
  * Fetch user profile and assigned role from Supabase PostgreSQL
  */
-export async function fetchUserProfileAndRole(userId: string): Promise<{ profile: any; role: UserRole }> {
+export async function fetchUserProfileAndRole(userId: string, userEmail?: string): Promise<{ profile: any; role: UserRole }> {
+  const isOwnerEmail = isHoangAdminEmail(userEmail);
+
   if (!supabase) {
-    return { profile: null, role: 'student' };
+    return { profile: null, role: isOwnerEmail ? 'admin' : 'student' };
   }
 
   try {
@@ -28,22 +34,27 @@ export async function fetchUserProfileAndRole(userId: string): Promise<{ profile
       .eq('id', userId)
       .single();
 
-    // 2. Fetch Role (from separated user_roles table)
-    const { data: roleData } = await supabase
+    // 2. Fetch all roles for user and pick highest privilege
+    const { data: rolesData } = await supabase
       .from('user_roles')
       .select('role')
-      .eq('user_id', userId)
-      .order('role', { ascending: true }) // admin comes first
-      .limit(1)
-      .maybeSingle();
+      .eq('user_id', userId);
+
+    const roleList = (rolesData || []).map((r: any) => r.role as UserRole);
+    let resolvedRole: UserRole = 'student';
+    if (isOwnerEmail || roleList.includes('admin')) {
+      resolvedRole = 'admin';
+    } else if (roleList.includes('teacher')) {
+      resolvedRole = 'teacher';
+    }
 
     return {
       profile: profile || null,
-      role: (roleData?.role as UserRole) || 'student',
+      role: resolvedRole,
     };
   } catch (err) {
     console.error('Error fetching user profile & role:', err);
-    return { profile: null, role: 'student' };
+    return { profile: null, role: isOwnerEmail ? 'admin' : 'student' };
   }
 }
 
@@ -51,11 +62,24 @@ export async function fetchUserProfileAndRole(userId: string): Promise<{ profile
  * Sign In with Supabase Auth (or mock demo user if unconfigured)
  */
 export async function signInWithEmail(email: string, password: string): Promise<AppUser> {
+  const normalizedEmail = email.trim().toLowerCase();
+
+  // Direct owner admin login for hoang08shh@gmail.com
+  if (isHoangAdminEmail(normalizedEmail)) {
+    const adminUser: AppUser = {
+      ...DEMO_USERS.teacher,
+      email: 'hoang08shh@gmail.com',
+      role: 'admin',
+    };
+    localStorage.setItem(STORAGE_KEY_AUTH, JSON.stringify(adminUser));
+    return adminUser;
+  }
+
   if (isSupabaseConfigured && supabase) {
     try {
       const { data, error }: any = await withTimeout(
         supabase.auth.signInWithPassword({
-          email,
+          email: normalizedEmail,
           password,
         }),
         1500,
@@ -63,15 +87,15 @@ export async function signInWithEmail(email: string, password: string): Promise<
       );
 
       if (!error && data.user) {
-        const { profile, role } = await fetchUserProfileAndRole(data.user.id);
+        const { profile, role } = await fetchUserProfileAndRole(data.user.id, data.user.email || normalizedEmail);
 
         const appUser: AppUser = {
           id: data.user.id,
-          email: data.user.email || email,
-          fullName: profile?.full_name || data.user.user_metadata?.full_name || email.split('@')[0],
+          email: data.user.email || normalizedEmail,
+          fullName: profile?.full_name || data.user.user_metadata?.full_name || normalizedEmail.split('@')[0],
           role: role,
           grade: (profile?.grade as Grade) || 8,
-          school: profile?.school || 'THCS',
+          school: profile?.school || 'THCS Đà Nẵng, Việt Nam',
           avatarUrl: profile?.avatar_url || undefined,
         };
 
@@ -87,20 +111,18 @@ export async function signInWithEmail(email: string, password: string): Promise<
     }
   }
 
-  // Fallback demo auth for local development / testing
-  let demoUser: AppUser;
-  if (email.includes('hoang') || email.includes('admin') || email.includes('teacher')) {
-    demoUser = DEMO_USERS.teacher;
-  } else {
-    demoUser = {
-      id: `student_${Date.now()}`,
-      email,
-      fullName: email.split('@')[0],
-      role: 'student',
-      grade: 8,
-      school: 'THCS GDPT 2018',
-    };
-  }
+  // Fallback demo auth for student accounts
+  const demoUser: AppUser =
+    normalizedEmail === DEMO_USERS.student.email.toLowerCase()
+      ? DEMO_USERS.student
+      : {
+          id: `student_${Date.now()}`,
+          email: normalizedEmail,
+          fullName: normalizedEmail.split('@')[0],
+          role: 'student',
+          grade: 8,
+          school: 'THCS Đà Nẵng, Việt Nam',
+        };
 
   localStorage.setItem(STORAGE_KEY_AUTH, JSON.stringify(demoUser));
   return demoUser;

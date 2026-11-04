@@ -49,14 +49,12 @@ export const TeacherAnalyticsView: React.FC<TeacherAnalyticsViewProps> = ({
     'hoa-hoc': 'Hóa học',
     'vat-li': 'Vật lí',
     'sinh-hoc': 'Sinh học',
-    'trai-dat-vu-tru': 'Trái Đất & Vũ trụ',
   };
 
   const domainColors: Record<SubjectDomain, string> = {
-    'hoa-hoc': 'text-purple-600 bg-purple-50 dark:bg-purple-950/50 border-purple-200 dark:border-purple-800',
-    'vat-li': 'text-blue-600 bg-blue-50 dark:bg-blue-950/50 border-blue-200 dark:border-blue-800',
-    'sinh-hoc': 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/50 border-emerald-200 dark:border-emerald-800',
-    'trai-dat-vu-tru': 'text-amber-600 bg-amber-50 dark:bg-amber-950/50 border-amber-200 dark:border-amber-800',
+    'hoa-hoc': 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/50 border-emerald-200 dark:border-emerald-800',
+    'vat-li': 'text-sky-600 bg-sky-50 dark:bg-sky-950/50 border-sky-200 dark:border-sky-800',
+    'sinh-hoc': 'text-amber-600 bg-amber-50 dark:bg-amber-950/50 border-amber-200 dark:border-amber-800',
   };
 
   if (isLoading || !stats) {
@@ -82,7 +80,7 @@ export const TeacherAnalyticsView: React.FC<TeacherAnalyticsViewProps> = ({
             <span className="px-2.5 py-0.5 rounded-full bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20 text-xs font-bold">
               Dành Cho Giáo Viên & Quản Trị
             </span>
-            <span className="text-xs text-slate-400">Chuẩn GDPT 2018</span>
+            <span className="text-xs text-slate-500 font-semibold">Bộ sách Kết nối tri thức với cuộc sống</span>
           </div>
           <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white mt-1">
             Bảng Thống Kê Năng Lực Học Tập Cả Lớp
