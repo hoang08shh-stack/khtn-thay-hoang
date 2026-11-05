@@ -21,10 +21,8 @@ import {
   Dna,
   CheckCircle2,
   Sparkles,
-  Layers,
   GraduationCap,
   Gamepad2,
-  Compass,
   MapPin,
   Mail,
   Phone,
@@ -186,22 +184,6 @@ export const HomePage: React.FC = () => {
                   <span>Tất cả bài giảng</span>
                 </Link>
               </div>
-
-              {/* Key Highlights Bar */}
-              <div className="grid grid-cols-3 gap-3 pt-3 max-w-xl">
-                <div className="bg-slate-800/65 backdrop-blur-md rounded-2xl p-3 border border-slate-700/70">
-                  <div className="text-xl sm:text-2xl font-black text-teal-200 font-mono">3 Phân môn</div>
-                  <div className="text-xs text-slate-300 font-semibold">Vật lí • Hóa học • Sinh học</div>
-                </div>
-                <div className="bg-slate-800/65 backdrop-blur-md rounded-2xl p-3 border border-slate-700/70">
-                  <div className="text-xl sm:text-2xl font-black text-sky-200 font-mono">100% IUPAC</div>
-                  <div className="text-xs text-slate-300 font-semibold">Danh pháp Hóa học Quốc tế</div>
-                </div>
-                <div className="bg-slate-800/65 backdrop-blur-md rounded-2xl p-3 border border-slate-700/70">
-                  <div className="text-xl sm:text-2xl font-black text-emerald-200 font-mono">3D & Game</div>
-                  <div className="text-xs text-slate-300 font-semibold">Mô phỏng & Ô chữ KHTN</div>
-                </div>
-              </div>
             </div>
 
             {/* Right Column: Interactive Atom Visualizer + Bright Lab Illustration */}
@@ -234,9 +216,6 @@ export const HomePage: React.FC = () => {
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div>
-            <span className="inline-flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wider text-teal-700 bg-teal-100 px-3 py-1 rounded-full">
-              <Compass className="w-3.5 h-3.5" /> Bộ sách Kết nối tri thức với cuộc sống
-            </span>
             <h2 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white mt-2">
               3 Phân Môn Khoa Học Tự Nhiên Trọng Tâm
             </h2>
@@ -299,9 +278,6 @@ export const HomePage: React.FC = () => {
       {/* 3. LỘ TRÌNH 4 KHỐI LỚP THCS (LỚP 6 - 7 - 8 - 9) */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
         <div className="text-center max-w-3xl mx-auto space-y-2">
-          <span className="px-3.5 py-1 rounded-full bg-sky-100 text-sky-700 text-xs font-extrabold uppercase tracking-wider">
-            Sách giáo khoa Kết nối tri thức với cuộc sống
-          </span>
           <h2 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">
             Lộ Trình Học Tập KHTN Từ Lớp 6 Đến Lớp 9
           </h2>

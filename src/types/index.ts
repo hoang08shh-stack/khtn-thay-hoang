@@ -159,7 +159,20 @@ export interface VideoLesson {
 
 export type VideoResource = VideoLesson;
 
-export type QuestionType = 'single_choice' | 'multiple_choice' | 'true_false' | 'essay';
+export type QuestionType =
+  | 'single_choice'
+  | 'multiple_choice'
+  | 'true_false'
+  | 'short_answer'
+  | 'essay';
+
+export interface TrueFalseStatement {
+  id: string; // 'a' | 'b' | 'c' | 'd'
+  label: string; // 'a)' | 'b)' | 'c)' | 'd)'
+  text: string;
+  isTrue: boolean | null; // null if answer key not yet specified
+  explanation?: string;
+}
 
 export interface QuizQuestion {
   id: string;
@@ -170,12 +183,31 @@ export interface QuizQuestion {
   question: string;
   questionType?: QuestionType;
   options: string[];
-  correctAnswer?: number; // 0-based index for single_choice/true_false
+  correctAnswer?: number; // 0-based index for single_choice/legacy true_false (-1 if unresolved)
   correctAnswers?: number[]; // array of 0-based indices for multiple_choice
+  // Dạng 2 (GDPT 2018): Đúng/Sai gồm các ý a), b), c), d)
+  trueFalseStatements?: TrueFalseStatement[];
+  // Dạng 3 (GDPT 2018): Trả lời ngắn (số hoặc cụm từ ngắn, đơn vị, sai số)
+  shortAnswer?: string;
+  shortAnswerUnit?: string;
+  shortAnswerTolerance?: number;
+  // Dạng 4 (GDPT 2018): Tự luận (đáp án mẫu, thang điểm/rubric, tải ảnh)
   explanation: string;
   solutionSteps?: string[]; // Hướng dẫn giải từng bước chi tiết
-  sampleAnswer?: string; // Đáp án mẫu / biểu điểm cho câu hỏi tự luận
+  sampleAnswer?: string; // Đáp án mẫu cho câu hỏi tự luận
+  rubric?: string; // Thang điểm / biểu điểm chấm tự luận
   allowImageUpload?: boolean; // Cho phép học sinh tải file ảnh bài làm lên (mặc định true với tự luận)
+  // Bảo toàn hình ảnh, bảng biểu và định dạng gốc từ Word
+  imageUrl?: string;
+  questionImages?: string[];
+  questionTables?: string[];
+  rawSourceBlock?: string;
+  // Trạng thái kiểm duyệt lời giải & siêu dữ liệu ngân hàng câu hỏi
+  approvalStatus?: 'approved' | 'pending_review' | 'draft';
+  sourceDocument?: string;
+  createdBy?: string;
+  createdAt?: string;
+  updatedAt?: string;
   difficulty: 'Nhận biết' | 'Thông hiểu' | 'Vận dụng';
   hint?: string;
   points?: number;

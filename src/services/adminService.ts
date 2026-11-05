@@ -139,9 +139,17 @@ export function extractYouTubeId(urlOrId: string): string | null {
   return match ? match[1] : null;
 }
 
+const memoryFallbackStore = new Map<string, string>();
+
 function safeReadLocal<T>(key: string, fallback: T): T {
   try {
-    if (typeof localStorage === 'undefined') return fallback;
+    if (typeof localStorage === 'undefined') {
+      const memRaw = memoryFallbackStore.get(key);
+      if (memRaw) {
+        return JSON.parse(memRaw) as T;
+      }
+      return fallback;
+    }
     const raw = localStorage.getItem(key);
     if (raw) {
       const parsed = JSON.parse(raw);
@@ -157,8 +165,10 @@ function safeReadLocal<T>(key: string, fallback: T): T {
 
 function safeWriteLocal<T>(key: string, data: T): void {
   try {
+    const serialized = JSON.stringify(data);
+    memoryFallbackStore.set(key, serialized);
     if (typeof localStorage === 'undefined') return;
-    localStorage.setItem(key, JSON.stringify(data));
+    localStorage.setItem(key, serialized);
   } catch (e) {
     console.warn(`Failed to write ${key} to localStorage:`, e);
   }
@@ -538,7 +548,7 @@ export function getAdminQuestionsSync(): QuizQuestion[] {
           stepsJoined
         );
 
-      if (needsScientificSolutionUpgrade) {
+      if (needsScientificSolutionUpgrade && !q.explanation?.trim()) {
         const concreteSteps = generateStepByStepSolution({
           question: q.question,
           options: q.options || [],
@@ -584,12 +594,15 @@ export async function saveAdminQuestion(qInput: Partial<QuizQuestion> & { questi
   const id = qInput.id || `q-custom-${Date.now()}`;
   const qType = qInput.questionType || 'single_choice';
   const options =
-    qType === 'essay'
+    qType === 'essay' || qType === 'short_answer'
       ? []
+      : qType === 'true_false' && Array.isArray(qInput.trueFalseStatements) && qInput.trueFalseStatements.length > 0
+      ? qInput.trueFalseStatements.map((st) => `${st.label}) ${st.text}`)
       : Array.isArray(qInput.options) && qInput.options.length >= 2
       ? qInput.options
       : ['Đáp án A', 'Đáp án B', 'Đáp án C', 'Đáp án D'];
 
+  const now = new Date().toISOString();
   const saved: QuizQuestion = {
     id,
     lessonId: qInput.lessonId || undefined,
@@ -601,13 +614,27 @@ export async function saveAdminQuestion(qInput: Partial<QuizQuestion> & { questi
     options,
     correctAnswer: typeof qInput.correctAnswer === 'number' ? qInput.correctAnswer : 0,
     correctAnswers: qInput.correctAnswers,
+    trueFalseStatements: qInput.trueFalseStatements,
+    shortAnswer: qInput.shortAnswer?.trim() || undefined,
+    shortAnswerUnit: qInput.shortAnswerUnit?.trim() || undefined,
+    shortAnswerTolerance: qInput.shortAnswerTolerance,
     explanation: qInput.explanation?.trim() || 'Giải thích theo chuẩn kiến thức sách Kết nối tri thức với cuộc sống.',
     solutionSteps: qInput.solutionSteps,
     sampleAnswer: qInput.sampleAnswer?.trim() || undefined,
+    rubric: qInput.rubric?.trim() || undefined,
     allowImageUpload: qType === 'essay' ? (qInput.allowImageUpload ?? true) : qInput.allowImageUpload,
+    imageUrl: qInput.imageUrl || qInput.questionImages?.[0] || undefined,
+    questionImages: qInput.questionImages,
+    questionTables: qInput.questionTables,
+    rawSourceBlock: qInput.rawSourceBlock,
+    approvalStatus: qInput.approvalStatus || 'approved',
+    sourceDocument: qInput.sourceDocument,
+    createdBy: qInput.createdBy,
+    createdAt: qInput.createdAt || now,
+    updatedAt: now,
     difficulty: qInput.difficulty || 'Thông hiểu',
     hint: qInput.hint?.trim() || undefined,
-    points: Number(qInput.points) || (qType === 'essay' ? 2.5 : 1),
+    points: Number(qInput.points) || (qType === 'essay' ? 2.5 : qType === 'true_false' ? 1.0 : qType === 'short_answer' ? 0.5 : 0.25),
   };
 
   const idx = all.findIndex((item) => item.id === id);
@@ -625,13 +652,16 @@ export async function saveAdminQuestionsBulk(
 ): Promise<QuizQuestion[]> {
   const all = getAdminQuestionsSync();
   const savedItems: QuizQuestion[] = [];
+  const now = new Date().toISOString();
 
   questionsList.forEach((qInput, index) => {
     const id = qInput.id || `q-word-${Date.now()}-${index + 1}`;
     const qType = qInput.questionType || 'single_choice';
     const options =
-      qType === 'essay'
+      qType === 'essay' || qType === 'short_answer'
         ? []
+        : qType === 'true_false' && Array.isArray(qInput.trueFalseStatements) && qInput.trueFalseStatements.length > 0
+        ? qInput.trueFalseStatements.map((st) => `${st.label}) ${st.text}`)
         : Array.isArray(qInput.options) && qInput.options.length >= 2
         ? qInput.options
         : ['Đáp án A', 'Đáp án B', 'Đáp án C', 'Đáp án D'];
@@ -647,15 +677,29 @@ export async function saveAdminQuestionsBulk(
       options,
       correctAnswer: typeof qInput.correctAnswer === 'number' ? qInput.correctAnswer : 0,
       correctAnswers: qInput.correctAnswers,
+      trueFalseStatements: qInput.trueFalseStatements,
+      shortAnswer: qInput.shortAnswer?.trim() || undefined,
+      shortAnswerUnit: qInput.shortAnswerUnit?.trim() || undefined,
+      shortAnswerTolerance: qInput.shortAnswerTolerance,
       explanation:
         qInput.explanation?.trim() ||
         'Giải thích theo chuẩn kiến thức sách Kết nối tri thức với cuộc sống.',
       solutionSteps: qInput.solutionSteps,
       sampleAnswer: qInput.sampleAnswer?.trim() || undefined,
+      rubric: qInput.rubric?.trim() || undefined,
       allowImageUpload: qType === 'essay' ? (qInput.allowImageUpload ?? true) : qInput.allowImageUpload,
+      imageUrl: qInput.imageUrl || qInput.questionImages?.[0] || undefined,
+      questionImages: qInput.questionImages,
+      questionTables: qInput.questionTables,
+      rawSourceBlock: qInput.rawSourceBlock,
+      approvalStatus: qInput.approvalStatus || 'approved',
+      sourceDocument: qInput.sourceDocument,
+      createdBy: qInput.createdBy,
+      createdAt: qInput.createdAt || now,
+      updatedAt: now,
       difficulty: qInput.difficulty || 'Thông hiểu',
       hint: qInput.hint?.trim() || undefined,
-      points: Number(qInput.points) || (qType === 'essay' ? 2.5 : 1.5),
+      points: Number(qInput.points) || (qType === 'essay' ? 2.5 : qType === 'true_false' ? 1.0 : qType === 'short_answer' ? 0.5 : 1.5),
     };
 
     savedItems.push(saved);

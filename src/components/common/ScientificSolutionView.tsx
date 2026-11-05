@@ -1,4 +1,5 @@
 import React from 'react';
+import { formatChemicalAndScientificText } from '../../utils/wordQuestionParser.ts';
 
 export interface ScientificSolutionSection {
   heading: string;
@@ -66,44 +67,93 @@ export function renderFormattedMathAndChem(text: string): React.ReactNode {
   return parts;
 }
 
+const UNICODE_SUB_TO_PLAIN: Record<string, string> = {
+  '₀': '0',
+  '₁': '1',
+  '₂': '2',
+  '₃': '3',
+  '₄': '4',
+  '₅': '5',
+  '₆': '6',
+  '₇': '7',
+  '₈': '8',
+  '₉': '9',
+  '₊': '+',
+  '₋': '-',
+  '₍': '(',
+  '₎': ')',
+  'ₘ': 'm',
+  'ₙ': 'n',
+  'ₐ': 'a',
+  'ₑ': 'e',
+  'ₒ': 'o',
+  'ₓ': 'x',
+};
+
+const UNICODE_SUP_TO_PLAIN: Record<string, string> = {
+  '⁰': '0',
+  '¹': '1',
+  '²': '2',
+  '³': '3',
+  '⁴': '4',
+  '⁵': '5',
+  '⁶': '6',
+  '⁷': '7',
+  '⁸': '8',
+  '⁹': '9',
+  '⁺': '+',
+  '⁻': '-',
+  '⁽': '(',
+  '⁾': ')',
+  'ⁿ': 'n',
+};
+
 /**
- * Helper to render nested chemical subscripts inside a subscript (e.g. H₂ inside n_{H₂})
+ * Helper to render nested chemical subscripts inside a subscript (e.g. H₂SO₄ inside n_{H₂SO₄} or Al₂(SO₄)₃ inside m_{Al₂(SO₄)₃})
  */
 function renderNestedSubContent(subText: string): React.ReactNode {
-  const cleaned = subText
-    .replace(/₀/g, '0')
-    .replace(/₁/g, '1')
-    .replace(/₂/g, '2')
-    .replace(/₃/g, '3')
-    .replace(/₄/g, '4')
-    .replace(/₅/g, '5')
-    .replace(/₆/g, '6')
-    .replace(/₇/g, '7')
-    .replace(/₈/g, '8')
-    .replace(/₉/g, '9');
+  const cleaned = subText.replace(/[₀₁₂₃₄₅₆₇₈₉₊₋₍₎ₘₙₐₑₒₓ]/g, (ch) => UNICODE_SUB_TO_PLAIN[ch] || ch);
 
-  // If it's a chemical formula like H2, O2, CO2, FeCl2, ZnCl2, render the trailing number as a sub-subscript
-  const chemSubMatch = cleaned.match(/^([A-Za-z()]+)(\d+)$/);
-  if (chemSubMatch) {
-    return (
-      <>
-        {chemSubMatch[1]}
-        <sub className="text-[0.82em] leading-none">{chemSubMatch[2]}</sub>
-      </>
-    );
+  // If the subscript itself is just a pure number or simple label without trailing/embedded formula digits, return directly
+  if (!/[A-Za-z)\]]\d/.test(cleaned)) {
+    return cleaned;
   }
-  return cleaned;
+
+  // Split and render every digit sequence following a chemical letter or closing parenthesis as a nested <sub>
+  const parts: React.ReactNode[] = [];
+  const regex = /([A-Za-z)\]])(\d+)/g;
+  let lastIdx = 0;
+  let m: RegExpExecArray | null;
+  let key = 0;
+
+  while ((m = regex.exec(cleaned)) !== null) {
+    if (m.index > lastIdx) {
+      parts.push(cleaned.slice(lastIdx, m.index));
+    }
+    parts.push(
+      <React.Fragment key={`nested-${key++}`}>
+        {m[1]}
+        <sub className="text-[0.82em] leading-none">{m[2]}</sub>
+      </React.Fragment>
+    );
+    lastIdx = m.index + m[0].length;
+  }
+
+  if (lastIdx < cleaned.length) {
+    parts.push(cleaned.slice(lastIdx));
+  }
+
+  return parts;
 }
 
 /**
- * Converts unicode subscripts (₂, ₃, ₄, ₁, ₘ) and underscore subscripts (n_Zn, m_{Zn}, V_dd, R_tđ, C_M)
- * as well as standard chemical formulas (ZnCl2, FeCl2, H2SO4, H2O, CO2, O2, N2, H2, Ca(OH)2)
+ * Converts unicode subscripts/superscripts, braced/unbraced subscripts (n_Zn, m_{Al₂(SO₄)₃}, V_dd, R_tđ, C_M),
+ * caret superscripts (10^{-3}, x^2, Cu^{2+}), and chemical formulas/equations
  * into clean HTML <sub> and <sup> elements.
  */
 function renderSubscriptsAndChemTokens(input: string): React.ReactNode {
   if (!input) return null;
 
-  // Step 1: Temporarily protect braced subscripts _{...} and unbraced symbol subscripts so inner ₂ doesn't collide
   const subPlaceholders: string[] = [];
   const storeSub = (content: string) => {
     const id = subPlaceholders.length;
@@ -111,38 +161,51 @@ function renderSubscriptsAndChemTokens(input: string): React.ReactNode {
     return `@@SUB_${id}@@`;
   };
 
-  let working = input
-    // Braced subscripts like n_{Zn}, V_{dd}, n_{H₂}
+  const supPlaceholders: string[] = [];
+  const storeSup = (content: string) => {
+    const id = supPlaceholders.length;
+    supPlaceholders.push(content);
+    return `@@SUP_${id}@@`;
+  };
+
+  // Protect braced subscripts/superscripts first before normalizing plain chemical formulas
+  let preProtected = input
     .replace(/_\{([^{}]+)\}/g, (_m, inner) => storeSub(inner))
-    // Unbraced underscore subscripts like n_Zn, m_Zn, M_Zn, n_HCl, V_dd, R_tđ, C_M, V_m, n_H₂
+    .replace(/\^\{([^{}]+)\}/g, (_m, inner) => storeSup(inner))
     .replace(
       /\b([nmMVICRPUQF])_([A-Za-z0-9đĐ₀₁₂₃₄₅₆₇₈₉()]+)\b/g,
       (_m, base, sub) => `${base}${storeSub(sub)}`
-    )
-    // Chemical formulas written with plain digits like ZnCl2, FeCl2, H2SO4, H2O, CO2, H2, O2, N2
-    .replace(
-      /\b(ZnCl|FeCl|CuCl|MgCl|CaCl|AlCl|NaCl|AgCl|BaCl|CuSO|FeSO|ZnSO|MgSO|Na2SO|H2SO|HNO|CaCO|Na2CO|CH3COOC2H|C2H5O|CH3COO|C6H12O|C12H22O|H|O|N|Cl|CO|SO|NO|CH|C)(\d+)\b/g,
-      (_m, prefix, digits) => `${prefix}${storeSub(digits)}`
-    )
-    // Unicode subscript numbers and letters outside braced subscripts
-    .replace(/₀/g, () => storeSub('0'))
-    .replace(/₁/g, () => storeSub('1'))
-    .replace(/₂/g, () => storeSub('2'))
-    .replace(/₃/g, () => storeSub('3'))
-    .replace(/₄/g, () => storeSub('4'))
-    .replace(/₅/g, () => storeSub('5'))
-    .replace(/₆/g, () => storeSub('6'))
-    .replace(/₇/g, () => storeSub('7'))
-    .replace(/₈/g, () => storeSub('8'))
-    .replace(/₉/g, () => storeSub('9'))
-    .replace(/ₘ/g, () => storeSub('m'))
-    // Superscripts like m², cm², I², R², H⁺, OH⁻
-    .replace(/²/g, '@@SUP_2@@')
-    .replace(/³/g, '@@SUP_3@@')
-    .replace(/⁺/g, '@@SUP_+@@')
-    .replace(/⁻/g, '@@SUP_-@@');
+    );
 
-  const tokenRegex = /@@(SUB|SUP)_([^@]+)@@/g;
+  // Normalize any unformatted chemical formulas, ions, units, and reaction arrows
+  let working = formatChemicalAndScientificText(preProtected).text;
+
+  // Catch any newly created _{...} or ^{...} from HTML conversion
+  working = working
+    .replace(/_\{([^{}]+)\}/g, (_m, inner) => storeSub(inner))
+    .replace(/\^\{([^{}]+)\}/g, (_m, inner) => storeSup(inner))
+    // Caret superscripts like 10^-3, 10^6, x^2
+    .replace(/\^([-+]?\d+[+-]?)/g, (_m, exp) => storeSup(exp))
+    // Contiguous runs of Unicode subscripts -> single <sub>
+    .replace(/[₀₁₂₃₄₅₆₇₈₉₊₋₍₎ₘₙₐₑₒₓ]+/g, (run) =>
+      storeSub(
+        run
+          .split('')
+          .map((ch) => UNICODE_SUB_TO_PLAIN[ch] || ch)
+          .join('')
+      )
+    )
+    // Contiguous runs of Unicode superscripts -> single <sup>
+    .replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻⁽⁾ⁿ]+/g, (run) =>
+      storeSup(
+        run
+          .split('')
+          .map((ch) => UNICODE_SUP_TO_PLAIN[ch] || ch)
+          .join('')
+      )
+    );
+
+  const tokenRegex = /@@(SUB|SUP)_(\d+)@@/g;
   const nodes: React.ReactNode[] = [];
   let lastIndex = 0;
   let m: RegExpExecArray | null;
@@ -153,19 +216,19 @@ function renderSubscriptsAndChemTokens(input: string): React.ReactNode {
       nodes.push(working.slice(lastIndex, m.index));
     }
     const kind = m[1];
-    const payload = m[2];
+    const slotIdx = parseInt(m[2], 10);
     if (kind === 'SUB') {
-      const subIdx = parseInt(payload, 10);
-      const rawSub = Number.isFinite(subIdx) ? subPlaceholders[subIdx] || '' : payload;
+      const rawSub = subPlaceholders[slotIdx] || '';
       nodes.push(
         <sub key={`sub-${idx++}`} className="text-[0.76em] leading-none font-normal">
           {renderNestedSubContent(rawSub)}
         </sub>
       );
     } else {
+      const rawSup = supPlaceholders[slotIdx] || '';
       nodes.push(
         <sup key={`sup-${idx++}`} className="text-[0.75em] leading-none font-normal">
-          {payload}
+          {rawSup}
         </sup>
       );
     }
@@ -232,8 +295,15 @@ export function parseStepsToScientificSolution(
     } else if (plainStepMatch) {
       const stepIdx = parseInt(plainStepMatch[1], 10);
       const letterPrefix = String.fromCharCode(96 + stepIdx);
-      heading = `${letterPrefix}) Bước ${stepIdx}`;
-      bodyText = plainStepMatch[2].trim();
+      const rest = plainStepMatch[2].trim();
+      const titleColonMatch = rest.match(/^([^:\n]{2,55}):\s*([\s\S]*)$/);
+      if (titleColonMatch) {
+        heading = `${letterPrefix}) ${titleColonMatch[1].trim()}`;
+        bodyText = titleColonMatch[2].trim();
+      } else {
+        heading = `${letterPrefix}) Bước ${stepIdx}`;
+        bodyText = rest;
+      }
     } else {
       const letterPrefix = String.fromCharCode(97 + sections.length);
       heading = `${letterPrefix}) Giải chi tiết`;
@@ -302,7 +372,7 @@ function extractGivensFromQuestion(question: string): string[] {
   if (vMlMatch) {
     const ml = parseFloat(vMlMatch[1].replace(',', '.'));
     const lStr = (ml / 1000).toFixed(3).replace('.', ',');
-    result.push(`V(dd HCl) = ${vMlMatch[1]} mL = ${lStr} L`);
+    result.push(`V(dd ${vMlMatch[2]}) = ${vMlMatch[1]} mL = ${lStr} L`);
   }
   if (/điều\s*kiện\s*chuẩn|đkc|24,79/i.test(qLower)) {
     result.push(`Vₘ = 24,79 L/mol (25°C, 1 bar)`);

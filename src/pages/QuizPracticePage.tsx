@@ -13,6 +13,7 @@ import {
   UserAnswerSelection,
   ServerGradingResult,
   UploadedEssayImage,
+  shuffleQuestionOptions,
 } from '../utils/quizScoringEngine.ts';
 import { parseExplanationIntoSteps } from '../utils/wordQuestionParser.ts';
 import {
@@ -44,6 +45,7 @@ import {
   ListChecks,
   FileText,
   X,
+  Shuffle,
 } from 'lucide-react';
 import { WordQuestionImportModal } from '../components/admin/WordQuestionImportModal.tsx';
 
@@ -305,6 +307,48 @@ export const QuizPracticePage: React.FC = () => {
     });
   };
 
+  const handleSelectTrueFalseStatement = (
+    questionId: string,
+    statementId: string,
+    value: boolean
+  ) => {
+    if (gradingResult) return;
+    setUserSelections((prev) => {
+      const prevMap = prev[questionId]?.trueFalseAnswers || {};
+      return {
+        ...prev,
+        [questionId]: {
+          ...prev[questionId],
+          questionId,
+          trueFalseAnswers: {
+            ...prevMap,
+            [statementId]: value,
+          },
+        },
+      };
+    });
+  };
+
+  const handleShortAnswerChange = (questionId: string, text: string) => {
+    if (gradingResult) return;
+    setUserSelections((prev) => ({
+      ...prev,
+      [questionId]: {
+        ...prev[questionId],
+        questionId,
+        shortAnswerText: text,
+      },
+    }));
+  };
+
+  const handleShuffleQuizOptions = () => {
+    if (!activeQuiz || gradingResult) return;
+    setActiveQuiz({
+      ...activeQuiz,
+      questions: activeQuiz.questions.map((q) => shuffleQuestionOptions(q)),
+    });
+  };
+
   const toggleHint = (questionId: string) => {
     setRevealedHints((prev) => ({ ...prev, [questionId]: !prev[questionId] }));
   };
@@ -353,21 +397,29 @@ export const QuizPracticePage: React.FC = () => {
     return true;
   });
 
+  const isQuestionAnswered = (q: LessonQuizConfig['questions'][number]): boolean => {
+    const sel = userSelections[q.id];
+    if (!sel) return false;
+    if (q.type === 'essay') {
+      return (
+        Boolean(sel.essayText && sel.essayText.trim().length > 0) ||
+        Boolean(sel.essayImages && sel.essayImages.length > 0)
+      );
+    }
+    if (q.type === 'short_answer') {
+      return Boolean(sel.shortAnswerText && sel.shortAnswerText.trim().length > 0);
+    }
+    if (q.type === 'true_false' && q.trueFalseStatements && q.trueFalseStatements.length > 0) {
+      return Object.keys(sel.trueFalseAnswers || {}).length > 0;
+    }
+    if (q.type === 'multiple_choice') {
+      return (sel.selectedOptionIds || []).length > 0;
+    }
+    return Boolean(sel.selectedOptionId);
+  };
+
   const answeredCount = activeQuiz
-    ? activeQuiz.questions.filter((q) => {
-        const sel = userSelections[q.id];
-        if (!sel) return false;
-        if (q.type === 'essay') {
-          return (
-            Boolean(sel.essayText && sel.essayText.trim().length > 0) ||
-            Boolean(sel.essayImages && sel.essayImages.length > 0)
-          );
-        }
-        if (q.type === 'multiple_choice') {
-          return (sel.selectedOptionIds || []).length > 0;
-        }
-        return Boolean(sel.selectedOptionId);
-      }).length
+    ? activeQuiz.questions.filter((q) => isQuestionAnswered(q)).length
     : 0;
 
   const domainLabels: Record<SubjectDomain, string> = {
@@ -533,7 +585,20 @@ export const QuizPracticePage: React.FC = () => {
                     </h2>
                   </div>
 
-                  <div className="flex items-center gap-4">
+                  <div className="flex flex-wrap items-center gap-3">
+                    {!gradingResult && (
+                      <button
+                        type="button"
+                        onClick={handleShuffleQuizOptions}
+                        data-testid="shuffle-options-btn"
+                        className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+                        title="Trộn thứ tự phương án A, B, C, D mà vẫn giữ nguyên đáp án đúng"
+                      >
+                        <Shuffle className="w-3.5 h-3.5 text-teal-600" />
+                        <span>Trộn phương án</span>
+                      </button>
+                    )}
+
                     <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-mono font-bold text-slate-700 dark:text-slate-200">
                       <Timer className="w-4 h-4 text-teal-500" />
                       <span>{formatTime(elapsedSeconds)}</span>
@@ -555,6 +620,52 @@ export const QuizPracticePage: React.FC = () => {
                         <span>Làm lại đề</span>
                       </button>
                     )}
+                  </div>
+                </div>
+
+                {/* Question Navigation Palette */}
+                <div className="bg-white dark:bg-slate-900 rounded-2xl p-3.5 sm:p-4 border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 mr-1">
+                      Bản đồ câu hỏi:
+                    </span>
+                    {activeQuiz.questions.map((q, idx) => {
+                      const answered = isQuestionAnswered(q);
+                      const fb = gradingResult?.details.find((d) => d.question_id === q.id);
+                      let btnCls =
+                        'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700';
+                      if (gradingResult && fb) {
+                        btnCls = fb.is_correct
+                          ? 'bg-emerald-600 text-white border-emerald-600'
+                          : (fb.earned_points || 0) > 0
+                          ? 'bg-amber-500 text-white border-amber-500'
+                          : 'bg-rose-600 text-white border-rose-600';
+                      } else if (answered) {
+                        btnCls = 'bg-teal-600 text-white border-teal-600';
+                      }
+                      return (
+                        <button
+                          key={q.id}
+                          type="button"
+                          onClick={() => {
+                            const el = document.getElementById(`quiz-question-${idx + 1}`);
+                            el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                          }}
+                          className={`w-8 h-8 rounded-xl text-xs font-extrabold border transition cursor-pointer flex items-center justify-center ${btnCls}`}
+                          title={`Chuyển tới Câu ${idx + 1}`}
+                        >
+                          {idx + 1}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="flex items-center gap-3 text-[11px] text-slate-500 font-semibold">
+                    <span className="inline-flex items-center gap-1">
+                      <span className="w-2.5 h-2.5 rounded-full bg-teal-600 inline-block" /> Đã trả lời
+                    </span>
+                    <span className="inline-flex items-center gap-1">
+                      <span className="w-2.5 h-2.5 rounded-full bg-slate-300 dark:bg-slate-700 inline-block" /> Chưa làm
+                    </span>
                   </div>
                 </div>
 
@@ -637,13 +748,23 @@ export const QuizPracticePage: React.FC = () => {
                     const sel = userSelections[q.id];
                     const itemFeedback = gradingResult?.details.find((it) => it.question_id === q.id);
                     const isEssay = q.type === 'essay';
+                    const isShortAnswer = q.type === 'short_answer';
+                    const isFourStatementTF =
+                      q.type === 'true_false' &&
+                      Array.isArray(q.trueFalseStatements) &&
+                      q.trueFalseStatements.length > 0;
+
                     const typeBadge = isEssay
-                      ? 'Tự luận (Học sinh tải ảnh bài làm & trình bày lời giải)'
+                      ? 'Dạng 4 • Tự luận (Nộp ảnh & trình bày lời giải)'
+                      : isShortAnswer
+                      ? 'Dạng 3 • Trả lời ngắn (Điền đáp số)'
+                      : isFourStatementTF
+                      ? 'Dạng 2 • Trắc nghiệm Đúng / Sai (4 ý a, b, c, d)'
                       : q.type === 'multiple_choice'
                       ? 'Chọn nhiều đáp án đúng'
                       : q.type === 'true_false'
                       ? 'Đúng / Sai'
-                      : 'Trắc nghiệm 1 đáp án đúng';
+                      : 'Dạng 1 • Trắc nghiệm nhiều lựa chọn (A, B, C, D)';
 
                     const stepsToDisplay = parseExplanationIntoSteps(
                       itemFeedback?.explanation || q.explanation || '',
@@ -662,10 +783,15 @@ export const QuizPracticePage: React.FC = () => {
                     return (
                       <div
                         key={q.id}
+                        id={`quiz-question-${qIdx + 1}`}
                         data-testid={`question-card-${qIdx + 1}`}
                         className={`bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-7 border-2 shadow-sm space-y-4 ${
                           isEssay
                             ? 'border-violet-200/80 dark:border-violet-900/60'
+                            : isShortAnswer
+                            ? 'border-amber-200/80 dark:border-amber-900/60'
+                            : isFourStatementTF
+                            ? 'border-sky-200/80 dark:border-sky-900/60'
                             : 'border-slate-100 dark:border-slate-800'
                         }`}
                       >
@@ -675,6 +801,10 @@ export const QuizPracticePage: React.FC = () => {
                               className={`px-2.5 py-1 rounded-lg font-extrabold text-xs border ${
                                 isEssay
                                   ? 'bg-violet-50 dark:bg-violet-950 text-violet-700 dark:text-violet-300 border-violet-200 dark:border-violet-800'
+                                  : isShortAnswer
+                                  ? 'bg-amber-50 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-800'
+                                  : isFourStatementTF
+                                  ? 'bg-sky-50 dark:bg-sky-950 text-sky-700 dark:text-sky-300 border-sky-200 dark:border-sky-800'
                                   : 'bg-teal-50 dark:bg-teal-950 text-teal-700 dark:text-teal-300 border-teal-200 dark:border-teal-800'
                               }`}
                             >
@@ -684,6 +814,10 @@ export const QuizPracticePage: React.FC = () => {
                               className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
                                 isEssay
                                   ? 'bg-violet-100 dark:bg-violet-900/60 text-violet-800 dark:text-violet-200'
+                                  : isShortAnswer
+                                  ? 'bg-amber-100 dark:bg-amber-900/60 text-amber-900 dark:text-amber-200'
+                                  : isFourStatementTF
+                                  ? 'bg-sky-100 dark:bg-sky-900/60 text-sky-900 dark:text-sky-200'
                                   : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
                               }`}
                             >
@@ -724,13 +858,40 @@ export const QuizPracticePage: React.FC = () => {
                           </div>
                         </div>
 
-                        <div className="space-y-1.5">
+                        <div className="space-y-2.5">
                           <h4 className="font-serif font-bold text-[#0d4f7c] dark:text-sky-300 text-base sm:text-[17px]">
                             Đề bài
                           </h4>
                           <div className="font-serif text-slate-900 dark:text-slate-100 text-[15px] sm:text-[16.5px] leading-relaxed whitespace-pre-line">
                             {renderFormattedMathAndChem(q.question)}
                           </div>
+
+                          {/* Embedded Question Images from Word / Question Bank */}
+                          {q.questionImages && q.questionImages.length > 0 && (
+                            <div className="flex flex-wrap gap-3 pt-2">
+                              {q.questionImages.map((imgSrc, imgIdx) => (
+                                <img
+                                  key={imgIdx}
+                                  src={imgSrc}
+                                  alt={`Hình minh họa câu ${qIdx + 1} - ${imgIdx + 1}`}
+                                  className="max-h-56 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white p-2 object-contain shadow-xs"
+                                />
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Embedded Question Tables from Word */}
+                          {q.questionTables && q.questionTables.length > 0 && (
+                            <div className="space-y-2 pt-2 overflow-x-auto">
+                              {q.questionTables.map((tblHtml, tblIdx) => (
+                                <div
+                                  key={tblIdx}
+                                  className="p-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/60 text-xs sm:text-sm [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:border-slate-300 dark:[&_td]:border-slate-600 [&_td]:p-2 [&_th]:border [&_th]:border-slate-300 dark:[&_th]:border-slate-600 [&_th]:p-2 [&_th]:bg-slate-100 dark:[&_th]:bg-slate-700"
+                                  dangerouslySetInnerHTML={{ __html: tblHtml }}
+                                />
+                              ))}
+                            </div>
+                          )}
                         </div>
 
                         {revealedHints[q.id] && q.hint && !gradingResult && (
@@ -743,7 +904,7 @@ export const QuizPracticePage: React.FC = () => {
                         )}
 
                         {/* ========================================================== */}
-                        {/* ESSAY QUESTION WORKSPACE (IMAGE UPLOAD + TEXT SOLUTION)     */}
+                        {/* DẠNG 4: ESSAY QUESTION WORKSPACE (IMAGE UPLOAD + TEXT)      */}
                         {/* ========================================================== */}
                         {isEssay ? (
                           <div className="space-y-4 pt-1">
@@ -862,9 +1023,167 @@ export const QuizPracticePage: React.FC = () => {
                               />
                             </div>
                           </div>
+                        ) : isShortAnswer ? (
+                          /* ========================================================== */
+                          /* DẠNG 3: SHORT ANSWER QUESTION WORKSPACE                    */
+                          /* ========================================================== */
+                          <div className="p-4 sm:p-5 rounded-2xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-800/70 space-y-3">
+                            <label className="block text-xs sm:text-sm font-extrabold text-amber-950 dark:text-amber-200">
+                              Điền kết quả trả lời ngắn của em (chấp nhận cả dấu phẩy &ldquo;,&rdquo; hoặc dấu chấm &ldquo;.&rdquo; thập phân):
+                            </label>
+                            <div className="flex flex-wrap items-center gap-3">
+                              <input
+                                type="text"
+                                disabled={Boolean(gradingResult)}
+                                data-testid={`short-answer-input-${q.id}`}
+                                value={sel?.shortAnswerText || ''}
+                                onChange={(e) => handleShortAnswerChange(q.id, e.target.value)}
+                                placeholder="Ví dụ: 2,48 hoặc 12.5..."
+                                className="w-full sm:w-72 px-4 py-3 rounded-2xl bg-white dark:bg-slate-900 border-2 border-amber-300 dark:border-amber-700 text-sm sm:text-base font-mono font-extrabold text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                              />
+                              {q.shortAnswerUnit && (
+                                <span className="px-3 py-2 rounded-xl bg-amber-100 dark:bg-amber-900/50 text-amber-900 dark:text-amber-200 text-xs sm:text-sm font-extrabold">
+                                  Đơn vị: {renderFormattedMathAndChem(q.shortAnswerUnit)}
+                                </span>
+                              )}
+                            </div>
+
+                            {gradingResult && itemFeedback && (
+                              <div
+                                className={`p-3 rounded-xl border text-xs sm:text-sm flex flex-wrap items-center justify-between gap-2 ${
+                                  itemFeedback.is_correct
+                                    ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-400 text-emerald-900 dark:text-emerald-200'
+                                    : 'bg-rose-50 dark:bg-rose-950/60 border-rose-400 text-rose-900 dark:text-rose-200'
+                                }`}
+                              >
+                                <div className="flex items-center gap-2 font-bold">
+                                  {itemFeedback.is_correct ? (
+                                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                                  ) : (
+                                    <XCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                                  )}
+                                  <span>
+                                    Câu trả lời của em:{' '}
+                                    <strong className="font-mono">
+                                      {itemFeedback.student_short_answer || '(Chưa điền)'}
+                                    </strong>
+                                  </span>
+                                </div>
+                                <div className="font-extrabold">
+                                  Đáp án chuẩn:{' '}
+                                  <span className="font-mono text-emerald-700 dark:text-emerald-300">
+                                    {itemFeedback.correct_short_answer}
+                                    {q.shortAnswerUnit ? ` ${q.shortAnswerUnit}` : ''}
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ) : isFourStatementTF ? (
+                          /* ========================================================== */
+                          /* DẠNG 2: 4-STATEMENT TRUE / FALSE (a, b, c, d)              */
+                          /* ========================================================== */
+                          <div className="space-y-2.5 pt-1">
+                            <div className="text-xs font-bold text-sky-800 dark:text-sky-300 bg-sky-50/80 dark:bg-sky-950/40 px-3.5 py-2 rounded-xl border border-sky-200/70 dark:border-sky-800/70 flex flex-wrap items-center justify-between gap-2">
+                              <span>
+                                Chọn <strong>Đúng</strong> hoặc <strong>Sai</strong> cho từng phát biểu a), b), c), d):
+                              </span>
+                              <span className="text-[11px] text-sky-700 dark:text-sky-400">
+                                Thang điểm GDPT 2018: 1 ý = 10% • 2 ý = 25% • 3 ý = 50% • 4 ý = 100%
+                              </span>
+                            </div>
+
+                            {(q.trueFalseStatements || []).map((stmt) => {
+                              const chosenVal = sel?.trueFalseAnswers?.[stmt.id];
+                              const stmtResult = itemFeedback?.true_false_results?.find(
+                                (r) => r.statement_id === stmt.id || r.label === stmt.label
+                              );
+
+                              return (
+                                <div
+                                  key={stmt.id}
+                                  data-testid={`tf-statement-row-${q.id}-${stmt.label}`}
+                                  className={`p-3.5 sm:p-4 rounded-2xl border transition space-y-2 ${
+                                    gradingResult && stmtResult
+                                      ? stmtResult.is_correct
+                                        ? 'bg-emerald-50/70 dark:bg-emerald-950/30 border-emerald-400'
+                                        : 'bg-rose-50/70 dark:bg-rose-950/30 border-rose-400'
+                                      : 'bg-slate-50/80 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700'
+                                  }`}
+                                >
+                                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                    <div className="font-serif text-xs sm:text-[15px] text-slate-900 dark:text-slate-100 leading-relaxed flex-1">
+                                      <strong className="font-sans text-sky-700 dark:text-sky-300 mr-1.5">
+                                        {stmt.label})
+                                      </strong>
+                                      {renderFormattedMathAndChem(stmt.text)}
+                                    </div>
+
+                                    <div className="flex items-center gap-2 shrink-0">
+                                      <button
+                                        type="button"
+                                        disabled={Boolean(gradingResult)}
+                                        data-testid={`tf-btn-${q.id}-${stmt.label}-true`}
+                                        onClick={() =>
+                                          handleSelectTrueFalseStatement(q.id, stmt.id, true)
+                                        }
+                                        className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold border transition cursor-pointer ${
+                                          chosenVal === true
+                                            ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                                            : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700 hover:border-emerald-500'
+                                        }`}
+                                      >
+                                        Đúng
+                                      </button>
+                                      <button
+                                        type="button"
+                                        disabled={Boolean(gradingResult)}
+                                        data-testid={`tf-btn-${q.id}-${stmt.label}-false`}
+                                        onClick={() =>
+                                          handleSelectTrueFalseStatement(q.id, stmt.id, false)
+                                        }
+                                        className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold border transition cursor-pointer ${
+                                          chosenVal === false
+                                            ? 'bg-rose-600 text-white border-rose-600 shadow-xs'
+                                            : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700 hover:border-rose-500'
+                                        }`}
+                                      >
+                                        Sai
+                                      </button>
+                                    </div>
+                                  </div>
+
+                                  {gradingResult && stmtResult && (
+                                    <div className="pt-2 border-t border-slate-200/70 dark:border-slate-700/70 text-xs flex flex-wrap items-center justify-between gap-2">
+                                      <span
+                                        className={`font-bold flex items-center gap-1 ${
+                                          stmtResult.is_correct
+                                            ? 'text-emerald-700 dark:text-emerald-300'
+                                            : 'text-rose-700 dark:text-rose-300'
+                                        }`}
+                                      >
+                                        {stmtResult.is_correct ? (
+                                          <CheckCircle2 className="w-3.5 h-3.5" />
+                                        ) : (
+                                          <XCircle className="w-3.5 h-3.5" />
+                                        )}
+                                        Đáp án đúng ý {stmt.label}):{' '}
+                                        <strong>{stmtResult.correct_answer ? 'Đúng' : 'Sai'}</strong>
+                                      </span>
+                                      {stmtResult.explanation && (
+                                        <span className="text-slate-600 dark:text-slate-300 italic">
+                                          Giải thích: {renderFormattedMathAndChem(stmtResult.explanation)}
+                                        </span>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
                         ) : (
                           /* ========================================================== */
-                          /* MULTIPLE-CHOICE / TRUE-FALSE OPTIONS                       */
+                          /* DẠNG 1: MULTIPLE-CHOICE OPTIONS (A, B, C, D)               */
                           /* ========================================================== */
                           <div className="grid grid-cols-1 gap-2.5 pt-1">
                             {q.options.map((opt, optIdx) => {
@@ -954,8 +1273,15 @@ export const QuizPracticePage: React.FC = () => {
                                       <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                                       <span className="text-emerald-800 dark:text-emerald-300">
                                         {isEssay
-                                          ? `Đã ghi nhận bài làm tự luận & ảnh đính kèm (+${q.points} điểm)`
-                                          : `Chính xác! (+${q.points} điểm)`}
+                                          ? `Đã ghi nhận bài làm tự luận & ảnh đính kèm (+${(itemFeedback.earned_points ?? q.points).toFixed(2)} điểm)`
+                                          : `Chính xác hoàn toàn! (+${(itemFeedback.earned_points ?? q.points).toFixed(2)} điểm)`}
+                                      </span>
+                                    </>
+                                  ) : (itemFeedback.earned_points || 0) > 0 ? (
+                                    <>
+                                      <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                                      <span className="text-amber-800 dark:text-amber-300">
+                                        Đúng một phần (+{(itemFeedback.earned_points || 0).toFixed(2)} / {q.points} điểm) — Xem lời giải chi tiết bên dưới
                                       </span>
                                     </>
                                   ) : (

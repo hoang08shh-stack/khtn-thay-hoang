@@ -12,13 +12,11 @@ import {
   Video,
   CheckSquare,
   GraduationCap,
-  Sparkles,
   User as UserIcon,
   LogOut,
   BarChart3,
   ShieldCheck,
   Gamepad2,
-  Download,
 } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
@@ -155,16 +153,6 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenSearch }) => {
 
           {/* Right Actions */}
           <div className="flex items-center gap-1.5 shrink-0">
-            {/* Download Full Project Source Code (.ZIP) */}
-            <a
-              href="/khtn-source-code.zip"
-              download="KHTN-Khoa-Hoc-So-Source-Code.zip"
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-[11px] xl:text-xs shadow-sm transition-all whitespace-nowrap"
-              title="Tải toàn bộ mã nguồn dự án (.ZIP) về máy"
-            >
-              <Download className="w-3.5 h-3.5 stroke-[2.5] shrink-0" />
-              <span className="hidden sm:inline">Tải mã nguồn (.ZIP)</span>
-            </a>
 
             {/* Search Trigger */}
             <button

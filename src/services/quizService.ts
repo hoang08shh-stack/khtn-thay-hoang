@@ -20,6 +20,8 @@ export interface QuizSubmissionItem {
   question_id: string;
   selected_option_id?: string | null;
   selected_option_ids?: string[];
+  true_false_answers?: Record<string, boolean>;
+  short_answer_text?: string;
   essay_text?: string;
   essay_images?: import('../utils/quizScoringEngine.ts').UploadedEssayImage[];
 }
@@ -34,6 +36,14 @@ export interface ClientQuestion {
   difficulty?: 'Nhận biết' | 'Thông hiểu' | 'Vận dụng';
   hint?: string;
   allow_image_upload?: boolean;
+  true_false_statements?: Array<{
+    id: string;
+    label: string;
+    text: string;
+  }>;
+  short_answer_unit?: string;
+  question_images?: string[];
+  question_tables?: string[];
   options: Array<{
     id: string;
     option_text: string;
@@ -210,6 +220,13 @@ export async function getQuizQuestions(quizId: string): Promise<ClientQuestion[]
     difficulty: q.difficulty,
     hint: q.hint,
     allow_image_upload: q.allowImageUpload ?? (q.questionType === 'essay' ? true : undefined),
+    true_false_statements: q.trueFalseStatements,
+    short_answer_unit: q.shortAnswerUnit,
+    short_answer_tolerance: q.shortAnswerTolerance,
+    question_images: q.questionImages || (q.imageUrl ? [q.imageUrl] : undefined),
+    question_tables: q.questionTables,
+    rubric: q.rubric,
+    approval_status: q.approvalStatus,
     options: (q.options || []).map((opt, optIdx) => ({
       id: `${q.id}_opt_${optIdx}`,
       option_text: opt,
@@ -270,12 +287,28 @@ export async function submitQuizAttemptSecurely(
       correctOptionIds = [`${q.id}_opt_${q.correctAnswer}`];
     }
 
+    const tfMap: Record<string, boolean> = {};
+    if (Array.isArray(q.trueFalseStatements)) {
+      for (const st of q.trueFalseStatements) {
+        if (typeof st.isTrue === 'boolean') {
+          tfMap[st.label] = st.isTrue;
+        }
+      }
+    }
+
     answerKeysMap.set(q.id, {
       question_id: q.id,
       correct_option_ids: correctOptionIds,
+      correct_true_false_map: Object.keys(tfMap).length > 0 ? tfMap : undefined,
+      true_false_statements: q.trueFalseStatements,
+      correct_short_answer: q.shortAnswer,
+      short_answer_unit: q.shortAnswerUnit,
+      short_answer_tolerance: q.shortAnswerTolerance,
       explanation: q.explanation,
       solution_steps: q.solutionSteps,
       sample_answer: q.sampleAnswer,
+      rubric: q.rubric,
+      approval_status: q.approvalStatus,
     });
   }
 
@@ -520,7 +553,15 @@ export async function getAllLessonQuizzes(): Promise<import('../utils/quizScorin
           allowImageUpload: rq.allow_image_upload ?? (rq.question_type === 'essay' ? true : undefined),
           solutionSteps: fullQ?.solutionSteps,
           sampleAnswer: fullQ?.sampleAnswer,
+          rubric: fullQ?.rubric,
           explanation: fullQ?.explanation,
+          trueFalseStatements: fullQ?.trueFalseStatements,
+          shortAnswer: fullQ?.shortAnswer,
+          shortAnswerUnit: fullQ?.shortAnswerUnit || rq.short_answer_unit,
+          shortAnswerTolerance: fullQ?.shortAnswerTolerance,
+          questionImages: fullQ?.questionImages || (fullQ?.imageUrl ? [fullQ.imageUrl] : rq.question_images),
+          questionTables: fullQ?.questionTables || rq.question_tables,
+          approvalStatus: fullQ?.approvalStatus,
           options: rq.options.map((o) => ({
             id: o.id,
             content: o.option_text,
@@ -549,6 +590,8 @@ export async function submitQuizAttemptSecure(
     question_id: s.questionId,
     selected_option_id: s.selectedOptionId || null,
     selected_option_ids: s.selectedOptionIds,
+    true_false_answers: s.trueFalseAnswers,
+    short_answer_text: s.shortAnswerText,
     essay_text: s.essayText,
     essay_images: s.essayImages,
   }));

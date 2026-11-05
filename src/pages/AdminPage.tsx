@@ -1334,18 +1334,31 @@ export const AdminPage: React.FC = () => {
                               questionType: nextType,
                               allowImageUpload: nextType === 'essay' ? true : undefined,
                               options:
-                                nextType === 'essay'
+                                nextType === 'essay' || nextType === 'short_answer'
                                   ? []
                                   : editingQuestion.options && editingQuestion.options.length >= 2
                                   ? editingQuestion.options
                                   : ['', '', '', ''],
+                              trueFalseStatements:
+                                nextType === 'true_false'
+                                  ? editingQuestion.trueFalseStatements &&
+                                    editingQuestion.trueFalseStatements.length > 0
+                                    ? editingQuestion.trueFalseStatements
+                                    : [
+                                        { id: 'tf_a', label: 'a', text: '', isTrue: true },
+                                        { id: 'tf_b', label: 'b', text: '', isTrue: false },
+                                        { id: 'tf_c', label: 'c', text: '', isTrue: true },
+                                        { id: 'tf_d', label: 'd', text: '', isTrue: false },
+                                      ]
+                                  : undefined,
                             });
                           }}
                           className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-bold"
                         >
-                          <option value="single_choice">Trắc nghiệm (4 đáp án)</option>
-                          <option value="essay">Tự luận (Học sinh tải ảnh bài làm)</option>
-                          <option value="true_false">Đúng / Sai</option>
+                          <option value="single_choice">Dạng 1: Trắc nghiệm (4 đáp án A, B, C, D)</option>
+                          <option value="true_false">Dạng 2: Đúng / Sai (4 ý a, b, c, d)</option>
+                          <option value="short_answer">Dạng 3: Trả lời ngắn (Điền đáp số)</option>
+                          <option value="essay">Dạng 4: Tự luận (Học sinh tải ảnh bài làm)</option>
                         </select>
                       </div>
                       <div>
@@ -1404,7 +1417,7 @@ export const AdminPage: React.FC = () => {
                         placeholder={
                           editingQuestion.questionType === 'essay'
                             ? 'Nhập đề bài tự luận (yêu cầu học sinh trình bày các bước giải hoặc chụp ảnh bài làm)...'
-                            : 'Nhập câu hỏi trắc nghiệm...'
+                            : 'Nhập câu hỏi...'
                         }
                         className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-semibold"
                       />
@@ -1423,6 +1436,96 @@ export const AdminPage: React.FC = () => {
                         <span className="px-2.5 py-1 rounded-lg bg-violet-600 text-white font-bold text-[11px] shrink-0">
                           Cho phép up ảnh
                         </span>
+                      </div>
+                    ) : editingQuestion.questionType === 'short_answer' ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 rounded-2xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
+                        <div>
+                          <label className="font-bold block mb-1">Đáp án chuẩn (Số hoặc biểu thức ngắn)</label>
+                          <input
+                            type="text"
+                            value={editingQuestion.shortAnswer || ''}
+                            onChange={(e) =>
+                              setEditingQuestion({ ...editingQuestion, shortAnswer: e.target.value })
+                            }
+                            placeholder="Ví dụ: 2,48"
+                            className="w-full px-3 py-2 rounded-xl border border-amber-300 dark:border-amber-700 bg-white dark:bg-slate-900 font-mono font-bold"
+                          />
+                        </div>
+                        <div>
+                          <label className="font-bold block mb-1">Đơn vị (tùy chọn)</label>
+                          <input
+                            type="text"
+                            value={editingQuestion.shortAnswerUnit || ''}
+                            onChange={(e) =>
+                              setEditingQuestion({ ...editingQuestion, shortAnswerUnit: e.target.value })
+                            }
+                            placeholder="Ví dụ: lít, gam, mol, Ω..."
+                            className="w-full px-3 py-2 rounded-xl border border-amber-300 dark:border-amber-700 bg-white dark:bg-slate-900"
+                          />
+                        </div>
+                      </div>
+                    ) : editingQuestion.questionType === 'true_false' &&
+                      editingQuestion.trueFalseStatements &&
+                      editingQuestion.trueFalseStatements.length > 0 ? (
+                      <div className="space-y-2 p-3.5 rounded-2xl bg-sky-50/70 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-800">
+                        <label className="font-extrabold block text-sky-900 dark:text-sky-200">
+                          Các phát biểu Đúng / Sai (a, b, c, d):
+                        </label>
+                        {editingQuestion.trueFalseStatements.map((stmt, sIdx) => (
+                          <div key={stmt.id} className="flex items-center gap-2">
+                            <span className="font-extrabold w-6 text-sky-700">{stmt.label})</span>
+                            <input
+                              type="text"
+                              value={stmt.text}
+                              onChange={(e) => {
+                                const nextStmts = [...(editingQuestion.trueFalseStatements || [])];
+                                nextStmts[sIdx] = { ...stmt, text: e.target.value };
+                                setEditingQuestion({
+                                  ...editingQuestion,
+                                  trueFalseStatements: nextStmts,
+                                });
+                              }}
+                              placeholder={`Nội dung phát biểu ${stmt.label})...`}
+                              className="flex-1 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const nextStmts = [...(editingQuestion.trueFalseStatements || [])];
+                                nextStmts[sIdx] = { ...stmt, isTrue: true };
+                                setEditingQuestion({
+                                  ...editingQuestion,
+                                  trueFalseStatements: nextStmts,
+                                });
+                              }}
+                              className={`px-2.5 py-1 rounded-lg font-bold ${
+                                stmt.isTrue === true
+                                  ? 'bg-emerald-600 text-white'
+                                  : 'bg-white dark:bg-slate-800 text-slate-600'
+                              }`}
+                            >
+                              Đúng
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const nextStmts = [...(editingQuestion.trueFalseStatements || [])];
+                                nextStmts[sIdx] = { ...stmt, isTrue: false };
+                                setEditingQuestion({
+                                  ...editingQuestion,
+                                  trueFalseStatements: nextStmts,
+                                });
+                              }}
+                              className={`px-2.5 py-1 rounded-lg font-bold ${
+                                stmt.isTrue === false
+                                  ? 'bg-rose-600 text-white'
+                                  : 'bg-white dark:bg-slate-800 text-slate-600'
+                              }`}
+                            >
+                              Sai
+                            </button>
+                          </div>
+                        ))}
                       </div>
                     ) : (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1582,6 +1685,11 @@ export const AdminPage: React.FC = () => {
                 <div className="space-y-3">
                   {filteredQuestions.map((q, index) => {
                     const isEssay = q.questionType === 'essay';
+                    const isShortAnswer = q.questionType === 'short_answer';
+                    const isFourStatementTF =
+                      q.questionType === 'true_false' &&
+                      Array.isArray(q.trueFalseStatements) &&
+                      q.trueFalseStatements.length > 0;
                     const stepsList = parseExplanationIntoSteps(q.explanation, q.solutionSteps, {
                       question: q.question,
                       options: q.options,
@@ -1605,10 +1713,20 @@ export const AdminPage: React.FC = () => {
                                 className={`px-2 py-0.5 rounded font-bold text-[11px] ${
                                   isEssay
                                     ? 'bg-violet-100 dark:bg-violet-950 text-violet-800 dark:text-violet-300'
+                                    : isShortAnswer
+                                    ? 'bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300'
+                                    : isFourStatementTF
+                                    ? 'bg-sky-100 dark:bg-sky-950 text-sky-800 dark:text-sky-300'
                                     : 'bg-teal-50 dark:bg-teal-950 text-teal-700 dark:text-teal-300'
                                 }`}
                               >
-                                {isEssay ? 'Tự luận (Cho phép học sinh up ảnh bài làm)' : 'Trắc nghiệm'}
+                                {isEssay
+                                  ? 'Dạng 4: Tự luận'
+                                  : isShortAnswer
+                                  ? 'Dạng 3: Trả lời ngắn'
+                                  : isFourStatementTF
+                                  ? 'Dạng 2: Đúng/Sai (4 ý)'
+                                  : 'Dạng 1: Trắc nghiệm'}
                               </span>
                               <span className="font-bold text-teal-700 dark:text-teal-400">
                                 Lớp {q.grade} • {DOMAINS.find((d) => d.id === q.domain)?.shortName}
@@ -1653,6 +1771,38 @@ export const AdminPage: React.FC = () => {
                         {isEssay ? (
                           <div className="px-3.5 py-2 rounded-xl bg-violet-50/60 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-800 text-xs text-violet-800 dark:text-violet-200 font-semibold">
                             📷 Định dạng Tự luận: Học sinh được tải lên file ảnh bài làm (.jpg, .png) và nhập lời giải chi tiết.
+                          </div>
+                        ) : isShortAnswer ? (
+                          <div className="px-3.5 py-2 rounded-xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-xs text-amber-900 dark:text-amber-200 font-bold">
+                            Đáp án trả lời ngắn:{' '}
+                            <span className="font-mono text-emerald-700 dark:text-emerald-300">
+                              {q.shortAnswer || '(Chưa nhập)'}
+                            </span>
+                            {q.shortAnswerUnit ? ` (${q.shortAnswerUnit})` : ''}
+                          </div>
+                        ) : isFourStatementTF ? (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                            {(q.trueFalseStatements || []).map((stmt) => (
+                              <div
+                                key={stmt.id}
+                                className="px-3 py-1.5 rounded-xl border border-sky-200 dark:border-sky-800 bg-sky-50/50 dark:bg-sky-950/30 flex items-center justify-between gap-2 font-serif"
+                              >
+                                <span>
+                                  <strong>{stmt.label})</strong> {renderFormattedMathAndChem(stmt.text)}
+                                </span>
+                                <span
+                                  className={`px-2 py-0.5 rounded font-sans font-extrabold text-[10px] ${
+                                    stmt.isTrue === true
+                                      ? 'bg-emerald-600 text-white'
+                                      : stmt.isTrue === false
+                                      ? 'bg-rose-600 text-white'
+                                      : 'bg-amber-500 text-white'
+                                  }`}
+                                >
+                                  {stmt.isTrue === true ? 'Đúng' : stmt.isTrue === false ? 'Sai' : '?'}
+                                </span>
+                              </div>
+                            ))}
                           </div>
                         ) : (
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
