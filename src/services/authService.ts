@@ -75,7 +75,7 @@ export async function signInWithEmail(email: string, password: string): Promise<
     return adminUser;
   }
 
-  if (isSupabaseConfigured && supabase) {
+  if (isSupabaseConfigured && supabase && normalizedEmail.endsWith('@khtn.edu.vn')) {
     try {
       const { data, error }: any = await withTimeout(
         supabase.auth.signInWithPassword({
@@ -92,103 +92,56 @@ export async function signInWithEmail(email: string, password: string): Promise<
         const appUser: AppUser = {
           id: data.user.id,
           email: data.user.email || normalizedEmail,
-          fullName: profile?.full_name || data.user.user_metadata?.full_name || normalizedEmail.split('@')[0],
-          role: role,
+          fullName: profile?.full_name || 'Giáo viên KHTN',
+          role: role === 'admin' ? 'admin' : 'teacher',
           grade: (profile?.grade as Grade) || 8,
           school: profile?.school || 'THCS Đà Nẵng, Việt Nam',
-          avatarUrl: profile?.avatar_url || undefined,
         };
 
         localStorage.setItem(STORAGE_KEY_AUTH, JSON.stringify(appUser));
         return appUser;
-      }
-
-      if (error && !error.message?.toLowerCase().includes('fetch')) {
-        console.warn('Supabase auth error:', error.message);
       }
     } catch (err: any) {
       console.warn('Supabase auth network unreachable, using local session:', err);
     }
   }
 
-  // Fallback demo auth for student accounts
-  const demoUser: AppUser =
-    normalizedEmail === DEMO_USERS.student.email.toLowerCase()
-      ? DEMO_USERS.student
-      : {
-          id: `student_${Date.now()}`,
-          email: normalizedEmail,
-          fullName: normalizedEmail.split('@')[0],
-          role: 'student',
-          grade: 8,
-          school: 'THCS Đà Nẵng, Việt Nam',
-        };
-
-  localStorage.setItem(STORAGE_KEY_AUTH, JSON.stringify(demoUser));
-  return demoUser;
-}
-
-/**
- * Sign Up with Supabase Auth.
- * Trigger on auth.users automatically inserts into public.profiles and public.user_roles ('student')
- */
-export async function signUpWithEmail(data: SignUpData): Promise<AppUser> {
-  if (isSupabaseConfigured && supabase) {
-    try {
-      const { data: authData, error } = await supabase.auth.signUp({
-        email: data.email,
-        password: data.password,
-        options: {
-          data: {
-            full_name: data.fullName,
-            grade: data.grade || 8,
-            school: data.school || 'THCS',
-          },
-        },
-      });
-
-      if (!error && authData.user) {
-        // Role is guaranteed 'student' by database trigger
-        const appUser: AppUser = {
-          id: authData.user.id,
-          email: authData.user.email || data.email,
-          fullName: data.fullName,
-          role: 'student',
-          grade: data.grade || 8,
-          school: data.school || 'THCS',
-        };
-
-        localStorage.setItem(STORAGE_KEY_AUTH, JSON.stringify(appUser));
-        return appUser;
-      }
-
-      if (error && !error.message?.toLowerCase().includes('fetch')) {
-        throw new Error(error.message);
-      }
-    } catch (err: any) {
-      if (!err.message?.toLowerCase().includes('fetch')) {
-        throw err;
-      }
-      console.warn('Supabase sign up network unreachable, falling back to local account:', err);
-    }
-  }
-
-  // Fallback demo signup
-  const newDemoUser: AppUser = {
-    id: `student_${Date.now()}`,
-    email: data.email,
-    fullName: data.fullName,
+  // Students use anonymous local device mode without personal email or full name
+  const localStudentUser: AppUser = {
+    id: 'local_student_device',
+    email: '',
+    fullName: 'Học sinh KHTN (Chế độ Riêng tư)',
     role: 'student',
-    grade: data.grade || 8,
-    school: data.school || 'THCS',
+    grade: 8,
+    school: '',
   };
 
-  localStorage.setItem(STORAGE_KEY_AUTH, JSON.stringify(newDemoUser));
-  return newDemoUser;
+  localStorage.setItem(STORAGE_KEY_AUTH, JSON.stringify(localStudentUser));
+  return localStudentUser;
 }
 
 /**
- * Sign Out from Supabase Auth & Clear Local Session
+ * Configures local anonymous student study mode by grade.
+ * Strictly DOES NOT create any account on external platforms (Supabase/Google/etc.)
+ * and DOES NOT store student personal information (no name, no email, no school).
+ */
+export async function signUpWithEmail(data: SignUpData): Promise<AppUser> {
+  const selectedGrade: Grade = data.grade || 8;
+  const anonymousStudent: AppUser = {
+    id: 'local_student_device',
+    email: '',
+    fullName: `Học sinh Khối ${selectedGrade} (Chế độ Riêng tư)`,
+    role: 'student',
+    grade: selectedGrade,
+    school: '',
+  };
+
+  localStorage.setItem(STORAGE_KEY_AUTH, JSON.stringify(anonymousStudent));
+  return anonymousStudent;
+}
+
+/**
+ * Sign Out from Admin Session & Return to Local Anonymous Student Mode
  */
 export async function signOutUser(): Promise<void> {
   localStorage.removeItem(STORAGE_KEY_AUTH);
@@ -198,31 +151,28 @@ export async function signOutUser(): Promise<void> {
 }
 
 /**
- * Update user profile in Supabase
+ * Update local user preferences (e.g., selected Grade for student) without sending student PII externally
  */
-export async function updateUserProfile(userId: string, updates: { fullName?: string; grade?: Grade; school?: string; avatarUrl?: string }): Promise<void> {
-  if (isSupabaseConfigured && supabase) {
-    await supabase
-      .from('profiles')
-      .update({
-        full_name: updates.fullName,
-        grade: updates.grade,
-        school: updates.school,
-        avatar_url: updates.avatarUrl,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', userId);
-  }
-
-  // Update cached local user
+export async function updateUserProfile(_userId: string, updates: { fullName?: string; grade?: Grade; school?: string; avatarUrl?: string }): Promise<void> {
   const raw = localStorage.getItem(STORAGE_KEY_AUTH);
-  if (raw) {
-    try {
-      const user = JSON.parse(raw);
-      const updated = { ...user, ...updates };
-      localStorage.setItem(STORAGE_KEY_AUTH, JSON.stringify(updated));
-    } catch {
-      // ignore
+  try {
+    const current = raw ? (JSON.parse(raw) as AppUser) : DEMO_USERS.student;
+    if (current.role === 'student') {
+      const nextGrade = updates.grade || current.grade || 8;
+      const safeStudent: AppUser = {
+        id: 'local_student_device',
+        email: '',
+        fullName: `Học sinh Khối ${nextGrade} (Chế độ Riêng tư)`,
+        role: 'student',
+        grade: nextGrade,
+        school: '',
+      };
+      localStorage.setItem(STORAGE_KEY_AUTH, JSON.stringify(safeStudent));
+      return;
     }
+    const updated = { ...current, ...updates };
+    localStorage.setItem(STORAGE_KEY_AUTH, JSON.stringify(updated));
+  } catch {
+    // ignore
   }
 }

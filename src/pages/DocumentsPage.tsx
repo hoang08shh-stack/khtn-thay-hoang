@@ -3,15 +3,19 @@ import { DOCUMENTS } from '../data/mockData.ts';
 import { Grade, DocumentResource } from '../types/index.ts';
 import { getAllDocuments } from '../services/contentService.ts';
 import { Breadcrumbs } from '../components/common/Breadcrumbs.tsx';
+import { DocumentViewerModal } from '../components/common/DocumentViewerModal.tsx';
 import {
-  FileText,
+  GeneratedDocumentData,
+  createDocumentDataFromCatalogItem,
+  triggerEducationalDocumentDownload,
+} from '../utils/documentGenerator.ts';
+import {
   Download,
   Search,
   Filter,
-  BookOpen,
   CheckCircle2,
-  ExternalLink,
   Sparkles,
+  Eye,
 } from 'lucide-react';
 
 export const DocumentsPage: React.FC = () => {
@@ -20,6 +24,13 @@ export const DocumentsPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [downloadedId, setDownloadedId] = useState<string | null>(null);
   const [docsList, setDocsList] = useState<DocumentResource[]>(DOCUMENTS);
+  const [previewDocData, setPreviewDocData] = useState<GeneratedDocumentData | null>(null);
+
+  const refreshDocs = () => {
+    getAllDocuments().then((data) => {
+      setDocsList(data);
+    });
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -46,12 +57,20 @@ export const DocumentsPage: React.FC = () => {
     return true;
   });
 
-  const handleDownload = (doc: DocumentResource) => {
-    setDownloadedId(doc.id);
-    if (doc.fileUrl && doc.fileUrl !== '#') {
-      window.open(doc.fileUrl, '_blank', 'noopener,noreferrer');
+  const handleDownload = async (doc: DocumentResource) => {
+    const docData = createDocumentDataFromCatalogItem(doc);
+    const ok = await triggerEducationalDocumentDownload(docData);
+    if (ok) {
+      setDownloadedId(doc.id);
+      setTimeout(() => setDownloadedId(null), 3000);
+    } else {
+      setPreviewDocData(docData);
     }
-    setTimeout(() => setDownloadedId(null), 3000);
+  };
+
+  const handlePreview = (doc: DocumentResource) => {
+    const docData = createDocumentDataFromCatalogItem(doc);
+    setPreviewDocData(docData);
   };
 
   return (
@@ -67,10 +86,10 @@ export const DocumentsPage: React.FC = () => {
               <span>KHOA HỌC SỐ KHTN • Bộ sách Kết nối tri thức với cuộc sống</span>
             </div>
             <h1 className="text-2xl sm:text-4xl font-black text-white">
-              Kho Học Liệu & Tài Liệu KHTN (Lớp 6 – 9)
+              Kho Học Liệu &amp; Tài Liệu KHTN (Lớp 6 – 9)
             </h1>
             <p className="text-sm sm:text-base text-white/90">
-              Tổng hợp giáo án điện tử PowerPoint, phiếu bài tập PDF, đề cương ôn tập học kì và sổ tay công thức theo bộ sách <strong>Kết nối tri thức với cuộc sống</strong> với danh pháp Hóa học quốc tế IUPAC.
+              Tổng hợp giáo án điện tử PowerPoint, phiếu học tập PDF/Word và đề cương ôn tập do giáo viên tải lên kho bài giảng theo bộ sách <strong>Kết nối tri thức với cuộc sống</strong>.
             </p>
           </div>
 
@@ -134,73 +153,114 @@ export const DocumentsPage: React.FC = () => {
 
         {/* Documents List */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredDocs.map((doc) => (
-            <div
-              key={doc.id}
-              className="bg-white dark:bg-slate-900 rounded-3xl p-6 border-2 border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-lg transition flex flex-col justify-between gap-4"
-            >
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span
-                    className={`text-xs font-extrabold uppercase px-2.5 py-1 rounded-lg ${
-                      doc.format === 'pptx'
-                        ? 'bg-orange-100 text-orange-800'
-                        : doc.format === 'pdf'
-                        ? 'bg-rose-100 text-rose-800'
-                        : 'bg-blue-100 text-blue-800'
-                    }`}
-                  >
-                    {doc.format} • {doc.fileSize}
-                  </span>
-                  <span className="text-xs font-extrabold text-teal-700 bg-teal-50 px-2.5 py-0.5 rounded-lg">
-                    Lớp {doc.grade}
-                  </span>
+          {filteredDocs.map((doc) => {
+            const docData = createDocumentDataFromCatalogItem(doc);
+            const hasRealFile = docData.hasTeacherFile;
+            return (
+              <div
+                key={doc.id}
+                onClick={() => handlePreview(doc)}
+                className="bg-white dark:bg-slate-900 rounded-3xl p-6 border-2 border-slate-100 dark:border-slate-800 hover:border-teal-400 shadow-sm hover:shadow-lg transition flex flex-col justify-between gap-4 cursor-pointer group"
+              >
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-1.5">
+                    <span
+                      className={`text-xs font-extrabold uppercase px-2.5 py-1 rounded-lg ${
+                        docData.format === 'pptx'
+                          ? 'bg-orange-100 text-orange-800'
+                          : docData.format === 'pdf'
+                          ? 'bg-rose-100 text-rose-800'
+                          : 'bg-blue-100 text-blue-800'
+                      }`}
+                    >
+                      {docData.format} • {docData.fileSize}
+                    </span>
+                    <span className="text-xs font-extrabold text-teal-700 bg-teal-50 px-2.5 py-0.5 rounded-lg">
+                      Lớp {doc.grade} • {doc.type}
+                    </span>
+                  </div>
+
+                  <h3 className="font-extrabold text-base text-slate-900 dark:text-white group-hover:text-teal-600 transition leading-snug">
+                    {doc.title}
+                  </h3>
+
+                  <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                    {doc.description}
+                  </p>
+
+                  <div>
+                    <span
+                      className={`inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
+                        hasRealFile
+                          ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300'
+                          : 'bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300'
+                      }`}
+                    >
+                      {hasRealFile
+                        ? `✓ Đã có file gốc GV (${docData.downloadFileName})`
+                        : 'Chưa tải file lên kho bài giảng'}
+                    </span>
+                  </div>
                 </div>
 
-                <h3 className="font-extrabold text-base text-slate-900 dark:text-white leading-snug">
-                  {doc.title}
-                </h3>
+                <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+                  <div className="text-xs text-slate-400">
+                    <span>{doc.downloadsCount ?? doc.downloadCount} lượt tải</span>
+                    {doc.pagesCount && <span> • {doc.pagesCount} trang</span>}
+                  </div>
 
-                <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                  {doc.description}
-                </p>
-              </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handlePreview(doc);
+                      }}
+                      className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-teal-50 text-teal-700 dark:text-teal-300 text-xs font-extrabold flex items-center gap-1 transition cursor-pointer"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      <span>Xem</span>
+                    </button>
 
-              <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                <div className="text-xs text-slate-400">
-                  <span>{doc.downloadsCount} lượt tải</span>
-                  {doc.pagesCount && <span> • {doc.pagesCount} trang</span>}
-                </div>
-
-                <button
-                  onClick={() => handleDownload(doc)}
-                  className={`px-4 py-2 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition cursor-pointer ${
-                    downloadedId === doc.id
-                      ? 'bg-emerald-600 text-white'
-                      : 'bg-teal-600 hover:bg-teal-500 text-white shadow-sm'
-                  }`}
-                >
-                  {downloadedId === doc.id ? (
-                    <>
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>Đang tải...</span>
-                    </>
-                  ) : (
-                    <>
-                      {doc.fileUrl && doc.fileUrl !== '#' ? (
-                        <ExternalLink className="w-3.5 h-3.5" />
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDownload(doc);
+                      }}
+                      className={`px-3.5 py-2 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition cursor-pointer ${
+                        downloadedId === doc.id
+                          ? 'bg-emerald-600 text-white'
+                          : hasRealFile
+                          ? 'bg-teal-600 hover:bg-teal-500 text-white shadow-sm'
+                          : 'bg-amber-600 hover:bg-amber-500 text-white shadow-sm'
+                      }`}
+                    >
+                      {downloadedId === doc.id ? (
+                        <>
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>Đã tải về!</span>
+                        </>
                       ) : (
-                        <Download className="w-3.5 h-3.5" />
+                        <>
+                          <Download className="w-3.5 h-3.5" />
+                          <span>Tải về</span>
+                        </>
                       )}
-                      <span>Tải tài liệu</span>
-                    </>
-                  )}
-                </button>
+                    </button>
+                  </div>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
+
+      <DocumentViewerModal
+        docData={previewDocData}
+        onClose={() => setPreviewDocData(null)}
+        onUploadedSuccess={refreshDocs}
+      />
     </div>
   );
 };

@@ -3,102 +3,34 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-  /* Soften pure white & light backgrounds to reduce screen glare */
-  --color-white: #f4f6f9;
-  --color-slate-50: #ebeef3;
-  --color-slate-100: #dfe5ee;
-  --color-slate-200: #cbd4e1;
-
-  /* Muted, lower-brightness Teal palette */
-  --color-teal-50: #e8f1f0;
-  --color-teal-100: #d2e4e2;
-  --color-teal-200: #adccc8;
-  --color-teal-300: #6ea8a2;
-  --color-teal-400: #3d8b84;
-  --color-teal-500: #23706a;
-  --color-teal-600: #1b5c57;
-  --color-teal-700: #164946;
-
-  /* Muted, lower-brightness Emerald palette */
-  --color-emerald-50: #e8f2ee;
-  --color-emerald-100: #d2e5dc;
-  --color-emerald-200: #aecfc0;
-  --color-emerald-300: #6ea98e;
-  --color-emerald-400: #3e8a69;
-  --color-emerald-500: #286f51;
-  --color-emerald-600: #1f5a42;
-  --color-emerald-700: #194835;
-
-  /* Muted, lower-brightness Sky & Cyan palettes */
-  --color-sky-50: #e9f0f6;
-  --color-sky-100: #d5e2ee;
-  --color-sky-200: #b2cade;
-  --color-sky-300: #759fc2;
-  --color-sky-400: #487da8;
-  --color-sky-500: #2f6590;
-  --color-sky-600: #255277;
-  --color-sky-700: #1e4260;
-
-  --color-cyan-200: #b0cdd6;
-  --color-cyan-300: #74a4b3;
-  --color-cyan-400: #468294;
-  --color-cyan-500: #2e697a;
-
-  /* Muted, lower-brightness Amber, Yellow & Orange palettes (no neon glare) */
-  --color-amber-50: #f3eee4;
-  --color-amber-100: #e6dcc8;
-  --color-amber-200: #d1be9b;
-  --color-amber-300: #b89b67;
-  --color-amber-400: #9e7e46;
-  --color-amber-500: #876832;
-  --color-amber-600: #6e5326;
-  --color-amber-700: #58421e;
-
-  --color-yellow-200: #d4c598;
-  --color-yellow-300: #b8a46b;
-  --color-yellow-400: #9c874c;
-
-  --color-orange-500: #8f5834;
-  --color-orange-600: #754628;
-
-  /* Muted, lower-brightness Indigo, Violet, Purple & Rose palettes */
-  --color-indigo-50: #ebedf5;
-  --color-indigo-500: #465085;
-  --color-indigo-600: #38406e;
-  --color-indigo-700: #2d3459;
-
-  --color-purple-50: #eeeaf4;
-  --color-purple-500: #5e4982;
-  --color-purple-600: #4c3a6b;
-  --color-purple-700: #3d2e57;
-
-  --color-rose-500: #8f4453;
-  --color-rose-600: #753542;
+  --font-sans: 'Be Vietnam Pro', 'Inter', 'Noto Sans', 'Roboto', -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-serif: 'Be Vietnam Pro', 'Inter', 'Noto Sans', 'Roboto', -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
 @layer base {
   :root {
-    --navy: #0B1B30;
-    --navy-light: #152844;
-    --navy-dark: #071220;
-    --lab-dark: #060D17;
-    --teal: #1b5c57;
-    --teal-light: #23706a;
-    --teal-dark: #164946;
-    --teal-accent: #3d8b84;
+    --navy: #0F172A;
+    --navy-light: #1E293B;
+    --navy-dark: #090E17;
+    --lab-dark: #0B1120;
+    --teal: #0D9488;
+    --teal-light: #14B8A6;
+    --teal-dark: #0F766E;
+    --teal-accent: #2DD4BF;
   }
 
   body {
     font-family: 'Be Vietnam Pro', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    color: #1e293b;
-    background-color: #eaeff5;
+    color: #0F172A;
+    background-color: #F8FAFC;
     transition: background-color 0.25s ease, color 0.25s ease;
     -webkit-tap-highlight-color: transparent;
   }
 
   html.dark body {
-    color: #dce3ec;
-    background-color: #0b111e;
+    color: #F1F5F9;
+    background-color: #0B1120;
   }
 
   code, pre {
@@ -125,15 +57,15 @@
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f5f9;
+  background: #F1F5F9;
 }
 
 html.dark ::-webkit-scrollbar-track {
-  background: #0f172a;
+  background: #0F172A;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: #CBD5E1;
   border-radius: 9999px;
 }
 
@@ -142,7 +74,7 @@ html.dark ::-webkit-scrollbar-thumb {
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: #94A3B8;
 }
 
 html.dark ::-webkit-scrollbar-thumb:hover {
@@ -153,11 +85,11 @@ html.dark ::-webkit-scrollbar-thumb:hover {
 .glass-panel {
   background: rgba(255, 255, 255, 0.92);
   backdrop-filter: blur(12px);
-  border: 1px solid rgba(226, 232, 240, 0.8);
+  border: 1px solid rgba(226, 232, 240, 0.85);
 }
 
 .glass-panel-dark {
-  background: rgba(11, 31, 58, 0.92);
+  background: rgba(15, 23, 42, 0.92);
   backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 255, 255, 0.1);
 }

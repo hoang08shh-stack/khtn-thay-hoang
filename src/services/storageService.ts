@@ -1,4 +1,5 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase.ts';
+import { saveTeacherFileToRepo } from './localFileStore.ts';
 
 /**
  * Supabase Free Tier File Limits & Validation Constants
@@ -73,36 +74,38 @@ export function validateUploadFile(file: File): FileValidationResult {
 }
 
 /**
- * Upload a document (PPTX, PDF, DOCX) to the `lesson-documents` bucket.
- * Requires teacher or admin privileges as enforced by Supabase Storage RLS.
+ * Upload a document (PPTX, PDF, DOCX) to the `lesson-documents` bucket or persistent IndexedDB repository.
  */
 export async function uploadLessonDocument(
   file: File,
   lessonId: string,
   onProgress?: (percent: number) => void
-): Promise<{ path: string; publicUrl: string; sizeFormatted: string } | null> {
+): Promise<{ path: string; publicUrl: string; sizeFormatted: string; fileName: string } | null> {
   const validation = validateUploadFile(file);
   if (!validation.valid) {
     throw new Error(validation.error);
   }
 
-  // If local demo mode
-  if (!isSupabaseConfigured || !supabase) {
+  const fallbackLocalUpload = async () => {
     if (onProgress) {
-      onProgress(30);
-      await new Promise((r) => setTimeout(r, 200));
-      onProgress(75);
-      await new Promise((r) => setTimeout(r, 200));
-      onProgress(100);
+      onProgress(35);
+      await new Promise((r) => setTimeout(r, 80));
+      onProgress(80);
     }
-
     const mockPath = `lesson-documents/${lessonId}/${Date.now()}_${file.name.replace(/\s+/g, '_')}`;
-    const mockUrl = URL.createObjectURL(file);
+    const saved = await saveTeacherFileToRepo(file);
+    if (onProgress) onProgress(100);
     return {
       path: mockPath,
-      publicUrl: mockUrl,
+      publicUrl: saved.fileUrl,
       sizeFormatted: validation.fileSizeFormatted || formatBytes(file.size),
+      fileName: file.name,
     };
+  };
+
+  // If local mode
+  if (!isSupabaseConfigured || !supabase) {
+    return fallbackLocalUpload();
   }
 
   try {
@@ -121,7 +124,8 @@ export async function uploadLessonDocument(
       });
 
     if (error) {
-      throw new Error(error.message);
+      console.warn('Supabase Storage upload warning, using local IndexedDB repository:', error.message);
+      return fallbackLocalUpload();
     }
 
     if (onProgress) onProgress(90);
@@ -136,10 +140,11 @@ export async function uploadLessonDocument(
       path: data.path,
       publicUrl: urlData.publicUrl,
       sizeFormatted: validation.fileSizeFormatted || formatBytes(file.size),
+      fileName: file.name,
     };
   } catch (err: any) {
-    console.error('Failed to upload lesson document:', err);
-    throw new Error(err.message || 'Lỗi tải lên tài liệu vào Supabase Storage.');
+    console.warn('Fallback to local IndexedDB document storage:', err);
+    return fallbackLocalUpload();
   }
 }
 

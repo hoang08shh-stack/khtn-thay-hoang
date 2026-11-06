@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Grade, SubjectDomain, Lesson, Simulation3D, DocumentResource, VideoResource } from '../types/index.ts';
 import {
   HERO_LAB_IMAGE,
+  GRADE_COVER_IMAGES,
   TOPICS,
   LESSONS,
   SIMULATIONS_3D,
@@ -13,6 +14,12 @@ import {
 } from '../data/mockData.ts';
 import { getLessonsByGrade, getDocumentsByGrade, getVideosByGrade } from '../services/contentService.ts';
 import { Breadcrumbs } from '../components/common/Breadcrumbs.tsx';
+import { DocumentViewerModal } from '../components/common/DocumentViewerModal.tsx';
+import {
+  GeneratedDocumentData,
+  createDocumentDataFromCatalogItem,
+  triggerEducationalDocumentDownload,
+} from '../utils/documentGenerator.ts';
 import {
   BookOpen,
   Atom,
@@ -26,6 +33,7 @@ import {
   Download,
   ExternalLink,
   Layers,
+  Eye,
 } from 'lucide-react';
 
 interface GradeTemplatePageProps {
@@ -49,8 +57,8 @@ const GRADE_INFO: Record<
     subtitle: 'Khởi đầu hành trình khám phá Tế bào, Chất và Lực trong tự nhiên',
     description:
       'Làm quen với dụng cụ đo lường phòng thí nghiệm, tìm hiểu các thể của chất, vai trò của Oxygen và không khí, khám phá cấu trúc tế bào thực vật – động vật, phân loại thế giới sống và các loại lực cơ học.',
-    gradient: 'from-teal-800 via-teal-900 to-slate-900',
-    bannerImage: DOMAINS[2]?.image || HERO_LAB_IMAGE,
+    gradient: 'from-emerald-700 via-teal-700 to-cyan-800',
+    bannerImage: GRADE_COVER_IMAGES[6] || HERO_LAB_IMAGE,
     stats: { topics: 11, lessons: 42, labs: 10 },
     competencies: [
       'Sử dụng thành thạo kính lúp, kính hiển vi quang học và dụng cụ đo khối lượng, chiều dài, nhiệt độ',
@@ -64,8 +72,8 @@ const GRADE_INFO: Record<
     subtitle: 'Khám phá thế giới vi mô Nguyên tử, Bảng tuần hoàn IUPAC & Quang học',
     description:
       'Đi sâu vào cấu trúc nguyên tử theo mô hình Rutherford – Bohr, bảng tuần hoàn các nguyên tố hóa học theo danh pháp quốc tế IUPAC (Hydrogen, Carbon, Nitrogen, Oxygen, Sodium...), liên kết hóa học, tốc độ chuyển động, sóng âm, ánh sáng, từ trường và trao đổi chất ở sinh vật.',
-    gradient: 'from-sky-800 via-slate-800 to-slate-900',
-    bannerImage: DOMAINS[0]?.image || HERO_LAB_IMAGE,
+    gradient: 'from-sky-700 via-blue-700 to-indigo-800',
+    bannerImage: GRADE_COVER_IMAGES[7] || HERO_LAB_IMAGE,
     stats: { topics: 12, lessons: 45, labs: 12 },
     competencies: [
       'Mô tả cấu tạo nguyên tử gồm hạt nhân (proton, neutron) và lớp vỏ electron; tra cứu bảng tuần hoàn IUPAC',
@@ -79,8 +87,8 @@ const GRADE_INFO: Record<
     subtitle: 'Làm chủ Phản ứng Hóa học, Acid – Base – pH, Áp suất & Định luật Ohm',
     description:
       'Nắm vững định luật bảo toàn khối lượng, tính toán theo Mol và nồng độ dung dịch, phân loại các hợp chất vô cơ theo danh pháp quốc tế (Acid, Base, Oxide, Muối), thang đo pH, khối lượng riêng, áp suất chất lỏng, mạch điện một chiều và giải phẫu sinh lí cơ thể người.',
-    gradient: 'from-amber-800 via-stone-800 to-slate-900',
-    bannerImage: DOMAINS[1]?.image || HERO_LAB_IMAGE,
+    gradient: 'from-teal-700 via-cyan-700 to-sky-800',
+    bannerImage: GRADE_COVER_IMAGES[8] || HERO_LAB_IMAGE,
     stats: { topics: 10, lessons: 48, labs: 14 },
     competencies: [
       'Lập phương trình hóa học, tính số mol, nồng độ phần trăm (C%) và nồng độ mol (CM)',
@@ -94,8 +102,8 @@ const GRADE_INFO: Record<
     subtitle: 'Tổng hợp Năng lượng, Khúc xạ ánh sáng, Hóa học Hữu cơ & Di truyền học DNA',
     description:
       'Hoàn thiện nền tảng KHTN bậc THCS với cơ năng, khúc xạ ánh sáng qua thấu kính, cảm ứng điện từ, dãy hoạt động hóa học của kim loại, hợp chất hữu cơ (Methane, Ethylene, Ethylic alcohol, Acetic acid, Glucose, Saccharose) và cơ sở di truyền học phân tử DNA – RNA – quy luật Mendel.',
-    gradient: 'from-indigo-900 via-slate-800 to-slate-900',
-    bannerImage: HERO_LAB_IMAGE,
+    gradient: 'from-indigo-800 via-sky-800 to-teal-800',
+    bannerImage: GRADE_COVER_IMAGES[9] || HERO_LAB_IMAGE,
     stats: { topics: 12, lessons: 52, labs: 15 },
     competencies: [
       'Vận dụng định luật khúc xạ ánh sáng, dựng ảnh qua thấu kính hội tụ – phân kì và tính công suất điện',
@@ -109,6 +117,7 @@ const GRADE_INFO: Record<
 export const GradeTemplatePage: React.FC<GradeTemplatePageProps> = ({ grade }) => {
   const [selectedDomain, setSelectedDomain] = useState<SubjectDomain | 'all'>('all');
   const [activeTab, setActiveTab] = useState<'topics' | 'simulations' | 'docs' | 'quiz'>('topics');
+  const [previewDocData, setPreviewDocData] = useState<GeneratedDocumentData | null>(null);
   const [gradeLessons, setGradeLessons] = useState<Lesson[]>(() =>
     LESSONS.filter((l) => l.grade === grade)
   );
@@ -165,16 +174,12 @@ export const GradeTemplatePage: React.FC<GradeTemplatePageProps> = ({ grade }) =
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
         <Breadcrumbs items={[{ label: `Khoa học tự nhiên Lớp ${grade}` }]} />
 
-        {/* 1. Bright Colorful Grade Hero Header */}
+        {/* 1. Harmonious Illustrated Grade Hero Header */}
         <div
-          className={`relative rounded-3xl bg-gradient-to-r ${info.gradient} text-white p-8 sm:p-12 overflow-hidden shadow-xl`}
+          className={`relative rounded-3xl bg-gradient-to-r ${info.gradient} text-white p-6 sm:p-10 overflow-hidden shadow-xl`}
         >
-          <div className="absolute inset-0 opacity-20 mix-blend-overlay pointer-events-none">
-            <img src={info.bannerImage} alt={info.title} className="w-full h-full object-cover" />
-          </div>
-
           <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
-            <div className="lg:col-span-8 space-y-4">
+            <div className="lg:col-span-7 space-y-4">
               <div className="inline-flex flex-wrap items-center gap-2 px-3.5 py-1 rounded-full bg-white/20 backdrop-blur-md text-xs font-extrabold uppercase tracking-wider">
                 <Sparkles className="w-3.5 h-3.5 text-amber-300" />
                 <span>KHOA HỌC SỐ KHTN • Khối lớp {grade}</span>
@@ -184,33 +189,44 @@ export const GradeTemplatePage: React.FC<GradeTemplatePageProps> = ({ grade }) =
               <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-white">
                 {info.title}
               </h1>
-              <p className="text-white/95 font-bold text-base sm:text-lg">
+              <p className="text-amber-200 font-bold text-base sm:text-lg">
                 {info.subtitle}
               </p>
-              <p className="text-white/90 text-xs sm:text-sm leading-relaxed max-w-2xl">
+              <p className="text-white/95 text-xs sm:text-sm leading-relaxed max-w-2xl">
                 {info.description}
               </p>
+
+              {/* Stats Box */}
+              <div className="grid grid-cols-3 gap-3 bg-slate-950/30 backdrop-blur-md p-4 rounded-2xl border border-white/25 text-center max-w-md pt-3">
+                <div>
+                  <div className="text-2xl font-black font-mono text-amber-300">
+                    {info.stats.topics}
+                  </div>
+                  <div className="text-xs text-white/90 mt-0.5 font-semibold">Chủ đề</div>
+                </div>
+                <div className="border-x border-white/20">
+                  <div className="text-2xl font-black font-mono text-cyan-200">
+                    {info.stats.lessons}
+                  </div>
+                  <div className="text-xs text-white/90 mt-0.5 font-semibold">Bài giảng</div>
+                </div>
+                <div>
+                  <div className="text-2xl font-black font-mono text-emerald-200">
+                    {info.stats.labs}
+                  </div>
+                  <div className="text-xs text-white/90 mt-0.5 font-semibold">Thí nghiệm số</div>
+                </div>
+              </div>
             </div>
 
-            {/* Stats Box */}
-            <div className="lg:col-span-4 grid grid-cols-3 gap-3 bg-slate-950/30 backdrop-blur-md p-5 rounded-2xl border border-white/25 text-center">
-              <div>
-                <div className="text-2xl sm:text-3xl font-black font-mono text-amber-300">
-                  {info.stats.topics}
-                </div>
-                <div className="text-xs text-white/90 mt-1 font-semibold">Chủ đề</div>
-              </div>
-              <div className="border-x border-white/20">
-                <div className="text-2xl sm:text-3xl font-black font-mono text-cyan-200">
-                  {info.stats.lessons}
-                </div>
-                <div className="text-xs text-white/90 mt-1 font-semibold">Bài giảng</div>
-              </div>
-              <div>
-                <div className="text-2xl sm:text-3xl font-black font-mono text-emerald-200">
-                  {info.stats.labs}
-                </div>
-                <div className="text-xs text-white/90 mt-1 font-semibold">Thí nghiệm số</div>
+            {/* Grade Visual Illustration Card */}
+            <div className="lg:col-span-5">
+              <div className="rounded-2xl overflow-hidden border-2 border-white/30 shadow-2xl bg-slate-900/40">
+                <img
+                  src={info.bannerImage}
+                  alt={info.title}
+                  className="w-full h-56 sm:h-64 object-cover"
+                />
               </div>
             </div>
           </div>
@@ -468,28 +484,69 @@ export const GradeTemplatePage: React.FC<GradeTemplatePageProps> = ({ grade }) =
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <div className="space-y-4">
               <h3 className="font-extrabold text-slate-900 dark:text-white text-base">
-                Tài liệu & Giáo án Lớp {grade} (Sách Kết nối tri thức)
+                Tài liệu &amp; Giáo án Lớp {grade} (Sách Kết nối tri thức)
               </h3>
-              {filteredDocuments.map((doc) => (
-                <div
-                  key={doc.id}
-                  className="p-4 rounded-2xl bg-white dark:bg-slate-900 border-2 border-slate-100 dark:border-slate-800 flex items-center justify-between gap-4"
-                >
-                  <div className="space-y-1">
-                    <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-teal-50 text-teal-700">
-                      {doc.format} • {doc.type}
-                    </span>
-                    <h4 className="font-bold text-sm text-slate-900 dark:text-white">{doc.title}</h4>
-                    <p className="text-xs text-slate-500">{doc.description}</p>
-                  </div>
-                  <Link
-                    to="/tai-lieu"
-                    className="px-3 py-2 rounded-xl bg-teal-600 text-white text-xs font-bold flex items-center gap-1.5 shrink-0"
+              {filteredDocuments.map((doc) => {
+                const docData = createDocumentDataFromCatalogItem(doc);
+                const hasRealFile = docData.hasTeacherFile;
+                return (
+                  <div
+                    key={doc.id}
+                    onClick={() => setPreviewDocData(docData)}
+                    className="p-4 rounded-2xl bg-white dark:bg-slate-900 border-2 border-slate-100 dark:border-slate-800 hover:border-teal-400 flex items-center justify-between gap-4 cursor-pointer transition group"
                   >
-                    <Download className="w-3.5 h-3.5" /> Tải về
-                  </Link>
-                </div>
-              ))}
+                    <div className="space-y-1">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-teal-50 text-teal-700">
+                          {docData.format} • {doc.type}
+                        </span>
+                        <span
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            hasRealFile
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-amber-100 text-amber-800'
+                          }`}
+                        >
+                          {hasRealFile ? 'Đã có file gốc GV' : 'Chưa tải file lên'}
+                        </span>
+                      </div>
+                      <h4 className="font-bold text-sm text-slate-900 dark:text-white group-hover:text-teal-600 transition">
+                        {doc.title}
+                      </h4>
+                      <p className="text-xs text-slate-500">{doc.description}</p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setPreviewDocData(docData);
+                        }}
+                        className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-teal-50 text-teal-700 dark:text-teal-300 text-xs font-bold flex items-center gap-1 cursor-pointer"
+                      >
+                        <Eye className="w-3.5 h-3.5" /> Xem
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          const ok = await triggerEducationalDocumentDownload(docData);
+                          if (!ok) {
+                            setPreviewDocData(docData);
+                          }
+                        }}
+                        className={`px-3 py-2 rounded-xl text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer ${
+                          hasRealFile
+                            ? 'bg-teal-600 hover:bg-teal-500'
+                            : 'bg-amber-600 hover:bg-amber-500'
+                        }`}
+                      >
+                        <Download className="w-3.5 h-3.5" /> Tải về
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
 
             <div className="space-y-4">
@@ -569,6 +626,16 @@ export const GradeTemplatePage: React.FC<GradeTemplatePageProps> = ({ grade }) =
           </div>
         )}
       </div>
+
+      <DocumentViewerModal
+        docData={previewDocData}
+        onClose={() => setPreviewDocData(null)}
+        onUploadedSuccess={() => {
+          getDocumentsByGrade(grade).then((docsData) => {
+            setGradeDocuments(docsData);
+          });
+        }}
+      />
     </div>
   );
 };

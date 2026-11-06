@@ -7,15 +7,14 @@ import { AppUser, Grade } from '../types/index.ts';
 import {
   Lock,
   Mail,
-  User,
   GraduationCap,
   ShieldCheck,
   CheckCircle2,
-  Database,
-  Cloud,
-  Sparkles,
-  School,
   AlertCircle,
+  Sparkles,
+  EyeOff,
+  Laptop,
+  ArrowRight,
 } from 'lucide-react';
 
 interface AuthPageProps {
@@ -23,65 +22,65 @@ interface AuthPageProps {
 }
 
 export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
-  const [tab, setTab] = useState<'login' | 'register'>('login');
+  const [tab, setTab] = useState<'student_local' | 'teacher_login'>('student_local');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [fullName, setFullName] = useState('');
   const [grade, setGrade] = useState<Grade>(8);
-  const [school, setSchool] = useState('THCS');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
-  const { login, register, isSupabaseActive } = useAuth();
+  const { login, register } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
-  const handleAuthSubmit = async (e: React.FormEvent) => {
+  const handleStartAnonymousStudentMode = async (selectedGrade: Grade) => {
+    setIsSubmitting(true);
+    setErrorMsg('');
+    try {
+      const anonymousUser = await register({
+        email: '',
+        password: '',
+        fullName: `Học sinh Khối ${selectedGrade} (Chế độ Riêng tư)`,
+        grade: selectedGrade,
+        school: '',
+      });
+      if (onLoginSuccess) onLoginSuccess(anonymousUser);
+      setSuccessMsg(`Đã kích hoạt Chế độ Học tập Riêng tư Khối ${selectedGrade} trên thiết bị này!`);
+      setTimeout(() => {
+        navigate(`/lop-${selectedGrade}`, { replace: true });
+      }, 600);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleTeacherLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
     setSuccessMsg('');
 
-    if (!email || !email.includes('@')) {
-      setErrorMsg('Vui lòng nhập địa chỉ email hợp lệ.');
+    const normalized = email.trim().toLowerCase();
+    if (!normalized || !normalized.includes('@')) {
+      setErrorMsg('Vui lòng nhập email quản trị của giáo viên.');
       return;
     }
-    const isAdminEmail = email.trim().toLowerCase() === 'hoang08shh@gmail.com';
-    if (!isAdminEmail && (!password || password.length < 6)) {
-      setErrorMsg('Mật khẩu phải chứa ít nhất 6 ký tự.');
+
+    if (normalized !== 'hoang08shh@gmail.com' && !normalized.endsWith('@khtn.edu.vn')) {
+      setErrorMsg(
+        'Hệ thống không yêu cầu và không cho phép học sinh tạo tài khoản bằng email cá nhân. Học sinh vui lòng chọn tab "Chế Độ Học Sinh (Không Cần Tài Khoản)".'
+      );
       return;
     }
 
     setIsSubmitting(true);
     try {
-      if (tab === 'login') {
-        const loggedUser = await login(email.trim(), password || 'admin123');
-        if (onLoginSuccess) onLoginSuccess(loggedUser);
-        const isLoggedAdmin = loggedUser.email.trim().toLowerCase() === 'hoang08shh@gmail.com';
-        const destination =
-          (location.state as any)?.from?.pathname || (isLoggedAdmin ? '/quan-tri' : '/tien-do');
-        navigate(destination, { replace: true });
-      } else {
-        if (!fullName.trim()) {
-          setErrorMsg('Vui lòng nhập họ và tên của em.');
-          setIsSubmitting(false);
-          return;
-        }
-
-        const newUser = await register({
-          email: email.trim(),
-          password,
-          fullName: fullName.trim(),
-          grade,
-          school: school.trim() || 'THCS Đà Nẵng, Việt Nam',
-        });
-
-        if (onLoginSuccess) onLoginSuccess(newUser);
-        setSuccessMsg('Đăng ký tài khoản thành công! Đang chuyển hướng...');
-        setTimeout(() => {
-          navigate('/tien-do', { replace: true });
-        }, 1200);
-      }
+      const loggedUser = await login(normalized, password || 'admin123');
+      if (onLoginSuccess) onLoginSuccess(loggedUser);
+      const isLoggedAdmin = loggedUser.email.trim().toLowerCase() === 'hoang08shh@gmail.com';
+      const destination =
+        (location.state as any)?.from?.pathname || (isLoggedAdmin ? '/quan-tri' : '/tien-do');
+      navigate(destination, { replace: true });
     } catch (err: any) {
       setErrorMsg(err.message || 'Xác thực không thành công. Vui lòng kiểm tra lại thông tin.');
     } finally {
@@ -89,64 +88,66 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
     }
   };
 
-  const quickDemoLogin = async (type: 'student' | 'teacher') => {
-    const demoUser = DEMO_USERS[type];
+  const quickTeacherDemoLogin = async () => {
+    const demoUser = DEMO_USERS.teacher;
     try {
       const user = await login(demoUser.email, 'password123');
       if (onLoginSuccess) onLoginSuccess(user);
-      navigate(user.email.trim().toLowerCase() === 'hoang08shh@gmail.com' ? '/quan-tri' : '/tien-do');
+      navigate('/quan-tri');
     } catch {
       if (onLoginSuccess) onLoginSuccess(demoUser);
-      navigate(demoUser.email.trim().toLowerCase() === 'hoang08shh@gmail.com' ? '/quan-tri' : '/tien-do');
+      navigate('/quan-tri');
     }
   };
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 py-10 text-slate-800 dark:text-slate-100">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-        <Breadcrumbs items={[{ label: tab === 'login' ? 'Đăng nhập tài khoản' : 'Đăng ký học sinh' }]} />
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+        <Breadcrumbs
+          items={[
+            {
+              label:
+                tab === 'student_local'
+                  ? 'Chế độ Học sinh (Không cần tài khoản)'
+                  : 'Đăng nhập Giáo viên / Quản trị',
+            },
+          ]}
+        />
 
-        <div className="max-w-lg mx-auto">
-          {/* Main Auth Form */}
+        <div className="max-w-xl mx-auto">
           <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-10 border border-slate-200/90 dark:border-slate-800 shadow-sm space-y-6">
+            {/* Mode Switcher Tabs */}
             <div className="flex border-b border-slate-200 dark:border-slate-800">
               <button
+                type="button"
                 onClick={() => {
-                  setTab('login');
+                  setTab('student_local');
                   setErrorMsg('');
                   setSuccessMsg('');
                 }}
-                className={`flex-1 py-3 text-sm font-bold border-b-2 transition ${
-                  tab === 'login'
+                className={`flex-1 py-3 text-xs sm:text-sm font-bold border-b-2 transition ${
+                  tab === 'student_local'
                     ? 'border-teal-600 text-teal-600 dark:text-teal-400'
                     : 'border-transparent text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
                 }`}
               >
-                Đăng Nhập
+                Học Sinh (Không Cần Tài Khoản)
               </button>
               <button
+                type="button"
                 onClick={() => {
-                  setTab('register');
+                  setTab('teacher_login');
                   setErrorMsg('');
                   setSuccessMsg('');
                 }}
-                className={`flex-1 py-3 text-sm font-bold border-b-2 transition ${
-                  tab === 'register'
-                    ? 'border-teal-600 text-teal-600 dark:text-teal-400'
+                className={`flex-1 py-3 text-xs sm:text-sm font-bold border-b-2 transition ${
+                  tab === 'teacher_login'
+                    ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
                     : 'border-transparent text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
                 }`}
               >
-                Đăng Ký Học Sinh
+                Cổng Giáo Viên / Quản Trị
               </button>
-            </div>
-
-            <div>
-              <h2 className="text-xl sm:text-2xl font-extrabold text-[#0B1F3A] dark:text-white">
-                {tab === 'login' ? 'Chào Mừng Trở Lại' : 'Tạo Tài Khoản Học Tập KHTN'}
-              </h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                Lưu lại tiến độ thực hành phòng thí nghiệm 3D và kết quả bài kiểm tra KHTN.
-              </p>
             </div>
 
             {errorMsg && (
@@ -163,145 +164,153 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
               </div>
             )}
 
-            <form onSubmit={handleAuthSubmit} className="space-y-4">
-              {tab === 'register' && (
-                <>
+            {tab === 'student_local' ? (
+              <div className="space-y-6">
+                <div>
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800 text-xs font-extrabold">
+                    <ShieldCheck className="w-4 h-4" />
+                    An Toàn Cho Học Sinh THCS (Đặc biệt Học sinh dưới 13 tuổi)
+                  </span>
+                  <h2 className="text-xl sm:text-2xl font-extrabold text-[#0B1F3A] dark:text-white mt-3">
+                    Vào Học Ngay – Không Cần Tạo Tài Khoản
+                  </h2>
+                  <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mt-1 leading-relaxed">
+                    Tuân thủ nghiêm ngặt quy định bảo vệ dữ liệu học sinh của nhà trường: Học sinh{' '}
+                    <strong>không cần đăng ký tài khoản trên nền tảng bên ngoài</strong>, không cần cung cấp Họ tên, Email hay Số điện thoại.
+                  </p>
+                </div>
+
+                {/* 3 School Safety Guarantees */}
+                <div className="space-y-2.5 bg-slate-50 dark:bg-slate-800/60 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 text-xs">
+                  <div className="flex items-start gap-2.5">
+                    <Laptop className="w-4 h-4 text-teal-600 dark:text-teal-400 shrink-0 mt-0.5" />
+                    <span>
+                      <strong>Không tạo tài khoản bên ngoài:</strong> Học sinh Lớp 6, 7 (dưới 13 tuổi) và Lớp 8, 9 truy cập trực tiếp toàn bộ bài giảng, mô phỏng 3D và đề luyện tập.
+                    </span>
+                  </div>
+                  <div className="flex items-start gap-2.5">
+                    <EyeOff className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0 mt-0.5" />
+                    <span>
+                      <strong>Không công khai thông tin hay thành tích cá nhân:</strong> Kết quả tự luyện chỉ lưu cục bộ trên trình duyệt của thiết bị này, chỉ mình em xem được.
+                    </span>
+                  </div>
+                  <div className="flex items-start gap-2.5">
+                    <Sparkles className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                    <span>
+                      <strong>Không đưa dữ liệu cá nhân vào AI bên ngoài:</strong> Hệ thống chấm điểm và hướng dẫn giải hoạt động bằng thuật toán sư phạm nội bộ.
+                    </span>
+                  </div>
+                </div>
+
+                {/* Grade Selection */}
+                <div className="space-y-2.5">
+                  <label className="block text-xs font-extrabold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+                    Chọn khối lớp của em trên thiết bị này:
+                  </label>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                    {([6, 7, 8, 9] as Grade[]).map((g) => (
+                      <button
+                        key={g}
+                        type="button"
+                        onClick={() => setGrade(g)}
+                        className={`py-3 px-3 rounded-2xl border-2 text-center transition flex flex-col items-center gap-1 ${
+                          grade === g
+                            ? 'border-teal-600 bg-teal-50 dark:bg-teal-950/60 text-teal-800 dark:text-teal-200 font-black shadow-sm'
+                            : 'border-slate-200 dark:border-slate-700 hover:border-teal-400 text-slate-700 dark:text-slate-300 font-bold'
+                        }`}
+                      >
+                        <GraduationCap className="w-5 h-5 text-teal-600 dark:text-teal-400" />
+                        <span className="text-sm">KHTN Lớp {g}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  disabled={isSubmitting}
+                  onClick={() => handleStartAnonymousStudentMode(grade)}
+                  className="w-full py-3.5 rounded-2xl bg-teal-700 hover:bg-teal-600 disabled:opacity-60 text-white font-bold text-sm shadow-sm transition flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <span>Vào Học Ngay Khối {grade} (Chế Độ Ẩn Danh • Không Cần Tài Khoản)</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-5">
+                <div>
+                  <h2 className="text-xl sm:text-2xl font-extrabold text-[#0B1F3A] dark:text-white">
+                    Đăng Nhập Dành Riêng Cho Giáo Viên
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    Khu vực quản trị ngân hàng câu hỏi, chuyển đổi đề Word (.docx) và quản lý học liệu của giáo viên.
+                  </p>
+                </div>
+
+                <form onSubmit={handleTeacherLogin} className="space-y-4">
                   <div>
                     <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                      Họ và tên học sinh
+                      Email Giáo viên / Quản trị viên
                     </label>
                     <div className="relative">
-                      <User className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                       <input
-                        type="text"
-                        placeholder="Ví dụ: Nguyễn Văn Minh"
-                        value={fullName}
-                        onChange={(e) => setFullName(e.target.value)}
+                        type="email"
+                        placeholder="hoang08shh@gmail.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
                         required
-                        className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                        className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       />
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                        Khối lớp
-                      </label>
-                      <select
-                        value={grade}
-                        onChange={(e) => setGrade(parseInt(e.target.value) as Grade)}
-                        className="w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 font-medium"
-                      >
-                        <option value={6}>Lớp 6</option>
-                        <option value={7}>Lớp 7</option>
-                        <option value={8}>Lớp 8</option>
-                        <option value={9}>Lớp 9</option>
-                      </select>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      Mật khẩu Quản trị
+                    </label>
+                    <div className="relative">
+                      <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="password"
+                        placeholder="Nhập mật khẩu quản trị"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required={email.trim().toLowerCase() !== 'hoang08shh@gmail.com'}
+                        className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
                     </div>
+                  </div>
 
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="w-full py-3 rounded-2xl bg-indigo-700 hover:bg-indigo-600 disabled:opacity-60 text-white font-bold text-sm shadow-sm transition flex items-center justify-center gap-2"
+                  >
+                    <ShieldCheck className="w-4 h-4" />
+                    <span>{isSubmitting ? 'Đang xác thực...' : 'Đăng Nhập Quản Trị Giáo Viên'}</span>
+                  </button>
+                </form>
+
+                <div className="pt-4 border-t border-slate-100 dark:border-slate-800 space-y-2.5">
+                  <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                    Truy cập nhanh cho Giáo viên phụ trách:
+                  </p>
+                  <button
+                    type="button"
+                    onClick={quickTeacherDemoLogin}
+                    className="w-full p-3.5 rounded-2xl bg-indigo-50/80 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100/80 text-left transition flex items-center justify-between"
+                  >
                     <div>
-                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                        Trường học
-                      </label>
-                      <div className="relative">
-                        <School className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                        <input
-                          type="text"
-                          placeholder="Ví dụ: THCS Đà Nẵng"
-                          value={school}
-                          onChange={(e) => setSchool(e.target.value)}
-                          className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-                        />
+                      <div className="flex items-center gap-1.5 text-xs font-extrabold text-indigo-800 dark:text-indigo-300">
+                        <ShieldCheck className="w-4 h-4 text-indigo-600" />
+                        <span>Giáo viên Quản trị (Thầy Hoàng KHTN)</span>
+                      </div>
+                      <div className="text-[11px] font-mono text-indigo-700/80 dark:text-indigo-400">
+                        hoang08shh@gmail.com
                       </div>
                     </div>
-                  </div>
-
-                  {/* Security Policy Badge */}
-                  <div className="p-3 rounded-xl bg-teal-50/70 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800/80 text-[11px] text-teal-800 dark:text-teal-300 flex items-start gap-2">
-                    <ShieldCheck className="w-4 h-4 shrink-0 text-teal-600 dark:text-teal-400 mt-0.5" />
-                    <span>
-                      Tài khoản đăng ký mới luôn mặc định quyền <strong>Học sinh (student)</strong> và không hiển thị nút Quản trị.
-                    </span>
-                  </div>
-                </>
-              )}
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Địa chỉ Email
-                </label>
-                <div className="relative">
-                  <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="email"
-                    placeholder="hoang08shh@gmail.com hoặc hocsinh@gmail.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Mật khẩu
-                </label>
-                <div className="relative">
-                  <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="password"
-                    placeholder="Nhập mật khẩu (tối thiểu 6 ký tự)"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required={email.trim().toLowerCase() !== 'hoang08shh@gmail.com'}
-                    className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="w-full py-3 rounded-2xl bg-teal-700 hover:bg-teal-600 disabled:opacity-60 text-white font-bold text-sm shadow-sm transition flex items-center justify-center gap-2"
-              >
-                <span>{isSubmitting ? 'Đang xác thực...' : tab === 'login' ? 'Đăng Nhập Ngay' : 'Hoàn Tất Đăng Ký'}</span>
-              </button>
-            </form>
-
-            {tab === 'login' && (
-              <div className="pt-4 border-t border-slate-100 dark:border-slate-800 space-y-2.5">
-                <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                  Chọn nhanh tài khoản đăng nhập:
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  <button
-                    type="button"
-                    onClick={() => quickDemoLogin('teacher')}
-                    className="p-3 rounded-2xl bg-indigo-50/80 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100/80 text-left transition space-y-0.5"
-                  >
-                    <div className="flex items-center gap-1.5 text-xs font-extrabold text-indigo-800 dark:text-indigo-300">
-                      <ShieldCheck className="w-4 h-4 text-indigo-600" />
-                      <span>Quản trị viên (Admin)</span>
-                    </div>
-                    <div className="text-[11px] font-mono text-indigo-700/80 dark:text-indigo-400 truncate">
-                      hoang08shh@gmail.com
-                    </div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => quickDemoLogin('student')}
-                    className="p-3 rounded-2xl bg-slate-100/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 hover:bg-slate-200/70 text-left transition space-y-0.5"
-                  >
-                    <div className="flex items-center gap-1.5 text-xs font-extrabold text-slate-800 dark:text-slate-200">
-                      <GraduationCap className="w-4 h-4 text-teal-600" />
-                      <span>Tài khoản Học sinh</span>
-                    </div>
-                    <div className="text-[11px] font-mono text-slate-500 dark:text-slate-400 truncate">
-                      hocsinh.khtn@gmail.com
-                    </div>
+                    <ArrowRight className="w-4 h-4 text-indigo-600" />
                   </button>
                 </div>
               </div>

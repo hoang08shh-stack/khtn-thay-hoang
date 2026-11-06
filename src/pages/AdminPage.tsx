@@ -58,7 +58,14 @@ import {
   getSiteSettingsSync,
   saveSiteSettingsSync,
   resetAllAdminDataToDefault,
+  saveUploadedAssetToRepository,
 } from '../services/adminService.ts';
+import { uploadLessonDocument } from '../services/storageService.ts';
+import {
+  createDocumentDataFromCatalogItem,
+  triggerEducationalDocumentDownload,
+} from '../utils/documentGenerator.ts';
+import { resolvePlayableOrDownloadableUrl, isRealUploadedFileUrl } from '../services/localFileStore.ts';
 import { LessonFormModal } from '../components/admin/LessonFormModal.tsx';
 import { DeleteConfirmModal } from '../components/admin/DeleteConfirmModal.tsx';
 import { AssetUploader } from '../components/admin/AssetUploader.tsx';
@@ -68,6 +75,8 @@ import {
   renderFormattedMathAndChem,
 } from '../components/common/ScientificSolutionView.tsx';
 import { WordQuestionImportModal } from '../components/admin/WordQuestionImportModal.tsx';
+import { UnifiedMaterialUploadModal } from '../components/admin/UnifiedMaterialUploadModal.tsx';
+import { FormulaEditorModal } from '../components/admin/FormulaEditorModal.tsx';
 import {
   parseExplanationIntoSteps,
   generateStepByStepSolution,
@@ -101,6 +110,7 @@ import {
   FolderKanban,
   Download,
   RotateCcw,
+  HelpCircle,
   Save,
   X,
   UserCheck,
@@ -146,6 +156,10 @@ export const AdminPage: React.FC = () => {
   const [editingQuestion, setEditingQuestion] = useState<Partial<QuizQuestion> | null>(null);
   const [editingQuiz, setEditingQuiz] = useState<Partial<QuizMeta> | null>(null);
   const [isWordImportOpen, setIsWordImportOpen] = useState(false);
+  const [isUnifiedUploadOpen, setIsUnifiedUploadOpen] = useState(false);
+  const [unifiedUploadInitialTab, setUnifiedUploadInitialTab] = useState<'wizard' | 'manager'>('wizard');
+  const [isAdminFormulaOpen, setIsAdminFormulaOpen] = useState(false);
+  const [adminFormulaTarget, setAdminFormulaTarget] = useState<'question' | 'explanation'>('question');
 
   // 4. Games State
   const [gameSubTab, setGameSubTab] = useState<'pairs' | 'crosswords' | 'detective'>('pairs');
@@ -179,6 +193,9 @@ export const AdminPage: React.FC = () => {
   // Modals State for Lessons & Delete Confirmation
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [editingLesson, setEditingLesson] = useState<AdminLesson | null>(null);
+  const [lessonFormInitialTab, setLessonFormInitialTab] = useState<
+    'info' | 'content' | 'media' | 'assets' | 'miniquiz'
+  >('info');
 
   const [deleteModalState, setDeleteModalState] = useState<{
     isOpen: boolean;
@@ -271,11 +288,16 @@ export const AdminPage: React.FC = () => {
 
   const handleOpenCreateLesson = () => {
     setEditingLesson(null);
+    setLessonFormInitialTab('info');
     setIsFormModalOpen(true);
   };
 
-  const handleOpenEditLesson = (lesson: AdminLesson) => {
+  const handleOpenEditLesson = (
+    lesson: AdminLesson,
+    initialTab: 'info' | 'content' | 'media' | 'assets' | 'miniquiz' = 'info'
+  ) => {
     setEditingLesson(lesson);
+    setLessonFormInitialTab(initialTab);
     setIsFormModalOpen(true);
   };
 
@@ -445,86 +467,172 @@ export const AdminPage: React.FC = () => {
         )}
 
         {/* Admin Dashboard Hero Header */}
-        <div className="bg-gradient-to-r from-slate-800 via-[#15283c] to-slate-800 rounded-3xl p-6 sm:p-8 text-white shadow-lg flex flex-col lg:flex-row lg:items-center justify-between gap-6 border border-slate-700/80">
-          <div className="space-y-2.5">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="px-3 py-1 rounded-full bg-teal-500/20 text-teal-300 border border-teal-500/30 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
-                <ShieldCheck className="w-4 h-4 text-teal-300" />
-                Quản Trị Toàn Hệ Thống (Full CMS)
-              </span>
-              <span className="text-xs text-slate-300">
-                • Quản trị viên: <strong className="text-white">{user?.fullName || 'Quản trị viên KHTN'}</strong> ({siteSettings.email})
-              </span>
+        <div className="bg-gradient-to-br from-[#0B1F3A] via-[#122B4A] to-[#0F3443] rounded-3xl p-6 sm:p-8 text-white shadow-lg border border-slate-700/80 space-y-6">
+          {/* Top Row: Identity & System Utilities */}
+          <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-5">
+            <div className="space-y-2.5 flex-1 min-w-0">
+              <div className="flex flex-wrap items-center gap-2 text-xs text-teal-300 font-semibold">
+                <ShieldCheck className="w-4 h-4 text-teal-400 shrink-0" />
+                <span>Trung tâm Quản trị Học liệu &amp; Nội dung số (Full CMS)</span>
+                <span aria-hidden="true" className="text-slate-500">·</span>
+                <span className="text-slate-300">
+                  Quản trị viên: <strong className="text-white">{user?.fullName || 'Quản trị viên KHTN'}</strong> ({siteSettings.email})
+                </span>
+              </div>
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight leading-snug">
+                Quản Trị {siteSettings.siteName} — {siteSettings.labName}
+              </h1>
+              <p className="text-xs sm:text-sm text-slate-300 max-w-3xl leading-relaxed">
+                Quản lý tập trung tất cả Chủ đề, Bài giảng (Lớp 6–9), Mô phỏng 3D, Ngân hàng câu hỏi trắc nghiệm, Trò chơi học tập, Video thí nghiệm, Tài liệu và Tài khoản người dùng. Mọi thay đổi được lưu và cập nhật trực tiếp lên trang web.
+              </p>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-              Quản Trị {siteSettings.siteName} — {siteSettings.labName}
-            </h1>
-            <p className="text-xs sm:text-sm text-slate-300 max-w-3xl leading-relaxed">
-              Quản lý tập trung tất cả Chủ đề, Bài giảng (Lớp 6–9), Mô phỏng 3D, Ngân hàng câu hỏi trắc nghiệm, Trò chơi học tập (Ghép thẻ, Ô chữ, Thám tử), Video thí nghiệm, Tài liệu và Tài khoản người dùng. Mọi thay đổi được lưu và cập nhật trực tiếp lên trang web.
-            </p>
+
+            <div className="flex flex-wrap items-center gap-2 shrink-0 self-start">
+              <Link
+                to="/"
+                className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-bold border border-white/15 transition flex items-center gap-1.5"
+              >
+                <ExternalLink className="w-3.5 h-3.5 text-teal-300" />
+                <span>Xem trang học sinh</span>
+              </Link>
+
+              <a
+                href="/khtn-source-code.zip"
+                download="KHTN-Khoa-Hoc-So-Source-Code.zip"
+                className="px-3.5 py-2 rounded-xl bg-amber-500/90 hover:bg-amber-400 text-slate-950 font-extrabold text-xs transition flex items-center gap-1.5 shadow-sm"
+                title="Tải toàn bộ mã nguồn dự án về máy (.ZIP)"
+              >
+                <Download className="w-3.5 h-3.5 stroke-[2.5]" />
+                <span>Tải mã nguồn (.ZIP)</span>
+              </a>
+
+              <button
+                onClick={handleExportAllData}
+                className="px-3.5 py-2 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-100 font-bold text-xs border border-slate-600/80 transition flex items-center gap-1.5 cursor-pointer"
+                title="Tải xuống toàn bộ dữ liệu dạng JSON"
+              >
+                <Database className="w-3.5 h-3.5 text-sky-400" />
+                <span>Sao lưu JSON</span>
+              </button>
+            </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+          {/* Bottom Row: 4 Primary Teacher Action Cards */}
+          <div className="pt-5 border-t border-white/10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <button
-              onClick={handleOpenCreateLesson}
-              className="px-4 py-2.5 rounded-2xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs sm:text-sm shadow-sm transition flex items-center gap-2"
+              onClick={() => {
+                setUnifiedUploadInitialTab('wizard');
+                setIsUnifiedUploadOpen(true);
+              }}
+              data-testid="open-unified-upload-wizard-btn"
+              className="group p-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white text-left transition shadow-sm flex items-start gap-3.5 cursor-pointer"
             >
-              <Plus className="w-4 h-4 stroke-[2.5]" />
-              <span>Soạn bài học mới</span>
+              <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+                <FileUp className="w-5 h-5 text-white" />
+              </div>
+              <div className="min-w-0">
+                <div className="font-extrabold text-xs sm:text-sm text-white">
+                  Tải Học Liệu (3 Bước)
+                </div>
+                <div className="text-[11px] text-emerald-100 mt-0.5 leading-snug">
+                  Up Giáo án PPTX, Phiếu PDF/Word, Video &amp; Mô phỏng
+                </div>
+              </div>
             </button>
 
-            <a
-              href="/khtn-source-code.zip"
-              download="KHTN-Khoa-Hoc-So-Source-Code.zip"
-              className="px-4 py-2.5 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs sm:text-sm shadow-sm transition flex items-center gap-2"
-              title="Tải toàn bộ mã nguồn dự án về máy (.ZIP) để mở bằng VS Code hoặc tải lên ChatGPT"
+            <button
+              onClick={() => {
+                setUnifiedUploadInitialTab('manager');
+                setIsUnifiedUploadOpen(true);
+              }}
+              data-testid="open-unified-resource-manager-btn"
+              className="group p-4 rounded-2xl bg-sky-700 hover:bg-sky-600 text-white text-left transition shadow-sm flex items-start gap-3.5 cursor-pointer"
             >
-              <Download className="w-4 h-4 stroke-[2.5]" />
-              <span>Tải mã nguồn (.ZIP)</span>
-            </a>
+              <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+                <FolderKanban className="w-5 h-5 text-white" />
+              </div>
+              <div className="min-w-0">
+                <div className="font-extrabold text-xs sm:text-sm text-white">
+                  Quản Lý Học Liệu Theo Bài
+                </div>
+                <div className="text-[11px] text-sky-100 mt-0.5 leading-snug">
+                  Duyệt kho tài nguyên theo Lớp → Chương → Bài học
+                </div>
+              </div>
+            </button>
 
             <button
-              onClick={handleExportAllData}
-              className="px-4 py-2.5 rounded-2xl bg-slate-700 hover:bg-slate-600 text-slate-100 font-bold text-xs sm:text-sm border border-slate-600 transition flex items-center gap-2"
-              title="Tải xuống toàn bộ dữ liệu dạng JSON"
+              onClick={handleOpenCreateLesson}
+              className="group p-4 rounded-2xl bg-teal-700 hover:bg-teal-600 text-white text-left transition shadow-sm flex items-start gap-3.5 cursor-pointer"
             >
-              <Download className="w-4 h-4" />
-              <span>Sao lưu JSON</span>
+              <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+                <Plus className="w-5 h-5 text-white stroke-[2.5]" />
+              </div>
+              <div className="min-w-0">
+                <div className="font-extrabold text-xs sm:text-sm text-white">
+                  Soạn Bài Học Mới
+                </div>
+                <div className="text-[11px] text-teal-100 mt-0.5 leading-snug">
+                  Tạo bài giảng, nhúng YouTube &amp; câu hỏi cuối bài
+                </div>
+              </div>
+            </button>
+
+            <button
+              onClick={() => {
+                setActiveTab('quizzes');
+                setIsWordImportOpen(true);
+              }}
+              className="group p-4 rounded-2xl bg-white/10 hover:bg-white/15 border border-white/15 text-white text-left transition flex items-start gap-3.5 cursor-pointer"
+            >
+              <div className="w-10 h-10 rounded-xl bg-indigo-500/30 flex items-center justify-center shrink-0">
+                <CheckSquare className="w-5 h-5 text-indigo-200" />
+              </div>
+              <div className="min-w-0">
+                <div className="font-extrabold text-xs sm:text-sm text-white">
+                  Chuyển Câu Hỏi Word (.docx)
+                </div>
+                <div className="text-[11px] text-slate-300 mt-0.5 leading-snug">
+                  Tách câu hỏi Trắc nghiệm A–D, Đúng/Sai &amp; Tự luận
+                </div>
+              </div>
             </button>
           </div>
         </div>
 
         {/* Multi-Module Navigation Tabs */}
-        <div className="flex flex-wrap items-center gap-1.5 bg-white dark:bg-slate-900 p-2 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-sm">
-          {navTabs.map((t) => {
-            const Icon = t.icon;
-            const active = activeTab === t.id;
-            return (
-              <button
-                key={t.id}
-                onClick={() => setActiveTab(t.id)}
-                className={`px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
-                  active
-                    ? 'bg-teal-700 text-white shadow-sm'
-                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                }`}
-              >
-                <Icon className="w-3.5 h-3.5 shrink-0" />
-                <span>{t.label}</span>
-                {typeof t.count === 'number' && (
-                  <span
-                    className={`px-1.5 py-0.5 rounded-md text-[10px] font-mono ${
-                      active
-                        ? 'bg-white/20 text-white'
-                        : 'bg-slate-200/70 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                    }`}
-                  >
-                    {t.count}
-                  </span>
-                )}
-              </button>
-            );
-          })}
+        <div className="bg-white dark:bg-slate-900 p-2 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-sm">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {navTabs.map((t) => {
+              const Icon = t.icon;
+              const active = activeTab === t.id;
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => setActiveTab(t.id)}
+                  className={`px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                    active
+                      ? 'bg-[#0B1F3A] dark:bg-teal-600 text-white shadow-sm'
+                      : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  <Icon className={`w-3.5 h-3.5 shrink-0 ${active ? 'text-teal-300 dark:text-white' : 'text-slate-400'}`} />
+                  <span>{t.label}</span>
+                  {typeof t.count === 'number' && (
+                    <span
+                      className={`px-1.5 py-0.5 rounded-md text-[10px] font-mono tabular-nums ${
+                        active
+                          ? 'bg-white/20 text-white'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                      }`}
+                    >
+                      {t.count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* ============================================================== */}
@@ -533,134 +641,253 @@ export const AdminPage: React.FC = () => {
         {activeTab === 'overview' && (
           <div className="space-y-6">
             {/* 8 KPI Cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <button
                 onClick={() => setActiveTab('topics')}
-                className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm text-left hover:border-teal-500 transition space-y-1"
+                className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm text-left hover:border-teal-500 transition flex items-start justify-between gap-3 cursor-pointer"
               >
-                <div className="flex items-center justify-between text-xs text-slate-500 font-semibold">
-                  <span>Chủ đề KHTN (Lớp 6–9)</span>
-                  <FolderKanban className="w-4 h-4 text-teal-600" />
+                <div className="space-y-1">
+                  <div className="text-xs text-slate-500 dark:text-slate-400 font-semibold">
+                    Chủ đề KHTN (Lớp 6–9)
+                  </div>
+                  <div className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white font-mono tabular-nums">
+                    {topics.length}
+                  </div>
+                  <div className="text-[11px] text-teal-700 dark:text-teal-400 font-bold pt-1">
+                    Quản lý chuyên đề →
+                  </div>
                 </div>
-                <div className="text-2xl sm:text-3xl font-extrabold text-slate-800 dark:text-white font-mono">
-                  {topics.length}
-                </div>
-                <div className="text-[11px] text-teal-700 dark:text-teal-400 font-medium">
-                  Quản lý chuyên đề →
+                <div className="w-10 h-10 rounded-xl bg-teal-50 dark:bg-teal-950/70 flex items-center justify-center shrink-0">
+                  <FolderKanban className="w-5 h-5 text-teal-600 dark:text-teal-400" />
                 </div>
               </button>
 
               <button
                 onClick={() => setActiveTab('lessons')}
-                className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm text-left hover:border-teal-500 transition space-y-1"
+                className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm text-left hover:border-teal-500 transition flex items-start justify-between gap-3 cursor-pointer"
               >
-                <div className="flex items-center justify-between text-xs text-slate-500 font-semibold">
-                  <span>Bài giảng lý thuyết</span>
-                  <BookOpen className="w-4 h-4 text-sky-600" />
+                <div className="space-y-1">
+                  <div className="text-xs text-slate-500 dark:text-slate-400 font-semibold">
+                    Bài giảng lý thuyết
+                  </div>
+                  <div className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white font-mono tabular-nums">
+                    {totalLessonsCount}
+                  </div>
+                  <div className="text-[11px] text-slate-500 pt-1">
+                    {publishedCount} xuất bản · {draftCount} nháp
+                  </div>
                 </div>
-                <div className="text-2xl sm:text-3xl font-extrabold text-slate-800 dark:text-white font-mono">
-                  {totalLessonsCount}
-                </div>
-                <div className="text-[11px] text-slate-500">
-                  {publishedCount} xuất bản • {draftCount} nháp
+                <div className="w-10 h-10 rounded-xl bg-sky-50 dark:bg-sky-950/70 flex items-center justify-center shrink-0">
+                  <BookOpen className="w-5 h-5 text-sky-600 dark:text-sky-400" />
                 </div>
               </button>
 
               <button
                 onClick={() => setActiveTab('sims')}
-                className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm text-left hover:border-teal-500 transition space-y-1"
+                className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm text-left hover:border-teal-500 transition flex items-start justify-between gap-3 cursor-pointer"
               >
-                <div className="flex items-center justify-between text-xs text-slate-500 font-semibold">
-                  <span>Phòng thí nghiệm 3D</span>
-                  <Atom className="w-4 h-4 text-indigo-600" />
+                <div className="space-y-1">
+                  <div className="text-xs text-slate-500 dark:text-slate-400 font-semibold">
+                    Phòng thí nghiệm 3D
+                  </div>
+                  <div className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white font-mono tabular-nums">
+                    {SIMULATIONS_3D.length}
+                  </div>
+                  <div className="text-[11px] text-indigo-700 dark:text-indigo-400 font-bold pt-1">
+                    Quản lý mô phỏng 3D →
+                  </div>
                 </div>
-                <div className="text-2xl sm:text-3xl font-extrabold text-slate-800 dark:text-white font-mono">
-                  {SIMULATIONS_3D.length}
-                </div>
-                <div className="text-[11px] text-indigo-700 dark:text-indigo-400 font-medium">
-                  Quản lý mô phỏng 3D →
+                <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/70 flex items-center justify-center shrink-0">
+                  <Atom className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
                 </div>
               </button>
 
               <button
                 onClick={() => setActiveTab('quizzes')}
-                className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm text-left hover:border-teal-500 transition space-y-1"
+                className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm text-left hover:border-teal-500 transition flex items-start justify-between gap-3 cursor-pointer"
               >
-                <div className="flex items-center justify-between text-xs text-slate-500 font-semibold">
-                  <span>Ngân hàng Câu hỏi & Đề</span>
-                  <CheckSquare className="w-4 h-4 text-emerald-600" />
+                <div className="space-y-1">
+                  <div className="text-xs text-slate-500 dark:text-slate-400 font-semibold">
+                    Ngân hàng Câu hỏi &amp; Đề
+                  </div>
+                  <div className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white font-mono tabular-nums">
+                    {questions.length}
+                  </div>
+                  <div className="text-[11px] text-slate-500 pt-1">
+                    {quizzes.length} bộ đề kiểm tra trực tuyến
+                  </div>
                 </div>
-                <div className="text-2xl sm:text-3xl font-extrabold text-slate-800 dark:text-white font-mono">
-                  {questions.length}
-                </div>
-                <div className="text-[11px] text-slate-500">
-                  {quizzes.length} bộ đề trắc nghiệm
+                <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/70 flex items-center justify-center shrink-0">
+                  <CheckSquare className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
                 </div>
               </button>
 
               <button
                 onClick={() => setActiveTab('games')}
-                className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm text-left hover:border-teal-500 transition space-y-1"
+                className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm text-left hover:border-teal-500 transition flex items-start justify-between gap-3 cursor-pointer"
               >
-                <div className="flex items-center justify-between text-xs text-slate-500 font-semibold">
-                  <span>Dữ liệu Trò chơi KHTN</span>
-                  <Gamepad2 className="w-4 h-4 text-amber-600" />
+                <div className="space-y-1">
+                  <div className="text-xs text-slate-500 dark:text-slate-400 font-semibold">
+                    Dữ liệu Trò chơi KHTN
+                  </div>
+                  <div className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white font-mono tabular-nums">
+                    {totalGamesItems}
+                  </div>
+                  <div className="text-[11px] text-slate-500 pt-1">
+                    {gamePairs.length} thẻ · {crosswords.length} ô chữ · {detectivePuzzles.length} mật mã
+                  </div>
                 </div>
-                <div className="text-2xl sm:text-3xl font-extrabold text-slate-800 dark:text-white font-mono">
-                  {totalGamesItems}
-                </div>
-                <div className="text-[11px] text-slate-500">
-                  {gamePairs.length} thẻ • {crosswords.length} ô chữ • {detectivePuzzles.length} mật mã
+                <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-950/70 flex items-center justify-center shrink-0">
+                  <Gamepad2 className="w-5 h-5 text-amber-600 dark:text-amber-400" />
                 </div>
               </button>
 
               <button
                 onClick={() => setActiveTab('videos')}
-                className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm text-left hover:border-teal-500 transition space-y-1"
+                className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm text-left hover:border-teal-500 transition flex items-start justify-between gap-3 cursor-pointer"
               >
-                <div className="flex items-center justify-between text-xs text-slate-500 font-semibold">
-                  <span>Video Thí nghiệm</span>
-                  <Video className="w-4 h-4 text-rose-600" />
+                <div className="space-y-1">
+                  <div className="text-xs text-slate-500 dark:text-slate-400 font-semibold">
+                    Video Bài giảng &amp; TN
+                  </div>
+                  <div className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white font-mono tabular-nums">
+                    {videos.length}
+                  </div>
+                  <div className="text-[11px] text-rose-700 dark:text-rose-400 font-bold pt-1">
+                    Quản lý kho video →
+                  </div>
                 </div>
-                <div className="text-2xl sm:text-3xl font-extrabold text-slate-800 dark:text-white font-mono">
-                  {videos.length}
-                </div>
-                <div className="text-[11px] text-rose-700 dark:text-rose-400 font-medium">
-                  Quản lý kho video →
+                <div className="w-10 h-10 rounded-xl bg-rose-50 dark:bg-rose-950/70 flex items-center justify-center shrink-0">
+                  <Video className="w-5 h-5 text-rose-600 dark:text-rose-400" />
                 </div>
               </button>
 
               <button
                 onClick={() => setActiveTab('docs')}
-                className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm text-left hover:border-teal-500 transition space-y-1"
+                className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm text-left hover:border-teal-500 transition flex items-start justify-between gap-3 cursor-pointer"
               >
-                <div className="flex items-center justify-between text-xs text-slate-500 font-semibold">
-                  <span>Tài liệu & Đề cương</span>
-                  <FileText className="w-4 h-4 text-purple-600" />
+                <div className="space-y-1">
+                  <div className="text-xs text-slate-500 dark:text-slate-400 font-semibold">
+                    Kho Giáo án &amp; Học liệu
+                  </div>
+                  <div className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white font-mono tabular-nums">
+                    {catalogDocs.length + documents.length}
+                  </div>
+                  <div className="text-[11px] text-slate-500 pt-1">
+                    {catalogDocs.length} danh mục · {documents.length} tệp đính kèm
+                  </div>
                 </div>
-                <div className="text-2xl sm:text-3xl font-extrabold text-slate-800 dark:text-white font-mono">
-                  {catalogDocs.length + documents.length}
-                </div>
-                <div className="text-[11px] text-slate-500">
-                  {catalogDocs.length} đề cương • {documents.length} tệp bài giảng
+                <div className="w-10 h-10 rounded-xl bg-purple-50 dark:bg-purple-950/70 flex items-center justify-center shrink-0">
+                  <FileText className="w-5 h-5 text-purple-600 dark:text-purple-400" />
                 </div>
               </button>
 
               <button
                 onClick={() => setActiveTab('users')}
-                className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm text-left hover:border-teal-500 transition space-y-1"
+                className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm text-left hover:border-teal-500 transition flex items-start justify-between gap-3 cursor-pointer"
               >
-                <div className="flex items-center justify-between text-xs text-slate-500 font-semibold">
-                  <span>Tài khoản & Phân quyền</span>
-                  <Users className="w-4 h-4 text-teal-600" />
+                <div className="space-y-1">
+                  <div className="text-xs text-slate-500 dark:text-slate-400 font-semibold">
+                    Tài khoản &amp; Phân quyền
+                  </div>
+                  <div className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white font-mono tabular-nums">
+                    {usersList.length}
+                  </div>
+                  <div className="text-[11px] text-teal-700 dark:text-teal-400 font-bold pt-1">
+                    Quản lý giáo viên &amp; học sinh →
+                  </div>
                 </div>
-                <div className="text-2xl sm:text-3xl font-extrabold text-slate-800 dark:text-white font-mono">
-                  {usersList.length}
-                </div>
-                <div className="text-[11px] text-teal-700 dark:text-teal-400 font-medium">
-                  Quản lý giáo viên & học sinh →
+                <div className="w-10 h-10 rounded-xl bg-teal-50 dark:bg-teal-950/70 flex items-center justify-center shrink-0">
+                  <Users className="w-5 h-5 text-teal-600 dark:text-teal-400" />
                 </div>
               </button>
+            </div>
+
+            {/* Grade 6-9 Curriculum Distribution Summary */}
+            <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-7 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <h3 className="text-base sm:text-lg font-extrabold text-slate-800 dark:text-white">
+                    Phân Bố Học Liệu Theo Khối Lớp (KHTN 6 – 9)
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Bấm vào từng khối lớp để lọc và quản lý danh sách bài giảng của khối đó.
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setUnifiedUploadInitialTab('manager');
+                    setIsUnifiedUploadOpen(true);
+                  }}
+                  className="px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-teal-50 dark:hover:bg-teal-950/60 text-teal-700 dark:text-teal-300 text-xs font-bold flex items-center gap-1.5 self-start sm:self-center transition cursor-pointer"
+                >
+                  <FolderKanban className="w-4 h-4" />
+                  <span>Mở cây thư mục học liệu</span>
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+                {([6, 7, 8, 9] as const).map((g) => {
+                  const gradeLessons = lessons.filter((l) => l.grade === g);
+                  const gradeTopics = topics.filter((t) => t.grade === g);
+                  const gradeQuestions = questions.filter((q) => q.grade === g);
+                  const gradeVideos = videos.filter((v) => v.grade === g);
+                  return (
+                    <div
+                      key={g}
+                      className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-800 flex flex-col justify-between gap-3"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-extrabold text-slate-900 dark:text-white">
+                          Khoa học tự nhiên {g}
+                        </span>
+                        <span className="text-xs font-mono font-bold text-teal-700 dark:text-teal-400">
+                          {gradeLessons.length} bài
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-2 py-2 border-y border-slate-200/70 dark:border-slate-700/70 text-center">
+                        <div>
+                          <div className="text-sm font-extrabold text-slate-800 dark:text-white font-mono tabular-nums">
+                            {gradeTopics.length}
+                          </div>
+                          <div className="text-[10px] text-slate-500">Chủ đề</div>
+                        </div>
+                        <div>
+                          <div className="text-sm font-extrabold text-slate-800 dark:text-white font-mono tabular-nums">
+                            {gradeQuestions.length}
+                          </div>
+                          <div className="text-[10px] text-slate-500">Câu hỏi</div>
+                        </div>
+                        <div>
+                          <div className="text-sm font-extrabold text-slate-800 dark:text-white font-mono tabular-nums">
+                            {gradeVideos.length}
+                          </div>
+                          <div className="text-[10px] text-slate-500">Video</div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between text-xs pt-0.5">
+                        <button
+                          onClick={() => {
+                            setSelectedGrade(g);
+                            setActiveTab('lessons');
+                          }}
+                          className="font-bold text-teal-700 dark:text-teal-400 hover:underline cursor-pointer"
+                        >
+                          Quản lý bài giảng Lớp {g} →
+                        </button>
+                        <Link
+                          to={`/lop-${g}`}
+                          className="text-slate-500 hover:text-slate-800 dark:hover:text-white text-[11px]"
+                        >
+                          Xem trang
+                        </Link>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
             {/* Site Configuration Form */}
@@ -1068,8 +1295,17 @@ export const AdminPage: React.FC = () => {
                     Hiển thị <strong>{filteredLessons.length}</strong> bài học
                   </span>
                   <button
+                    onClick={() => {
+                      setUnifiedUploadInitialTab('wizard');
+                      setIsUnifiedUploadOpen(true);
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs flex items-center gap-1 cursor-pointer"
+                  >
+                    <FileUp className="w-3.5 h-3.5" /> Tải học liệu 3 bước
+                  </button>
+                  <button
                     onClick={handleOpenCreateLesson}
-                    className="px-3 py-1.5 rounded-xl bg-teal-700 text-white font-bold text-xs flex items-center gap-1"
+                    className="px-3 py-1.5 rounded-xl bg-teal-700 text-white font-bold text-xs flex items-center gap-1 cursor-pointer"
                   >
                     <Plus className="w-3.5 h-3.5" /> Thêm bài giảng
                   </button>
@@ -1124,7 +1360,15 @@ export const AdminPage: React.FC = () => {
                         <p className="text-xs text-slate-500 line-clamp-1">{l.summary}</p>
                       </div>
 
-                      <div className="flex items-center gap-2 self-end md:self-center shrink-0">
+                      <div className="flex flex-wrap items-center gap-2 self-end md:self-center shrink-0">
+                        <button
+                          onClick={() => handleOpenEditLesson(l, 'miniquiz')}
+                          className="px-3 py-1.5 rounded-xl text-xs font-bold border border-teal-200 dark:border-teal-800 bg-teal-50/70 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 hover:bg-teal-100 flex items-center gap-1 cursor-pointer"
+                          title="Thêm / Sửa câu hỏi ôn tập, củng cố cuối bài"
+                        >
+                          <HelpCircle className="w-3.5 h-3.5" />
+                          <span>Câu hỏi cuối bài ({(l.miniQuiz || []).length})</span>
+                        </button>
                         <button
                           onClick={() => handleTogglePublish(l)}
                           className="px-3 py-1.5 rounded-xl text-xs font-bold border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
@@ -1139,7 +1383,7 @@ export const AdminPage: React.FC = () => {
                           <Eye className="w-4 h-4" />
                         </Link>
                         <button
-                          onClick={() => handleOpenEditLesson(l)}
+                          onClick={() => handleOpenEditLesson(l, 'info')}
                           className="p-2 rounded-xl text-teal-600 border border-teal-200 dark:border-teal-800 hover:bg-teal-50"
                           title="Sửa bài học"
                         >
@@ -1409,14 +1653,27 @@ export const AdminPage: React.FC = () => {
                     </div>
 
                     <div>
-                      <label className="font-bold">Nội dung câu hỏi (Chuẩn danh pháp IUPAC)</label>
+                      <div className="flex items-center justify-between">
+                        <label className="font-bold">Nội dung câu hỏi (Chuẩn danh pháp IUPAC)</label>
+                        <button
+                          type="button"
+                          data-testid="admin-open-formula-editor-btn"
+                          onClick={() => {
+                            setAdminFormulaTarget('question');
+                            setIsAdminFormulaOpen(true);
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-teal-700 hover:bg-teal-600 text-white font-extrabold text-[11px] flex items-center gap-1 cursor-pointer"
+                        >
+                          <span>∑ CÔNG THỨC</span>
+                        </button>
+                      </div>
                       <textarea
                         rows={2}
                         value={editingQuestion.question || ''}
                         onChange={(e) => setEditingQuestion({ ...editingQuestion, question: e.target.value })}
                         placeholder={
                           editingQuestion.questionType === 'essay'
-                            ? 'Nhập đề bài tự luận (yêu cầu học sinh trình bày các bước giải hoặc chụp ảnh bài làm)...'
+                            ? 'Nhập đề bài tự luận (yêu cầu học sinh trình bày lời giải hoặc chụp ảnh bài làm)...'
                             : 'Nhập câu hỏi...'
                         }
                         className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-semibold"
@@ -1560,45 +1817,57 @@ export const AdminPage: React.FC = () => {
                     )}
 
                     <div className="space-y-2">
-                      <div className="flex items-center justify-between">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
                         <label className="font-bold">
-                          Lời giải chi tiết bài tập (Bước 1, Bước 2, Bước 3...)
+                          Lời giải ngắn gọn, mạch lạc (Đi thẳng vào công thức, phép tính và đáp án)
                         </label>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const qText = editingQuestion.question || 'Bài tập Khoa học tự nhiên';
-                            const opts = editingQuestion.options || [];
-                            const cIdx = editingQuestion.correctAnswer ?? 0;
-                            const dom = (editingQuestion.domain as SubjectDomain) || 'hoa-hoc';
-                            const gr = (editingQuestion.grade as Grade) || 8;
-                            const qType = editingQuestion.questionType || 'single_choice';
-                            const steps = generateStepByStepSolution({
-                              question: qText,
-                              options: opts,
-                              correctAnswer: cIdx,
-                              questionType: qType,
-                              domain: dom,
-                              grade: gr,
-                            });
-                            const exp = generateDetailedExplanation({
-                              question: qText,
-                              options: opts,
-                              correctAnswer: cIdx,
-                              questionType: qType,
-                              domain: dom,
-                              grade: gr,
-                            });
-                            setEditingQuestion({
-                              ...editingQuestion,
-                              explanation: exp,
-                              solutionSteps: steps,
-                            });
-                          }}
-                          className="px-2.5 py-1 rounded-lg bg-teal-100 dark:bg-teal-950 text-teal-800 dark:text-teal-300 font-bold text-[11px] hover:bg-teal-200 transition"
-                        >
-                          ✨ Tự động giải chi tiết bài tập này
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAdminFormulaTarget('explanation');
+                              setIsAdminFormulaOpen(true);
+                            }}
+                            className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-teal-700 dark:text-teal-300 font-bold text-[11px] hover:bg-teal-50 cursor-pointer"
+                          >
+                            ∑ Chèn công thức vào lời giải
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const qText = editingQuestion.question || 'Bài tập Khoa học tự nhiên';
+                              const opts = editingQuestion.options || [];
+                              const cIdx = editingQuestion.correctAnswer ?? 0;
+                              const dom = (editingQuestion.domain as SubjectDomain) || 'hoa-hoc';
+                              const gr = (editingQuestion.grade as Grade) || 8;
+                              const qType = editingQuestion.questionType || 'single_choice';
+                              const steps = generateStepByStepSolution({
+                                question: qText,
+                                options: opts,
+                                correctAnswer: cIdx,
+                                questionType: qType,
+                                domain: dom,
+                                grade: gr,
+                              });
+                              const exp = generateDetailedExplanation({
+                                question: qText,
+                                options: opts,
+                                correctAnswer: cIdx,
+                                questionType: qType,
+                                domain: dom,
+                                grade: gr,
+                              });
+                              setEditingQuestion({
+                                ...editingQuestion,
+                                explanation: exp,
+                                solutionSteps: steps,
+                              });
+                            }}
+                            className="px-2.5 py-1 rounded-lg bg-teal-100 dark:bg-teal-950 text-teal-800 dark:text-teal-300 font-bold text-[11px] hover:bg-teal-200 transition cursor-pointer"
+                          >
+                            ✨ Tạo lời giải ngắn gọn
+                          </button>
+                        </div>
                       </div>
                       <textarea
                         rows={4}
@@ -1618,7 +1887,7 @@ export const AdminPage: React.FC = () => {
                             }),
                           });
                         }}
-                        placeholder={`Nhập lời giải cụ thể của bài tập:\nBước 1: Tính số mol / Đổi đơn vị...\nBước 2: Thay số tính toán trực tiếp...\nBước 3: Kết luận đáp số...`}
+                        placeholder={`Nhập lời giải ngắn gọn, mạch lạc:\nn_Zn = 6,5 / 65 = 0,1 mol.\nPTHH: Zn + H₂SO₄ → ZnSO₄ + H₂↑\nĐáp án: B.`}
                         className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 leading-relaxed"
                       />
                     </div>
@@ -2743,11 +3012,11 @@ export const AdminPage: React.FC = () => {
                 {editingCatalogDoc && (
                   <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border-2 border-teal-600/60 space-y-4 text-xs">
                     <h4 className="font-extrabold text-sm">
-                      {editingCatalogDoc.id ? 'Chỉnh sửa Tài liệu' : 'Thêm Tài liệu / Đề cương mới'}
+                      {editingCatalogDoc.id ? 'Chỉnh sửa Tài liệu' : 'Thêm Tài liệu / Giáo án / Phiếu học tập mới'}
                     </h4>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                       <div className="sm:col-span-2">
-                        <label className="font-bold">Tên Tài liệu / Đề cương</label>
+                        <label className="font-bold">Tên Tài liệu / Giáo án / Phiếu học tập</label>
                         <input
                           type="text"
                           value={editingCatalogDoc.title || ''}
@@ -2755,6 +3024,19 @@ export const AdminPage: React.FC = () => {
                           placeholder="Nhập tên tài liệu..."
                           className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-semibold"
                         />
+                      </div>
+                      <div>
+                        <label className="font-bold">Phân loại học liệu</label>
+                        <select
+                          value={editingCatalogDoc.type || 'Giáo án điện tử'}
+                          onChange={(e) => setEditingCatalogDoc({ ...editingCatalogDoc, type: e.target.value as any })}
+                          className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-bold"
+                        >
+                          <option value="Giáo án điện tử">Giáo án điện tử</option>
+                          <option value="Phiếu học tập">Phiếu học tập</option>
+                          <option value="Đề cương ôn tập">Đề cương ôn tập</option>
+                          <option value="Sổ tay công thức">Sổ tay công thức</option>
+                        </select>
                       </div>
                       <div>
                         <label className="font-bold">Định dạng</label>
@@ -2799,14 +3081,60 @@ export const AdminPage: React.FC = () => {
                           ))}
                         </select>
                       </div>
-                      <div>
-                        <label className="font-bold">Dung lượng tệp</label>
-                        <input
-                          type="text"
-                          value={editingCatalogDoc.fileSize || '3.2 MB'}
-                          onChange={(e) => setEditingCatalogDoc({ ...editingCatalogDoc, fileSize: e.target.value })}
-                          className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
-                        />
+                      <div className="sm:col-span-2">
+                        <label className="font-bold block">Tải tệp gốc từ máy tính (.pptx, .pdf, .docx)</label>
+                        <div className="mt-1 flex items-center gap-2">
+                          <label className="px-3.5 py-2 rounded-xl bg-teal-50 dark:bg-teal-950/60 hover:bg-teal-100 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800 font-extrabold flex items-center gap-1.5 cursor-pointer transition shrink-0">
+                            <FileUp className="w-4 h-4" />
+                            <span>Chọn tệp từ máy tính</span>
+                            <input
+                              type="file"
+                              accept=".ppt,.pptx,.pdf,.doc,.docx"
+                              className="hidden"
+                              onChange={async (e) => {
+                                const file = e.target.files?.[0];
+                                if (!file) return;
+                                try {
+                                  const uploaded = await uploadLessonDocument(
+                                    file,
+                                    editingCatalogDoc.lessonId || 'general-library'
+                                  );
+                                  if (uploaded) {
+                                    const ext = file.name.split('.').pop()?.toLowerCase() || 'pdf';
+                                    const fmt: 'pptx' | 'pdf' | 'docx' =
+                                      ext === 'pptx' || ext === 'ppt'
+                                        ? 'pptx'
+                                        : ext === 'docx' || ext === 'doc'
+                                        ? 'docx'
+                                        : 'pdf';
+                                    setEditingCatalogDoc((prev) => ({
+                                      ...prev,
+                                      title: prev?.title?.trim()
+                                        ? prev.title
+                                        : file.name.replace(/\.[^/.]+$/, ''),
+                                      format: fmt,
+                                      fileSize: uploaded.sizeFormatted,
+                                      fileUrl: uploaded.publicUrl,
+                                      downloadUrl: uploaded.publicUrl,
+                                      fileName: uploaded.fileName || file.name,
+                                    }));
+                                    showToast(`Đã đính kèm tệp "${file.name}" (${uploaded.sizeFormatted})`);
+                                  }
+                                } catch (err: any) {
+                                  showToast(err?.message || 'Lỗi tải tệp lên', 'error');
+                                }
+                                e.target.value = '';
+                              }}
+                            />
+                          </label>
+                          <span className="text-[11px] text-slate-500 truncate">
+                            {editingCatalogDoc.fileName
+                              ? `Đã chọn: ${editingCatalogDoc.fileName} (${editingCatalogDoc.fileSize})`
+                              : isRealUploadedFileUrl(editingCatalogDoc.fileUrl || editingCatalogDoc.downloadUrl)
+                              ? 'Đã có tệp gốc đính kèm'
+                              : 'Chưa chọn tệp'}
+                          </span>
+                        </div>
                       </div>
                     </div>
                     <div>
@@ -2840,7 +3168,7 @@ export const AdminPage: React.FC = () => {
                           });
                           setEditingCatalogDoc(null);
                           await loadAllData();
-                          showToast('Đã lưu tài liệu vào kho đề cương!');
+                          showToast('Đã lưu tài liệu vào kho học liệu!');
                         }}
                         className="px-4 py-2 rounded-xl bg-teal-700 text-white font-bold"
                       >
@@ -2851,43 +3179,68 @@ export const AdminPage: React.FC = () => {
                 )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {catalogDocs.map((doc) => (
-                    <div
-                      key={doc.id}
-                      className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3"
-                    >
-                      <div className="space-y-1 text-xs">
-                        <div className="flex items-center gap-2">
-                          <span className="px-2 py-0.5 rounded bg-teal-50 dark:bg-teal-950 text-teal-700 font-bold uppercase">
-                            {doc.format}
-                          </span>
-                          <span className="font-bold text-slate-600">
-                            Lớp {doc.grade} • {DOMAINS.find((d) => d.id === doc.domain)?.shortName} • {doc.fileSize}
-                          </span>
+                  {catalogDocs.map((doc) => {
+                    const docData = createDocumentDataFromCatalogItem(doc);
+                    const hasRealFile = docData.hasTeacherFile;
+                    return (
+                      <div
+                        key={doc.id}
+                        className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3"
+                      >
+                        <div className="space-y-1 text-xs min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="px-2 py-0.5 rounded bg-teal-50 dark:bg-teal-950 text-teal-700 font-bold uppercase">
+                              {docData.format}
+                            </span>
+                            <span className="font-bold text-slate-600">
+                              Lớp {doc.grade} • {doc.type} • {docData.fileSize}
+                            </span>
+                            <span
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                hasRealFile
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : 'bg-amber-100 text-amber-800'
+                              }`}
+                            >
+                              {hasRealFile ? `Đã có file (${docData.downloadFileName})` : 'Chưa tải file lên'}
+                            </span>
+                          </div>
+                          <h4 className="font-extrabold text-sm text-slate-800 dark:text-white truncate">
+                            {doc.title}
+                          </h4>
+                          <p className="text-slate-500 line-clamp-1">{doc.description}</p>
                         </div>
-                        <h4 className="font-extrabold text-sm text-slate-800 dark:text-white">{doc.title}</h4>
-                        <p className="text-slate-500 line-clamp-1">{doc.description}</p>
+                        <div className="flex items-center gap-1 shrink-0">
+                          {hasRealFile && (
+                            <button
+                              onClick={() => triggerEducationalDocumentDownload(docData)}
+                              className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50"
+                              title={`Tải tệp gốc "${docData.downloadFileName}"`}
+                            >
+                              <Download className="w-4 h-4" />
+                            </button>
+                          )}
+                          <button
+                            onClick={() => setEditingCatalogDoc(doc)}
+                            className="p-1.5 rounded-lg text-teal-600 hover:bg-teal-50"
+                            title="Sửa / Đính kèm tệp gốc"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={async () => {
+                              await deleteAdminCatalogDoc(doc.id);
+                              await loadAllData();
+                              showToast('Đã xóa tài liệu.');
+                            }}
+                            className="p-1.5 rounded-lg text-red-600 hover:bg-red-50"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button
-                          onClick={() => setEditingCatalogDoc(doc)}
-                          className="p-1.5 rounded-lg text-teal-600 hover:bg-teal-50"
-                        >
-                          <Edit className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={async () => {
-                            await deleteAdminCatalogDoc(doc.id);
-                            await loadAllData();
-                            showToast('Đã xóa tài liệu.');
-                          }}
-                          className="p-1.5 rounded-lg text-red-600 hover:bg-red-50"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -2897,21 +3250,22 @@ export const AdminPage: React.FC = () => {
                 <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
                   <h3 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
                     <FileUp className="w-5 h-5 text-teal-600" />
-                    Tải Lên Tệp Đính Kèm (PPTX, PDF, DOCX, Hình ảnh)
+                    Tải Lên Tệp Đính Kèm Kho Bài Giảng (PPTX, PDF, DOCX, Hình ảnh)
                   </h3>
                   <AssetUploader
                     lessonId="general-library"
-                    onAssetUploaded={(newDoc) => {
+                    onAssetUploaded={async (newDoc) => {
+                      await saveUploadedAssetToRepository(newDoc);
                       setDocuments((prev) => [newDoc, ...prev]);
-                      showToast(`Đã tải lên tài liệu: "${newDoc.title}"`);
-                      loadAllData();
+                      showToast(`Đã tải lên kho bài giảng: "${newDoc.fileName || newDoc.title}"`);
+                      await loadAllData();
                     }}
                   />
                 </div>
 
                 <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-bold">Danh sách tệp đính kèm ({filteredDocuments.length})</h3>
+                    <h3 className="text-sm font-bold">Danh sách tệp đính kèm trong kho ({filteredDocuments.length})</h3>
                     <div className="flex items-center gap-1.5 text-xs">
                       {(['all', 'pptx', 'pdf', 'docx', 'image'] as const).map((fmt) => (
                         <button
@@ -2935,25 +3289,51 @@ export const AdminPage: React.FC = () => {
                         className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 flex items-center justify-between gap-3"
                       >
                         <div className="min-w-0">
-                          <h4 className="font-bold text-xs sm:text-sm truncate">{doc.title}</h4>
+                          <h4 className="font-bold text-xs sm:text-sm truncate">
+                            {doc.fileName || doc.title}
+                          </h4>
                           <div className="text-[11px] text-slate-400">
-                            {doc.format.toUpperCase()} • {doc.fileSize} {doc.lessonTitle && `• Bài: ${doc.lessonTitle}`}
+                            {doc.format.toUpperCase()} • {doc.type} • {doc.fileSize}{' '}
+                            {doc.lessonTitle && `• Bài: ${doc.lessonTitle}`}
                           </div>
                         </div>
-                        <button
-                          onClick={() =>
-                            setDeleteModalState({
-                              isOpen: true,
-                              itemType: 'tài liệu',
-                              id: doc.id,
-                              name: doc.title,
-                              storagePath: doc.storagePath,
-                            })
-                          }
-                          className="p-2 rounded-xl text-red-600 hover:bg-red-50"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {isRealUploadedFileUrl(doc.fileUrl) && (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const resolved = await resolvePlayableOrDownloadableUrl(doc.fileUrl);
+                                if (!resolved) return;
+                                const a = document.createElement('a');
+                                a.href = resolved.url;
+                                a.download =
+                                  resolved.fileName || doc.fileName || `${doc.title}.${doc.format}`;
+                                document.body.appendChild(a);
+                                a.click();
+                                document.body.removeChild(a);
+                              }}
+                              className="px-2.5 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold flex items-center gap-1"
+                              title="Tải tệp gốc về máy"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                              <span>Tải về</span>
+                            </button>
+                          )}
+                          <button
+                            onClick={() =>
+                              setDeleteModalState({
+                                isOpen: true,
+                                itemType: 'tài liệu',
+                                id: doc.id,
+                                name: doc.title,
+                                storagePath: doc.storagePath,
+                              })
+                            }
+                            className="p-2 rounded-xl text-red-600 hover:bg-red-50"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -2971,10 +3351,10 @@ export const AdminPage: React.FC = () => {
             <div className="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <h3 className="text-base font-extrabold text-slate-800 dark:text-white">
-                  Quản Lý Học Sinh, Giáo Viên & Phân Quyền Hệ Thống
+                  Quản Lý Phân Quyền Giáo Viên & Chính Sách Bảo Vệ Dữ Liệu Học Sinh
                 </h3>
                 <p className="text-xs text-slate-500">
-                  Thêm mới tài khoản, phân quyền (Admin / Giáo viên / Học sinh) hoặc chuyển đổi nhanh tài khoản đang đăng nhập.
+                  Học sinh (nhất là dưới 13 tuổi) sử dụng chế độ ẩn danh cục bộ trên thiết bị, tuyệt đối không tạo tài khoản bên ngoài, không thu thập dữ liệu cá nhân vào AI và không công khai thành tích.
                 </p>
               </div>
               <button
@@ -2982,14 +3362,14 @@ export const AdminPage: React.FC = () => {
                   setEditingUser({
                     fullName: '',
                     email: '',
-                    role: 'student',
+                    role: 'teacher',
                     grade: 8,
-                    school: 'THCS Đà Nẵng, Việt Nam',
+                    school: 'Đà Nẵng, Việt Nam',
                   })
                 }
                 className="px-4 py-2 rounded-xl bg-teal-700 text-white text-xs font-bold flex items-center gap-1.5 self-start sm:self-center"
               >
-                <Plus className="w-4 h-4" /> Thêm tài khoản
+                <Plus className="w-4 h-4" /> Thêm tài khoản Giáo viên
               </button>
             </div>
 
@@ -3150,6 +3530,7 @@ export const AdminPage: React.FC = () => {
       <LessonFormModal
         isOpen={isFormModalOpen}
         lesson={editingLesson}
+        initialTab={lessonFormInitialTab}
         onClose={() => setIsFormModalOpen(false)}
         onSaved={(savedLesson) => {
           showToast(
@@ -3183,8 +3564,45 @@ export const AdminPage: React.FC = () => {
           showToast(
             createdQuiz
               ? `Đã nhập ${savedQuestions.length} câu hỏi từ Word và tạo đề "${createdQuiz.title}"!`
-              : `Đã nhập thành công ${savedQuestions.length} câu hỏi kèm giải thích chi tiết từ Word!`
+              : `Đã nhập thành công ${savedQuestions.length} câu hỏi kèm lời giải ngắn gọn từ Word!`
           );
+        }}
+      />
+
+      {/* Unified 3-Step Material Upload & Resource Manager Modal */}
+      <UnifiedMaterialUploadModal
+        isOpen={isUnifiedUploadOpen}
+        initialTab={unifiedUploadInitialTab}
+        onClose={() => setIsUnifiedUploadOpen(false)}
+        onSavedResource={() => {
+          loadAllData();
+        }}
+      />
+
+      {/* Formula Editor Modal for Admin Single Question Editor */}
+      <FormulaEditorModal
+        isOpen={isAdminFormulaOpen}
+        onClose={() => setIsAdminFormulaOpen(false)}
+        targetLabel={
+          adminFormulaTarget === 'question' ? 'Nội dung câu hỏi' : 'Lời giải bài tập'
+        }
+        onInsertFormula={(formula) => {
+          if (!editingQuestion) return;
+          if (adminFormulaTarget === 'question') {
+            const current = editingQuestion.question || '';
+            setEditingQuestion({
+              ...editingQuestion,
+              question: `${current}${current.endsWith(' ') || !current ? '' : ' '}${formula}`,
+            });
+          } else {
+            const current = editingQuestion.explanation || '';
+            const nextExp = `${current}${current.endsWith(' ') || !current ? '' : ' '}${formula}`;
+            setEditingQuestion({
+              ...editingQuestion,
+              explanation: nextExp,
+              solutionSteps: parseExplanationIntoSteps(nextExp),
+            });
+          }
         }}
       />
     </div>

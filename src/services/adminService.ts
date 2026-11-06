@@ -8,6 +8,7 @@ import {
   QuizQuestion,
   QuizMeta,
   AppUser,
+  LessonMiniQuizItem,
 } from '../types/index.ts';
 import {
   LESSONS,
@@ -40,6 +41,7 @@ export interface LessonAssetItem {
   type: string;
   fileSize: string;
   fileUrl: string;
+  fileName?: string;
   storagePath?: string;
   downloadsCount?: number;
   lessonTitle?: string;
@@ -66,6 +68,7 @@ export interface AdminLesson {
   updatedAt: string;
   assets?: LessonAssetItem[];
   simulationIds?: string[];
+  miniQuiz?: LessonMiniQuizItem[];
 }
 
 export interface SiteSettings {
@@ -103,7 +106,7 @@ export const DEFAULT_SITE_SETTINGS: SiteSettings = {
   email: 'hoang08shh@gmail.com',
   zalo: '0793565756',
   domainsLabel: 'Vật lí • Hóa học • Sinh học',
-  allowStudentRegister: true,
+  allowStudentRegister: false,
   maintenanceMode: false,
 };
 
@@ -124,19 +127,41 @@ export function generateSlug(text: string): string {
 }
 
 /**
- * Extract YouTube 11-character video ID from URL or raw ID
+ * Extract YouTube 11-character video ID from URL, iframe snippet, or raw ID
  */
 export function extractYouTubeId(urlOrId: string): string | null {
   if (!urlOrId) return null;
-  const trimmed = urlOrId.trim();
+  let trimmed = urlOrId.trim();
+
+  // Extract src attribute if teacher pasted full <iframe ... src="...">
+  const iframeSrcMatch = trimmed.match(/src=["']([^"']+)["']/i);
+  if (iframeSrcMatch && iframeSrcMatch[1]) {
+    trimmed = iframeSrcMatch[1].trim();
+  }
+
+  // Strip accidental "k3_" prefix before an 11-char ID (14 chars total)
+  trimmed = trimmed
+    .replace(/([?&]v=|youtu\.be\/|embed\/|shorts\/|live\/)k3_([a-zA-Z0-9_-]{11})(?![a-zA-Z0-9_-])/g, '$1$2')
+    .replace(/^k3_([a-zA-Z0-9_-]{11})$/, '$1');
 
   if (/^[a-zA-Z0-9_-]{11}$/.test(trimmed)) {
     return trimmed;
   }
 
-  const regex = /(?:youtube\.com\/(?:[^/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?/\s]{11})/i;
+  const regex =
+    /(?:youtube(?:-nocookie)?\.com\/(?:[^/]+\/.+\/|(?:v|e(?:mbed)?|shorts|live)\/|.*[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})/i;
   const match = trimmed.match(regex);
   return match ? match[1] : null;
+}
+
+export function normalizeVideoUrl(rawUrl?: string): string | undefined {
+  if (!rawUrl || !rawUrl.trim()) return undefined;
+  const trimmed = rawUrl.trim();
+  const ytId = extractYouTubeId(trimmed);
+  if (ytId) {
+    return `https://www.youtube.com/watch?v=${ytId}`;
+  }
+  return trimmed;
 }
 
 const memoryFallbackStore = new Map<string, string>();
@@ -179,10 +204,35 @@ function safeWriteLocal<T>(key: string, data: T): void {
  * 1. LESSONS MANAGEMENT
  * ============================================================================
  */
-function getInitialLocalLessons(): AdminLesson[] {
+export function getInitialLocalLessons(): AdminLesson[] {
   const cached = safeReadLocal<AdminLesson[] | null>(STORAGE_KEYS.LESSONS, null);
   if (cached && Array.isArray(cached) && cached.length > 0) {
-    return cached;
+    let needsResave = false;
+    const cleaned = cached.map((item) => {
+      const baseLesson = LESSONS.find((m) => m.id === item.id);
+      const fixedVideoUrl = normalizeVideoUrl(item.videoUrl);
+      if (fixedVideoUrl !== item.videoUrl) {
+        needsResave = true;
+      }
+      // Remove legacy auto-seeded placeholder assets that have fileUrl === '#'
+      const rawAssets = Array.isArray(item.assets) ? item.assets : [];
+      const realAssets = rawAssets.filter(
+        (a) => a && a.fileUrl && a.fileUrl.trim() !== '' && a.fileUrl.trim() !== '#'
+      );
+      if (realAssets.length !== rawAssets.length) {
+        needsResave = true;
+      }
+      return {
+        ...item,
+        videoUrl: fixedVideoUrl,
+        assets: realAssets,
+        miniQuiz: item.miniQuiz ?? baseLesson?.miniQuiz ?? [],
+      };
+    });
+    if (needsResave) {
+      safeWriteLocal(STORAGE_KEYS.LESSONS, cleaned);
+    }
+    return cleaned;
   }
 
   const initial: AdminLesson[] = LESSONS.map((l, index) => ({
@@ -201,35 +251,13 @@ function getInitialLocalLessons(): AdminLesson[] {
     orderIndex: index + 1,
     isPublished: true,
     thumbnailUrl: l.thumbnailUrl,
-    videoUrl: l.videoUrl || 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+    videoUrl: normalizeVideoUrl(l.videoUrl) || 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
     viewCount: l.viewCount || 120,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     simulationIds: l.simulationId ? [l.simulationId] : [],
-    assets: [
-      {
-        id: `asset-${l.id}-1`,
-        lessonId: l.id,
-        title: `Giáo án điện tử PowerPoint - ${l.title}`,
-        format: 'pptx' as const,
-        type: 'Giáo án điện tử',
-        fileSize: '18.4 MB',
-        fileUrl: '#',
-        storagePath: `lesson-documents/${l.id}/giao_an.pptx`,
-        downloadsCount: 45,
-      },
-      {
-        id: `asset-${l.id}-2`,
-        lessonId: l.id,
-        title: `Phiếu học tập và bài tập KHTN - ${l.title}`,
-        format: 'pdf' as const,
-        type: 'Phiếu học tập',
-        fileSize: '2.1 MB',
-        fileUrl: '#',
-        storagePath: `lesson-documents/${l.id}/phieu_hoc_tap.pdf`,
-        downloadsCount: 89,
-      },
-    ],
+    miniQuiz: l.miniQuiz ? [...l.miniQuiz] : [],
+    assets: [],
   }));
 
   safeWriteLocal(STORAGE_KEYS.LESSONS, initial);
@@ -286,12 +314,13 @@ export async function fetchAdminLessons(): Promise<AdminLesson[]> {
             orderIndex: l.order_index ?? 0,
             isPublished: l.is_published ?? true,
             thumbnailUrl: l.thumbnail_url || undefined,
-            videoUrl: l.video_url || undefined,
+            videoUrl: normalizeVideoUrl(l.video_url),
             viewCount: l.view_count || 0,
             createdAt: l.created_at,
             updatedAt: l.updated_at,
             assets: lessonAssets,
             simulationIds,
+            miniQuiz: [],
           };
         });
       }
@@ -341,15 +370,18 @@ export async function saveAdminLesson(
     isPublished: boolean;
     thumbnailUrl?: string;
     videoUrl?: string;
+    miniQuiz?: LessonMiniQuizItem[];
   },
   assets: LessonAssetItem[],
-  simulationIds: string[] = []
+  simulationIds: string[] = [],
+  miniQuiz?: LessonMiniQuizItem[]
 ): Promise<AdminLesson> {
   const finalSlug = lessonData.slug?.trim() || generateSlug(lessonData.title);
   const now = new Date().toISOString();
 
   const local = getInitialLocalLessons();
   const id = lessonData.id || `custom-lesson-${Date.now()}`;
+  const existing = local.find((l) => l.id === id);
 
   const savedLesson: AdminLesson = {
     id,
@@ -365,9 +397,9 @@ export async function saveAdminLesson(
     orderIndex: lessonData.orderIndex,
     isPublished: lessonData.isPublished,
     thumbnailUrl: lessonData.thumbnailUrl,
-    videoUrl: lessonData.videoUrl,
-    viewCount: 0,
-    createdAt: now,
+    videoUrl: normalizeVideoUrl(lessonData.videoUrl),
+    viewCount: existing?.viewCount || 0,
+    createdAt: existing?.createdAt || now,
     updatedAt: now,
     assets: assets.map((a, i) => ({
       ...a,
@@ -375,6 +407,7 @@ export async function saveAdminLesson(
       lessonId: id,
     })),
     simulationIds,
+    miniQuiz: miniQuiz ?? lessonData.miniQuiz ?? existing?.miniQuiz ?? [],
   };
 
   const existingIndex = local.findIndex((l) => l.id === id);
@@ -386,6 +419,26 @@ export async function saveAdminLesson(
 
   saveLocalLessons(local);
   return savedLesson;
+}
+
+export function updateLessonMiniQuizSync(
+  lessonId: string,
+  miniQuiz: LessonMiniQuizItem[]
+): AdminLesson | null {
+  const local = getInitialLocalLessons();
+  const idx = local.findIndex(
+    (l) => l.id === lessonId || l.slug === lessonId || l.code.toLowerCase() === lessonId.toLowerCase()
+  );
+  if (idx < 0) return null;
+
+  const updated: AdminLesson = {
+    ...local[idx],
+    miniQuiz: [...miniQuiz],
+    updatedAt: new Date().toISOString(),
+  };
+  local[idx] = updated;
+  saveLocalLessons(local);
+  return updated;
 }
 
 export async function toggleLessonPublish(
@@ -410,22 +463,70 @@ export async function deleteAdminLesson(lessonId: string): Promise<boolean> {
   return true;
 }
 
+export function getGeneralUploadedAssetsSync(): LessonAssetItem[] {
+  return safeReadLocal<LessonAssetItem[]>(STORAGE_KEYS.ASSETS, []);
+}
+
+export async function saveUploadedAssetToRepository(
+  newAsset: LessonAssetItem
+): Promise<LessonAssetItem> {
+  const localLessons = getInitialLocalLessons();
+  const matchedLesson = localLessons.find(
+    (l) => l.id === newAsset.lessonId || l.code === newAsset.lessonId
+  );
+
+  const enriched: LessonAssetItem = {
+    ...newAsset,
+    id: newAsset.id || `asset-repo-${Date.now()}`,
+    lessonTitle: newAsset.lessonTitle || matchedLesson?.title || 'Kho học liệu chung',
+    createdAt: newAsset.createdAt || new Date().toISOString(),
+  };
+
+  if (matchedLesson) {
+    const existing = Array.isArray(matchedLesson.assets) ? matchedLesson.assets : [];
+    matchedLesson.assets = [
+      enriched,
+      ...existing.filter((a) => a.id !== enriched.id),
+    ];
+    matchedLesson.updatedAt = new Date().toISOString();
+    saveLocalLessons(localLessons);
+  }
+
+  const generalAssets = getGeneralUploadedAssetsSync();
+  const updatedGeneral = [
+    enriched,
+    ...generalAssets.filter((a) => a.id !== enriched.id),
+  ];
+  safeWriteLocal(STORAGE_KEYS.ASSETS, updatedGeneral);
+
+  return enriched;
+}
+
 export async function fetchAllAdminDocuments(): Promise<LessonAssetItem[]> {
   const lessons = await fetchAdminLessons();
-  const allDocs: LessonAssetItem[] = [];
+  const allDocsMap = new Map<string, LessonAssetItem>();
 
   lessons.forEach((l) => {
     if (l.assets && l.assets.length > 0) {
       l.assets.forEach((a) => {
-        allDocs.push({
-          ...a,
-          lessonTitle: l.title,
-        });
+        if (a.fileUrl && a.fileUrl !== '#') {
+          allDocsMap.set(a.id, {
+            ...a,
+            lessonTitle: a.lessonTitle || l.title,
+          });
+        }
       });
     }
   });
 
-  return allDocs;
+  const generalAssets = getGeneralUploadedAssetsSync();
+  generalAssets.forEach((a) => {
+    if (!allDocsMap.has(a.id) && a.fileUrl && a.fileUrl !== '#') {
+      allDocsMap.set(a.id, a);
+    }
+  });
+
+  return Array.from(allDocsMap.values());
 }
 
 export async function deleteAdminAsset(
@@ -442,6 +543,9 @@ export async function deleteAdminAsset(
     }
   });
   saveLocalLessons(local);
+
+  const generalAssets = getGeneralUploadedAssetsSync().filter((a) => a.id !== assetId);
+  safeWriteLocal(STORAGE_KEYS.ASSETS, generalAssets);
   return true;
 }
 
@@ -843,8 +947,14 @@ export async function fetchAdminCatalogDocs(): Promise<DocumentItem[]> {
 export async function saveAdminCatalogDoc(docInput: Partial<DocumentItem> & { title: string; grade: Grade; domain: SubjectDomain }): Promise<DocumentItem> {
   const all = getAdminCatalogDocsSync();
   const id = docInput.id || `doc-custom-${Date.now()}`;
+  const resolvedUrl =
+    (docInput.fileUrl && docInput.fileUrl.trim() !== '#' ? docInput.fileUrl.trim() : '') ||
+    (docInput.downloadUrl && docInput.downloadUrl.trim() !== '#' ? docInput.downloadUrl.trim() : '') ||
+    '#';
+
   const saved: DocumentItem = {
     id,
+    lessonId: docInput.lessonId,
     title: docInput.title.trim(),
     grade: docInput.grade,
     domain: docInput.domain,
@@ -855,7 +965,9 @@ export async function saveAdminCatalogDoc(docInput: Partial<DocumentItem> & { ti
     description: docInput.description?.trim() || 'Tài liệu chuẩn hóa danh pháp IUPAC - Kết nối tri thức với cuộc sống.',
     author: docInput.author?.trim() || 'KHOA HỌC SỐ KHTN',
     downloadCount: Number(docInput.downloadCount) || 50,
-    downloadUrl: docInput.downloadUrl?.trim() || '#',
+    downloadUrl: resolvedUrl,
+    fileUrl: resolvedUrl !== '#' ? resolvedUrl : undefined,
+    fileName: docInput.fileName,
     previewSlides: docInput.previewSlides || [
       'Tóm tắt lý thuyết trọng tâm & Công thức chuẩn',
       'Hệ thống bài tập trắc nghiệm và tự luận có lời giải',
@@ -1002,38 +1114,13 @@ export async function deleteAdminDetectivePuzzle(id: string): Promise<boolean> {
  */
 const INITIAL_USERS: AppUser[] = [
   DEMO_USERS.teacher,
-  DEMO_USERS.student,
   {
     id: 'user_teacher_physics',
     email: 'giaovien.vatli@khtn.edu.vn',
-    fullName: 'Trần Thị Thu Hà (Tổ trưởng Vật lí - KHTN)',
+    fullName: 'Giáo viên Bộ môn KHTN (Tổ Tự nhiên)',
     role: 'teacher',
     grade: 9,
-    school: 'THCS Đà Nẵng, Việt Nam',
-  },
-  {
-    id: 'user_student_grade6',
-    email: 'le.hoang.nam6a@gmail.com',
-    fullName: 'Lê Hoàng Nam (Học sinh Lớp 6A2)',
-    role: 'student',
-    grade: 6,
-    school: 'THCS Đà Nẵng, Việt Nam',
-  },
-  {
-    id: 'user_student_grade7',
-    email: 'pham.khanh.linh7b@gmail.com',
-    fullName: 'Phạm Khánh Linh (Học sinh Lớp 7B1)',
-    role: 'student',
-    grade: 7,
-    school: 'THCS Đà Nẵng, Việt Nam',
-  },
-  {
-    id: 'user_student_grade9',
-    email: 'ngo.gia.bao9a@gmail.com',
-    fullName: 'Ngô Gia Bảo (Học sinh Lớp 9A1)',
-    role: 'student',
-    grade: 9,
-    school: 'THCS Đà Nẵng, Việt Nam',
+    school: 'Đà Nẵng, Việt Nam',
   },
 ];
 

@@ -45,10 +45,18 @@ export interface LessonSection {
   };
 }
 
+export type LessonReviewQuestionType = 'single_choice' | 'true_false' | 'essay';
+
 export interface LessonMiniQuizItem {
+  id?: string;
+  questionType?: LessonReviewQuestionType;
   question: string;
   options: string[];
   correctIndex: number;
+  correctIndices?: number[];
+  trueFalseStatements?: TrueFalseStatement[];
+  sampleAnswer?: string;
+  rubric?: string;
   explanation: string;
 }
 
@@ -59,6 +67,7 @@ export interface LessonAsset {
   type: string;
   fileSize: string;
   fileUrl: string;
+  fileName?: string;
 }
 
 export interface Lesson {
@@ -122,6 +131,7 @@ export interface Simulation3D {
 
 export interface DocumentItem {
   id: string;
+  lessonId?: string;
   title: string;
   grade: Grade;
   domain: SubjectDomain;
@@ -137,6 +147,7 @@ export interface DocumentItem {
   previewSlides?: string[];
   downloadUrl: string;
   fileUrl?: string;
+  fileName?: string;
 }
 
 export type DocumentResource = DocumentItem;

@@ -20,6 +20,7 @@ import {
   ScientificSolutionView,
   renderFormattedMathAndChem,
 } from '../components/common/ScientificSolutionView.tsx';
+import { sanitizeStudentPII } from '../utils/studentPrivacyGuard.ts';
 import { useAuth } from '../hooks/useAuth.ts';
 import {
   Award,
@@ -363,12 +364,20 @@ export const QuizPracticePage: React.FC = () => {
     setIsTimerRunning(false);
 
     try {
-      const selectionsList = Object.values(userSelections);
+      const selectionsList = Object.values(userSelections).map((sel) => ({
+        ...sel,
+        shortAnswerText: sel.shortAnswerText
+          ? sanitizeStudentPII(sel.shortAnswerText).sanitizedText
+          : sel.shortAnswerText,
+        essayText: sel.essayText
+          ? sanitizeStudentPII(sel.essayText).sanitizedText
+          : sel.essayText,
+      }));
       const result = await submitQuizAttemptSecure(
         activeQuiz.id,
         selectionsList,
         elapsedSeconds,
-        user?.id || 'user_student_demo'
+        user?.id || 'local_student_device'
       );
 
       setGradingResult(result);
@@ -444,7 +453,7 @@ export const QuizPracticePage: React.FC = () => {
               Phòng Luyện Tập Trắc Nghiệm & Tự Luận KHTN
             </h1>
             <p className="text-xs sm:text-sm text-white/90 leading-relaxed">
-              Kết hợp câu hỏi <strong>Trắc nghiệm</strong> và <strong>Tự luận (cho phép học sinh chụp & tải file ảnh bài làm lên)</strong> kèm <strong>Hướng dẫn giải từng bước chi tiết</strong> chuẩn danh pháp quốc tế IUPAC.
+              Kết hợp 4 dạng câu hỏi chuẩn GDPT 2018 kèm <strong>Hướng dẫn giải từng bước chi tiết</strong>. Học sinh làm bài trực tiếp <strong>không cần tạo tài khoản bên ngoài</strong>, kết quả lưu riêng tư trên thiết bị và <strong>tuyệt đối không đưa dữ liệu cá nhân của học sinh vào công cụ AI bên ngoài</strong>.
             </p>
           </div>
 
@@ -1153,30 +1162,51 @@ export const QuizPracticePage: React.FC = () => {
                                     </div>
                                   </div>
 
-                                  {gradingResult && stmtResult && (
-                                    <div className="pt-2 border-t border-slate-200/70 dark:border-slate-700/70 text-xs flex flex-wrap items-center justify-between gap-2">
-                                      <span
-                                        className={`font-bold flex items-center gap-1 ${
-                                          stmtResult.is_correct
-                                            ? 'text-emerald-700 dark:text-emerald-300'
-                                            : 'text-rose-700 dark:text-rose-300'
-                                        }`}
-                                      >
-                                        {stmtResult.is_correct ? (
-                                          <CheckCircle2 className="w-3.5 h-3.5" />
-                                        ) : (
-                                          <XCircle className="w-3.5 h-3.5" />
+                                  {(gradingResult || revealedStepGuides[q.id]) &&
+                                    (stmtResult || stmt.isTrue !== undefined) &&
+                                    (q.approvalStatus !== 'pending_review' ||
+                                      user?.role === 'teacher' ||
+                                      user?.role === 'admin') && (
+                                      <div className="pt-2 border-t border-slate-200/70 dark:border-slate-700/70 text-xs space-y-1">
+                                        <div className="flex flex-wrap items-center justify-between gap-2">
+                                          <span
+                                            className={`font-bold flex items-center gap-1 ${
+                                              stmtResult
+                                                ? stmtResult.is_correct
+                                                  ? 'text-emerald-700 dark:text-emerald-300'
+                                                  : 'text-rose-700 dark:text-rose-300'
+                                                : 'text-sky-700 dark:text-sky-300'
+                                            }`}
+                                          >
+                                            {stmtResult ? (
+                                              stmtResult.is_correct ? (
+                                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                              ) : (
+                                                <XCircle className="w-3.5 h-3.5" />
+                                              )
+                                            ) : (
+                                              <CheckCircle2 className="w-3.5 h-3.5" />
+                                            )}
+                                            Đáp án đúng:{' '}
+                                            <strong>
+                                              {(stmtResult ? stmtResult.correct_answer : stmt.isTrue)
+                                                ? 'Đúng'
+                                                : 'Sai'}
+                                            </strong>
+                                          </span>
+                                        </div>
+                                        {(stmtResult?.explanation || stmt.explanation) && (
+                                          <p className="text-slate-700 dark:text-slate-200 font-serif text-[13.5px] leading-relaxed">
+                                            {renderFormattedMathAndChem(
+                                              (stmtResult?.explanation || stmt.explanation || '').replace(
+                                                /^[a-d]\s*[.)]\s*/i,
+                                                ''
+                                              )
+                                            )}
+                                          </p>
                                         )}
-                                        Đáp án đúng ý {stmt.label}):{' '}
-                                        <strong>{stmtResult.correct_answer ? 'Đúng' : 'Sai'}</strong>
-                                      </span>
-                                      {stmtResult.explanation && (
-                                        <span className="text-slate-600 dark:text-slate-300 italic">
-                                          Giải thích: {renderFormattedMathAndChem(stmtResult.explanation)}
-                                        </span>
-                                      )}
-                                    </div>
-                                  )}
+                                      </div>
+                                    )}
                                 </div>
                               );
                             })}
@@ -1258,12 +1288,12 @@ export const QuizPracticePage: React.FC = () => {
                         )}
 
                         {/* ========================================================== */}
-                        {/* TEXTBOOK WORKED-OUT SOLUTION (MATCHING REFERENCE IMAGE)     */}
+                        {/* CONCISE WORKED-OUT SOLUTION (MỤC 10 - NGẮN GỌN, MẠCH LẠC)  */}
                         {/* ========================================================== */}
-                        {showStepByStepBox && (
+                        {showStepByStepBox && !isFourStatementTF && (
                           <div
                             data-testid={`step-by-step-explanation-${qIdx + 1}`}
-                            className="p-5 sm:p-6 rounded-2xl border-2 border-[#c8dfee] dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm space-y-4"
+                            className="p-5 sm:p-6 rounded-2xl border-2 border-[#c8dfee] dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm space-y-3"
                           >
                             <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-[#d5e6f2] dark:border-slate-800">
                               <div className="font-extrabold flex items-center gap-2 text-xs sm:text-sm">
@@ -1281,7 +1311,7 @@ export const QuizPracticePage: React.FC = () => {
                                     <>
                                       <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
                                       <span className="text-amber-800 dark:text-amber-300">
-                                        Đúng một phần (+{(itemFeedback.earned_points || 0).toFixed(2)} / {q.points} điểm) — Xem lời giải chi tiết bên dưới
+                                        Đúng một phần (+{(itemFeedback.earned_points || 0).toFixed(2)} / {q.points} điểm)
                                       </span>
                                     </>
                                   ) : (
@@ -1289,8 +1319,8 @@ export const QuizPracticePage: React.FC = () => {
                                       <AlertCircle className="w-4 h-4 text-rose-600 dark:text-rose-400" />
                                       <span className="text-rose-700 dark:text-rose-300">
                                         {isEssay
-                                          ? 'Chưa nộp bài làm tự luận — Xem lời giải chi tiết bên dưới'
-                                          : 'Chưa chính xác — Xem lời giải chi tiết bên dưới'}
+                                          ? 'Chưa nộp bài làm tự luận — Xem lời giải bên dưới'
+                                          : 'Chưa chính xác — Xem lời giải bên dưới'}
                                       </span>
                                     </>
                                   )
@@ -1298,21 +1328,29 @@ export const QuizPracticePage: React.FC = () => {
                                   <>
                                     <ListChecks className="w-4 h-4 text-[#0d4f7c] dark:text-sky-400" />
                                     <span className="text-[#0d4f7c] dark:text-sky-300 tracking-wide">
-                                      LỜI GIẢI CHI TIẾT BÀI TẬP
+                                      LỜI GIẢI CHI TIẾT
                                     </span>
                                   </>
                                 )}
                               </div>
 
                               <span className="px-2.5 py-0.5 rounded-full bg-[#eaf3f8] dark:bg-slate-800 text-[#0d4f7c] dark:text-sky-300 text-[11px] font-extrabold">
-                                Chuẩn công thức & Kí hiệu KHTN
+                                Trình bày ngắn gọn • Chuẩn KHTN
                               </span>
                             </div>
 
-                            <ScientificSolutionView
-                              steps={stepsToDisplay}
-                              questionText={q.question}
-                            />
+                            {q.approvalStatus === 'pending_review' &&
+                            user?.role !== 'teacher' &&
+                            user?.role !== 'admin' ? (
+                              <p className="text-xs italic text-slate-500 dark:text-slate-400">
+                                Lời giải chi tiết của câu hỏi này đang chờ giáo viên kiểm duyệt trước khi hiển thị công khai.
+                              </p>
+                            ) : (
+                              <ScientificSolutionView
+                                steps={stepsToDisplay}
+                                questionText={q.question}
+                              />
+                            )}
                           </div>
                         )}
                       </div>

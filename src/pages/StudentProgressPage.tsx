@@ -233,38 +233,40 @@ export const StudentProgressPage: React.FC<StudentProgressPageProps> = ({
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 py-8 text-slate-800 dark:text-slate-100">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
-        <Breadcrumbs items={[{ label: 'Bảng theo dõi tiến độ học tập' }]} />
+        <Breadcrumbs items={[{ label: 'Sổ tay tự theo dõi tiến độ cá nhân (Riêng tư trên thiết bị)' }]} />
 
-        {/* Student Profile Header Card */}
+        {/* Anonymous Local Student Header Card (No Student Personal Data Displayed) */}
         <div className="bg-gradient-to-r from-[#0B1F3A] to-[#152E52] rounded-3xl p-6 sm:p-10 text-white shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-6 border border-slate-800">
           <div className="flex items-center gap-5">
-            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-teal-500 text-slate-950 font-black text-2xl sm:text-3xl flex items-center justify-center shadow-lg shadow-teal-500/20">
-              {currentUser?.fullName.charAt(0) || 'E'}
+            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-teal-500 text-slate-950 font-black text-xl sm:text-2xl flex items-center justify-center shadow-lg shadow-teal-500/20">
+              {isTeacherOrAdmin ? 'GV' : `K${currentUser?.grade || 8}`}
             </div>
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
+            <div className="space-y-1.5">
+              <div className="flex flex-wrap items-center gap-2">
                 <h1 className="text-xl sm:text-2xl font-extrabold text-white">
-                  {currentUser?.fullName || 'Học viên KHTN'}
+                  {isTeacherOrAdmin
+                    ? 'Giáo viên Quản trị KHTN'
+                    : `Sổ Tay Tự Học KHTN Khối ${currentUser?.grade || 8} (Chế Độ Ẩn Danh)`}
                 </h1>
                 <span className="px-2.5 py-0.5 rounded-full bg-teal-500/20 text-teal-300 border border-teal-500/40 text-xs font-bold">
-                  {currentUser?.role === 'admin'
+                  {isTeacherOrAdmin
                     ? 'Quản trị viên'
-                    : currentUser?.role === 'teacher'
-                    ? 'Giáo viên KHTN'
-                    : `Học sinh Lớp ${currentUser?.grade || 8}`}
+                    : '🔒 Riêng tư trên thiết bị • Không cần tài khoản'}
                 </span>
               </div>
-              <p className="text-xs sm:text-sm text-slate-400">
-                {currentUser?.school || 'THCS Đà Nẵng, Việt Nam'} • Email: {currentUser?.email || 'hoang08shh@gmail.com'}
+              <p className="text-xs sm:text-sm text-slate-300">
+                {isTeacherOrAdmin
+                  ? 'Quản lý học liệu và thống kê tổng hợp chương trình GDPT 2018'
+                  : 'Hệ thống không thu thập họ tên, email hay trường lớp của học sinh • Không công khai điểm số cá nhân'}
               </p>
-              <div className="flex items-center gap-2 pt-1">
+              <div className="flex flex-wrap items-center gap-2 pt-1">
                 <span className="text-xs text-amber-400 font-bold flex items-center gap-1">
                   <Flame className="w-4 h-4 fill-current" />
-                  {earnedBadgeCount} Huy hiệu đạt chuẩn
+                  {earnedBadgeCount} Huy hiệu tự rèn luyện
                 </span>
                 <span className="text-xs text-slate-400">•</span>
                 <span className="text-xs text-teal-300 font-medium">
-                  KHOA HỌC SỐ KHTN • Kết nối tri thức
+                  Bảo vệ dữ liệu học sinh THCS & dưới 13 tuổi
                 </span>
               </div>
             </div>
@@ -275,7 +277,7 @@ export const StudentProgressPage: React.FC<StudentProgressPageProps> = ({
               to="/luyen-tap"
               className="px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-xs sm:text-sm font-bold shadow-md shadow-teal-600/30 transition hover:scale-105"
             >
-              Làm bài kiểm tra mới
+              Làm bài luyện tập mới
             </Link>
           </div>
         </div>
@@ -366,7 +368,7 @@ export const StudentProgressPage: React.FC<StudentProgressPageProps> = ({
             }`}
           >
             <Trophy className="w-4 h-4 text-amber-500" />
-            <span>Bảng vinh danh KHTN</span>
+            <span>Cột mốc năng lực cá nhân (Riêng tư)</span>
           </button>
 
           <button
@@ -390,10 +392,10 @@ export const StudentProgressPage: React.FC<StudentProgressPageProps> = ({
             }`}
           >
             <History className="w-4 h-4" />
-            <span>Lịch sử kiểm tra trắc nghiệm ({quizAttempts.length})</span>
+            <span>Lịch sử tự luyện trên thiết bị ({quizAttempts.length})</span>
           </button>
 
-          {(isTeacherOrAdmin || true) && (
+          {isTeacherOrAdmin && (
             <button
               onClick={() => setActiveTab('teacher')}
               className={`pb-3 px-3 text-xs sm:text-sm font-bold border-b-2 flex items-center gap-2 transition whitespace-nowrap ${
@@ -403,7 +405,7 @@ export const StudentProgressPage: React.FC<StudentProgressPageProps> = ({
               }`}
             >
               <BarChart3 className="w-4 h-4 text-purple-500" />
-              <span>Góc Giáo Viên & Thống Kê Lớp</span>
+              <span>Góc Giáo Viên (Thống Kê Chuyên Đề Ẩn Danh)</span>
             </button>
           )}
         </div>
@@ -419,12 +421,11 @@ export const StudentProgressPage: React.FC<StudentProgressPageProps> = ({
           </div>
         )}
 
-        {/* TAB: GLOBAL LEADERBOARD */}
+        {/* TAB: PERSONAL COMPETENCY MILESTONES (PRIVATE ON DEVICE) */}
         {activeTab === 'leaderboard' && (
           <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-slate-800 shadow-sm space-y-6">
             <GlobalLeaderboard
               currentUserId={userId}
-              currentUserRawName={currentUser?.fullName || 'Nguyễn Văn Minh'}
               currentUserStats={{
                 points: undefined,
                 streak: dailyProgress?.streakDays ?? 4,
@@ -548,10 +549,10 @@ export const StudentProgressPage: React.FC<StudentProgressPageProps> = ({
           <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-slate-800 shadow-sm space-y-6">
             <div>
               <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">
-                Lịch Sử Kiểm Tra Trắc Nghiệm ({quizAttempts.length} lượt thi)
+                Lịch Sử Tự Luyện Trên Thiết Bị Cá Nhân ({quizAttempts.length} lượt làm bài)
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Toàn bộ kết quả bài kiểm tra được chấm tự động và lưu trữ an toàn trên Supabase.
+                Toàn bộ kết quả tự luyện được chấm bằng thuật toán sư phạm nội bộ và chỉ lưu cục bộ trên trình duyệt thiết bị của em (tuyệt đối không công khai điểm số cá nhân).
               </p>
             </div>
 

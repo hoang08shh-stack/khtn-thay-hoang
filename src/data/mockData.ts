@@ -9,49 +9,65 @@ import {
   QuizMeta,
   Badge,
 } from '../types/index.ts';
-const heroLabImg = '/assets/images/hero_science_lab_1793629233704.jpg';
+const heroLabImg = '/assets/images/khtn_thcs_hero_lab_1793932730581.jpg';
 const domainChemImg = '/assets/images/domain_chemistry_bright_1793629233529.jpg';
 const domainPhysImg = '/assets/images/domain_physics_bright_1793629235212.jpg';
 const domainBioImg = '/assets/images/domain_biology_bright_1793629236067.jpg';
+const grade6Img = '/assets/images/khtn_grade6_cell_nature_1793932731616.jpg';
+const grade7Img = '/assets/images/khtn_grade7_atom_optics_1793932732744.jpg';
+const grade8Img = '/assets/images/khtn_grade8_chemistry_circuit_1793932733846.jpg';
+const grade9Img = '/assets/images/khtn_grade9_dna_lens_1793932736576.jpg';
+const gamesArenaImg = '/assets/images/khtn_games_discovery_1793932736154.jpg';
+const classicLabImg = '/assets/images/hero_science_lab_1793629233704.jpg';
 
 export const HERO_LAB_IMAGE = heroLabImg;
+export const GAMES_ARENA_IMAGE = gamesArenaImg;
+export const GRADE_COVER_IMAGES: Record<number, string> = {
+  6: grade6Img,
+  7: grade7Img,
+  8: grade8Img,
+  9: grade9Img,
+};
 
 export const DOMAINS: DomainInfo[] = [
   {
     id: 'hoa-hoc',
     name: 'Chất và sự biến đổi của chất (Hóa học)',
     shortName: 'Hóa học',
-    color: '#059669',
+    color: 'text-emerald-600',
     bgColor: 'bg-emerald-50',
     borderColor: 'border-emerald-200',
+    gradient: 'from-emerald-600 via-teal-600 to-cyan-700',
     iconName: 'FlaskConical',
     description:
       'Khám phá cấu tạo nguyên tử, bảng tuần hoàn các nguyên tố hóa học chuẩn quốc tế IUPAC (Hydrogen, Carbon, Nitrogen, Oxygen, Sodium, Chlorine...), liên kết hóa học, phản ứng Acid - Base - Oxide - Muối và hợp chất hữu cơ.',
-    image: domainChemImg,
+    image: grade8Img,
   },
   {
     id: 'vat-li',
     name: 'Năng lượng và sự biến đổi (Vật lí)',
     shortName: 'Vật lí',
-    color: '#0284c7',
+    color: 'text-sky-600',
     bgColor: 'bg-sky-50',
     borderColor: 'border-sky-200',
+    gradient: 'from-sky-600 via-blue-600 to-indigo-700',
     iconName: 'Zap',
     description:
       'Tìm hiểu các quy luật về tốc độ chuyển động, lực, áp suất Archimedes, năng lượng cơ học, điện học, định luật Ohm (I = U / R), cảm ứng điện từ, khúc xạ và tán sắc ánh sáng.',
-    image: domainPhysImg,
+    image: grade7Img,
   },
   {
     id: 'sinh-hoc',
     name: 'Vật sống (Sinh học)',
     shortName: 'Sinh học',
-    color: '#d97706',
-    bgColor: 'bg-amber-50',
-    borderColor: 'border-amber-200',
+    color: 'text-teal-600',
+    bgColor: 'bg-teal-50',
+    borderColor: 'border-teal-200',
+    gradient: 'from-teal-600 via-emerald-600 to-green-700',
     iconName: 'Dna',
     description:
       'Nghiên cứu cấu trúc tế bào thực vật - động vật, quang hợp, hô hấp tế bào, sinh học cơ thể người, di truyền học Mendel, cấu trúc phân tử DNA - RNA - Protein và tiến hóa.',
-    image: domainBioImg,
+    image: grade6Img,
   },
 ];
 
@@ -83,7 +99,7 @@ export const TOPICS: Topic[] = [
     experimentCount: 3,
     icon: 'Microscope',
     order: 2,
-    image: domainBioImg,
+    image: grade6Img,
   },
   {
     id: 't6-3',
@@ -113,7 +129,7 @@ export const TOPICS: Topic[] = [
     experimentCount: 3,
     icon: 'Atom',
     order: 1,
-    image: domainChemImg,
+    image: grade7Img,
   },
   {
     id: 't7-2',
@@ -141,7 +157,7 @@ export const TOPICS: Topic[] = [
     experimentCount: 3,
     icon: 'Dna',
     order: 3,
-    image: domainBioImg,
+    image: grade6Img,
   },
 
   // LỚP 8 - Bộ sách Kết nối tri thức với cuộc sống
@@ -157,7 +173,7 @@ export const TOPICS: Topic[] = [
     experimentCount: 5,
     icon: 'FlaskConical',
     order: 1,
-    image: domainChemImg,
+    image: grade8Img,
   },
   {
     id: 't8-2',
@@ -201,7 +217,7 @@ export const TOPICS: Topic[] = [
     experimentCount: 5,
     icon: 'Zap',
     order: 1,
-    image: domainPhysImg,
+    image: grade9Img,
   },
   {
     id: 't9-2',
@@ -229,7 +245,7 @@ export const TOPICS: Topic[] = [
     experimentCount: 3,
     icon: 'Dna',
     order: 3,
-    image: domainBioImg,
+    image: grade9Img,
   },
 ];
 
@@ -314,7 +330,7 @@ export const LESSONS: Lesson[] = [
           'Tế bào thực vật có thành Cellulose vững chắc và bào quan Lục lạp thực hiện quang hợp.',
           'Tế bào động vật không có thành Cellulose và không có lục lạp.',
         ],
-        imageUrl: domainBioImg,
+        imageUrl: grade6Img,
         imageCaption: 'Mô hình 3D cấu trúc hiển vi của tế bào thực vật và tế bào động vật.',
       },
     ],
@@ -322,7 +338,7 @@ export const LESSONS: Lesson[] = [
       'Tế bào là đơn vị cấu trúc và chức năng của mọi cơ thể sống.',
       'Lục lạp là bào quan quang hợp đặc trưng của tế bào thực vật.',
     ],
-    thumbnailUrl: domainBioImg,
+    thumbnailUrl: grade6Img,
     simulationId: 'sim-microscope-cell',
     videoUrl: 'https://www.youtube.com/embed/URUJD5NEXC8',
     documentId: 'doc-khtn-6-1',
@@ -361,7 +377,7 @@ export const LESSONS: Lesson[] = [
         ],
         formula: 'Z = p = e   |   Khối lượng nguyên tử A ≈ p + n (amu)',
         formulaMeaning: 'Số đơn vị điện tích hạt nhân Z bằng số hạt Proton và bằng số hạt Electron.',
-        imageUrl: domainChemImg,
+        imageUrl: grade7Img,
         imageCaption: 'Mô phỏng 3D cấu tạo nguyên tử Rutherford - Bohr trong KHOA HỌC SỐ KHTN.',
       },
       {
@@ -376,7 +392,7 @@ export const LESSONS: Lesson[] = [
       'Nguyên tử trung hòa về điện: Số hạt Proton (+) luôn bằng số hạt Electron (-).',
       'Sử dụng thống nhất danh pháp quốc tế IUPAC: Hydrogen, Oxygen, Carbon, Nitrogen, Sodium, Potassium, Calcium, Iron, Copper, Aluminium, Chlorine, Sulfur.',
     ],
-    thumbnailUrl: domainChemImg,
+    thumbnailUrl: grade7Img,
     simulationId: 'sim-atom-bohr',
     videoUrl: 'https://www.youtube.com/embed/FSyAehMdpyI',
     documentId: 'doc-khtn-7-1',
@@ -454,7 +470,7 @@ export const LESSONS: Lesson[] = [
         ],
         formula: 'HCl + NaOH → NaCl + H₂O   |   pH = -log[H⁺]',
         formulaMeaning: 'Phản ứng trung hòa giữa Hydrochloric acid và Sodium hydroxide tạo muối Sodium chloride và nước.',
-        imageUrl: domainChemImg,
+        imageUrl: grade8Img,
         imageCaption: 'Thí nghiệm chuẩn độ Acid - Base và đo pH điện tử trong KHOA HỌC SỐ KHTN.',
       },
       {
@@ -470,7 +486,7 @@ export const LESSONS: Lesson[] = [
       'Base kiềm phân li ra ion OH⁻ (pH > 7, quỳ tím hóa xanh, Phenolphthalein hóa hồng): Sodium hydroxide (NaOH), Calcium hydroxide (Ca(OH)₂).',
       'Oxide và Muối được gọi tên thống nhất theo danh pháp quốc tế IUPAC.',
     ],
-    thumbnailUrl: domainChemImg,
+    thumbnailUrl: grade8Img,
     simulationId: 'sim-acid-base-ph',
     videoUrl: 'https://www.youtube.com/embed/ANi709MYnWg',
     documentId: 'doc-khtn-8-1',
@@ -584,7 +600,7 @@ export const LESSONS: Lesson[] = [
         ],
         formula: 'N = 2A + 2G   |   L = (N / 2) × 3,4 Å   |   H = 2A + 3G',
         formulaMeaning: 'N: tổng số Nucleotide; L: chiều dài phân tử DNA (Å); H: tổng số liên kết Hydrogen.',
-        imageUrl: domainBioImg,
+        imageUrl: grade9Img,
         imageCaption: 'Mô hình 3D chuỗi xoắn kép phân tử DNA và các cặp base bổ sung A-T, G-C.',
       },
       {
@@ -599,7 +615,7 @@ export const LESSONS: Lesson[] = [
       'Trong phân tử DNA: A = T, G = C; tổng số Nucleotide N = 2A + 2G; tổng liên kết Hydrogen H = 2A + 3G.',
       'Danh pháp hữu cơ chuẩn IUPAC: Methane (CH₄), Ethylene (C₂H₄), Ethylic alcohol / Ethanol (C₂H₅OH), Acetic acid (CH₃COOH), Ethyl acetate (CH₃COOC₂H₅), Glucose (C₆H₁₂O₆), Saccharose (C₁₂H₂₂O₁₁), Starch (Tinh bột), Cellulose.',
     ],
-    thumbnailUrl: domainBioImg,
+    thumbnailUrl: grade9Img,
     simulationId: 'sim-dna-double-helix',
     videoUrl: 'https://www.youtube.com/embed/8kK2zwjRV0M',
     documentId: 'doc-khtn-9-1',
@@ -642,7 +658,7 @@ export const SIMULATIONS_3D: Simulation3D[] = [
       'Tương tác 3D trực quan với cấu tạo nguyên tử của các nguyên tố Hydrogen, Helium, Carbon, Nitrogen, Oxygen, Sodium, Chlorine theo chuẩn quốc tế IUPAC. Điều chỉnh số hạt Proton, Neutron, Electron và tốc độ quỹ đạo.',
     learningGoal: 'Hiểu cấu tạo hạt nhân (Proton, Neutron) và quy tắc phân bố Electron trên các lớp vỏ K, L, M.',
     keyConcepts: ['Proton (+1)', 'Neutron (0)', 'Electron (-1)', 'Danh pháp IUPAC'],
-    thumbnail: domainChemImg,
+    thumbnail: grade7Img,
     type: 'atom-bohr',
     difficulty: 'Cơ bản',
     relatedLessonId: 'khtn-7-bai-2',
@@ -666,7 +682,7 @@ export const SIMULATIONS_3D: Simulation3D[] = [
       'Thực hành chuẩn độ dung dịch Hydrochloric acid (HCl 0,1M) bằng dung dịch Sodium hydroxide (NaOH 0,1M) từ khóa Buret. Quan sát sự đổi màu chất chỉ thị và máy đo pH điện tử thời gian thực.',
     learningGoal: 'Xác định điểm tương đương pH = 7,0 trong phản ứng trung hòa HCl + NaOH → NaCl + H₂O.',
     keyConcepts: ['Hydrochloric acid (HCl)', 'Sodium hydroxide (NaOH)', 'Thang đo pH (1-14)', 'Phản ứng trung hòa'],
-    thumbnail: domainChemImg,
+    thumbnail: grade8Img,
     type: 'acid-base-ph',
     difficulty: 'Nâng cao',
     relatedLessonId: 'khtn-8-bai-5',
@@ -713,7 +729,7 @@ export const SIMULATIONS_3D: Simulation3D[] = [
       'Chiếu chùm tia Laser đỏ hoặc ánh sáng trắng qua bản bán trụ thủy tinh. Thay đổi góc tới i và chiết suất n₂ để nghiệm lại định luật Snell và quan sát dải quang phổ cầu vồng.',
     learningGoal: 'Đo góc tới i, góc khúc xạ r theo định luật Snell n₁.sin(i) = n₂.sin(r) và quan sát tán sắc ánh sáng.',
     keyConcepts: ['Khúc xạ ánh sáng', 'Định luật Snell', 'Chiết suất n', 'Tán sắc ánh sáng'],
-    thumbnail: domainPhysImg,
+    thumbnail: classicLabImg,
     type: 'light-refraction',
     difficulty: 'Nâng cao',
     relatedLessonId: 'khtn-9-bai-4',
@@ -737,7 +753,7 @@ export const SIMULATIONS_3D: Simulation3D[] = [
       'Quan sát mô hình giải phẫu 3D tế bào thực vật với thành Cellulose, lục lạp, không bào trung tâm, ti thể và nhân chứa phân tử DNA dưới kính hiển vi quang học.',
     learningGoal: 'Phân biệt cấu trúc tế bào thực vật và tế bào động vật, nắm vững chức năng từng bào quan.',
     keyConcepts: ['Màng sinh chất', 'Thành Cellulose', 'Lục lạp (Quang hợp)', 'Nhân tế bào (DNA)'],
-    thumbnail: domainBioImg,
+    thumbnail: grade6Img,
     type: 'microscope-cell',
     difficulty: 'Cơ bản',
     relatedLessonId: 'khtn-6-bai-18',
@@ -759,7 +775,7 @@ export const SIMULATIONS_3D: Simulation3D[] = [
       'Khám phá chuỗi xoắn kép phân tử DNA (Deoxyribonucleic acid) với các cặp Nucleotide liên kết bổ sung Adenine - Thymine (A-T) và Guanine - Cytosine (G-C).',
     learningGoal: 'Hiểu cấu trúc không gian của DNA và nguyên tắc bổ sung trong nhân đôi DNA, phiên mã RNA.',
     keyConcepts: ['DNA (Deoxyribonucleic acid)', 'Adenine - Thymine (2 liên kết H)', 'Guanine - Cytosine (3 liên kết H)', 'RNA'],
-    thumbnail: domainBioImg,
+    thumbnail: grade9Img,
     type: 'declarative-model',
     difficulty: 'Chuyên sâu',
     relatedLessonId: 'khtn-9-bai-8',

@@ -6,14 +6,13 @@ import {
   QuizQuestion,
   QuizMeta,
   QuestionType,
-  TrueFalseStatement,
 } from '../../types/index.ts';
 import {
   ParsedWordQuestion,
   QuestionValidationStatus,
   computeQuestionValidationStatus,
   regenerateImportedQuestion,
-  generateStructured4StepSolution,
+  generateConciseSolution,
   parseWordContentToQuestions,
   generateDetailedExplanation,
   generateScientificSolution,
@@ -24,6 +23,14 @@ import {
   SAMPLE_WORD_4_TYPES_TEXT,
 } from '../../utils/wordQuestionParser.ts';
 import {
+  detectLegacyVietnameseEncoding,
+  convertLegacyVietnameseToUnicode,
+  normalizeVietnameseUnicodeNFC,
+  EncodingDetectionResult,
+} from '../../utils/vietnameseFontFixer.ts';
+import { normalizeSolutionPresentation } from '../../utils/scientificSolution.ts';
+import { sanitizeStudentPII } from '../../utils/studentPrivacyGuard.ts';
+import {
   saveAdminQuestion,
   saveAdminQuestionsBulk,
   saveAdminQuiz,
@@ -32,6 +39,7 @@ import {
   ScientificSolutionView,
   renderFormattedMathAndChem,
 } from '../common/ScientificSolutionView.tsx';
+import { FormulaEditorModal } from './FormulaEditorModal.tsx';
 import {
   X,
   FileUp,
@@ -56,6 +64,10 @@ import {
   Square,
   Edit3,
   Layers,
+  Undo2,
+  Redo2,
+  Sigma,
+  Type,
 } from 'lucide-react';
 
 interface WordQuestionImportModalProps {
@@ -75,27 +87,32 @@ const VALIDATION_BADGES: Record<
 > = {
   valid: {
     label: 'Hợp lệ',
-    color: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800',
+    color:
+      'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800',
     dotColor: 'bg-emerald-500',
   },
   has_explanation: {
     label: 'Có lời giải',
-    color: 'bg-teal-100 text-teal-800 dark:bg-teal-950/80 dark:text-teal-300 border-teal-300 dark:border-teal-800',
+    color:
+      'bg-teal-100 text-teal-800 dark:bg-teal-950/80 dark:text-teal-300 border-teal-300 dark:border-teal-800',
     dotColor: 'bg-teal-500',
   },
   missing_answer: {
     label: 'Thiếu đáp án',
-    color: 'bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border-amber-300 dark:border-amber-800',
+    color:
+      'bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border-amber-300 dark:border-amber-800',
     dotColor: 'bg-amber-500',
   },
   needs_review: {
     label: 'Cần kiểm tra',
-    color: 'bg-orange-100 text-orange-800 dark:bg-orange-950/80 dark:text-orange-300 border-orange-300 dark:border-orange-800',
+    color:
+      'bg-orange-100 text-orange-800 dark:bg-orange-950/80 dark:text-orange-300 border-orange-300 dark:border-orange-800',
     dotColor: 'bg-orange-500',
   },
   format_error: {
     label: 'Lỗi định dạng',
-    color: 'bg-red-100 text-red-800 dark:bg-red-950/80 dark:text-red-300 border-red-300 dark:border-red-800',
+    color:
+      'bg-red-100 text-red-800 dark:bg-red-950/80 dark:text-red-300 border-red-300 dark:border-red-800',
     dotColor: 'bg-red-500',
   },
 };
@@ -107,6 +124,25 @@ const QUESTION_TYPE_LABELS: Record<QuestionType, string> = {
   short_answer: 'Dạng 3: Trả lời ngắn',
   essay: 'Dạng 4: Tự luận',
 };
+
+const SAMPLE_LEGACY_TCVN3_TEXT = `C©u 1: Cho 6,5 gam Zn t¸c dông hoµn toµn víi dung dÞch H2SO4 lo·ng d­. ThÓ tÝch khÝ H2 thu ®­îc ë ®iÒu kiÖn chuÈn lµ:
+A. 1,2395 L.
+B. *2,479 L.
+C. 3,7185 L.
+D. 4,958 L.
+Lêi gi¶i:
+n_Zn = 6,5 / 65 = 0,1 mol.
+PTHH: Zn + H2SO4 -> ZnSO4 + H2^
+n_H2 = n_Zn = 0,1 mol => V_H2 = 0,1 . 24,79 = 2,479 L.
+§¸p ¸n: B.`;
+
+type FormulaTarget =
+  | { type: 'question'; qIdx: number }
+  | { type: 'option'; qIdx: number; optIdx: number }
+  | { type: 'tf_statement'; qIdx: number; sIdx: number }
+  | { type: 'tf_explanation'; qIdx: number; sIdx: number }
+  | { type: 'short_answer'; qIdx: number }
+  | { type: 'explanation'; qIdx: number };
 
 export const WordQuestionImportModal: React.FC<WordQuestionImportModalProps> = ({
   isOpen,
@@ -123,13 +159,19 @@ export const WordQuestionImportModal: React.FC<WordQuestionImportModalProps> = (
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
 
+  // Legacy font detection state (Section 6)
+  const [fontDetection, setFontDetection] = useState<EncodingDetectionResult | null>(null);
+
   // Conversion settings
   const [fallbackGrade, setFallbackGrade] = useState<Grade>(defaultGrade);
   const [fallbackDomain, setFallbackDomain] = useState<SubjectDomain>(defaultDomain);
   const [autoStandardizeIupac, setAutoStandardizeIupac] = useState(true);
 
-  // Parsed questions preview state
+  // Parsed questions preview state + Undo/Redo history
   const [parsedQuestions, setParsedQuestions] = useState<ParsedWordQuestion[]>([]);
+  const [undoStack, setUndoStack] = useState<ParsedWordQuestion[][]>([]);
+  const [redoStack, setRedoStack] = useState<ParsedWordQuestion[][]>([]);
+
   const [selectedIdx, setSelectedIdx] = useState<number>(0);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<'two_pane' | 'all_list'>('two_pane');
@@ -137,6 +179,17 @@ export const WordQuestionImportModal: React.FC<WordQuestionImportModalProps> = (
   const [savedSingleIds, setSavedSingleIds] = useState<Set<string>>(new Set());
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+
+  // Formula Editor Modal state (Section 8)
+  const [formulaModalOpen, setFormulaModalOpen] = useState(false);
+  const [formulaTarget, setFormulaTarget] = useState<FormulaTarget>({
+    type: 'question',
+    qIdx: 0,
+  });
+  const [formulaInitialValue, setFormulaInitialValue] = useState('');
+
+  // Solution Normalization Preview state (Section 10)
+  const [normalizedPreviewMap, setNormalizedPreviewMap] = useState<Record<string, string>>({});
 
   // Bulk assignment controls
   const [bulkGrade, setBulkGrade] = useState<Grade>(defaultGrade);
@@ -165,6 +218,29 @@ export const WordQuestionImportModal: React.FC<WordQuestionImportModalProps> = (
 
   if (!isOpen) return null;
 
+  const pushUndoSnapshot = (currentList: ParsedWordQuestion[]) => {
+    setUndoStack((prev) => [...prev.slice(-19), currentList]);
+    setRedoStack([]);
+  };
+
+  const handleUndo = () => {
+    if (undoStack.length === 0) return;
+    const previous = undoStack[undoStack.length - 1];
+    setRedoStack((prev) => [...prev, parsedQuestions]);
+    setUndoStack((prev) => prev.slice(0, -1));
+    setParsedQuestions(previous);
+    setStatusMessage('Đã hoàn tác thao tác chỉnh sửa vừa rồi.');
+  };
+
+  const handleRedo = () => {
+    if (redoStack.length === 0) return;
+    const next = redoStack[redoStack.length - 1];
+    setUndoStack((prev) => [...prev, parsedQuestions]);
+    setRedoStack((prev) => prev.slice(0, -1));
+    setParsedQuestions(next);
+    setStatusMessage('Đã làm lại thao tác chỉnh sửa.');
+  };
+
   const isQuestionValidToSave = (q: ParsedWordQuestion): boolean => {
     const status = computeQuestionValidationStatus(q);
     return status === 'valid' || status === 'has_explanation';
@@ -179,11 +255,17 @@ export const WordQuestionImportModal: React.FC<WordQuestionImportModalProps> = (
     gradeOverride = fallbackGrade,
     domainOverride = fallbackDomain,
     iupacOverride = autoStandardizeIupac,
-    docName = uploadedFileName
+    docName = uploadedFileName,
+    autoConvertLegacyFont = false
   ) => {
     setParseProgress(40);
-    setStatusMessage('Đang phân tích cấu trúc câu hỏi, công thức Hóa học và đáp án...');
-    const res = parseWordContentToQuestions(textToParse, {
+    setStatusMessage('Đang chuẩn hóa Unicode NFC, kiểm tra bảng mã tiếng Việt và bóc tách câu hỏi...');
+
+    const detection = detectLegacyVietnameseEncoding(textToParse, htmlToParse);
+    setFontDetection(detection);
+
+    const piiClean = sanitizeStudentPII(textToParse);
+    const res = parseWordContentToQuestions(piiClean.sanitizedText, {
       htmlContent: htmlToParse,
       defaultGrade: gradeOverride,
       defaultDomain: domainOverride,
@@ -191,6 +273,8 @@ export const WordQuestionImportModal: React.FC<WordQuestionImportModalProps> = (
       sourceDocumentName: docName || 'Văn bản Word',
     });
     setParsedQuestions(res.questions);
+    setUndoStack([]);
+    setRedoStack([]);
     setSelectedIdx(0);
     setSelectedIds(new Set(res.questions.map((q) => q.id)));
     setHasUnsavedChanges(res.questions.length > 0);
@@ -204,7 +288,18 @@ export const WordQuestionImportModal: React.FC<WordQuestionImportModalProps> = (
     );
     setParseStats(res.stats);
     setParseProgress(100);
-    setStatusMessage(`Đã bóc tách thành công ${res.questions.length} câu hỏi từ tài liệu.`);
+    setStatusMessage(`Đã bóc tách thành công ${res.questions.length} câu hỏi chuẩn Unicode NFC.`);
+  };
+
+  const handleConfirmLegacyFontConversion = () => {
+    if (!fontDetection) return;
+    const converted = convertLegacyVietnameseToUnicode(rawText, fontDetection.detectedEncoding);
+    const normalized = formatChemicalAndScientificText(normalizeVietnameseUnicodeNFC(converted)).text;
+    setRawText(normalized);
+    setHtmlContent(undefined);
+    setFontDetection(detectLegacyVietnameseEncoding(normalized, undefined));
+    runParse(normalized, undefined, fallbackGrade, fallbackDomain, autoStandardizeIupac, uploadedFileName, true);
+    setStatusMessage('Đã chuyển mã tiếng Việt sang chuẩn Unicode (UTF-8 NFC) thành công!');
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -231,18 +326,20 @@ export const WordQuestionImportModal: React.FC<WordQuestionImportModalProps> = (
           mammoth.extractRawText({ arrayBuffer }),
           mammoth.convertToHtml({ arrayBuffer }),
         ]);
-        const extractedHtml = htmlResult.value || '';
+        const extractedHtml = normalizeVietnameseUnicodeNFC(htmlResult.value || '');
         const extractedText = extractFormattedTextFromMammothHtml(
           extractedHtml,
-          rawResult.value || ''
+          normalizeVietnameseUnicodeNFC(rawResult.value || '')
         );
         const formattedRaw = formatChemicalAndScientificText(extractedText).text;
         setRawText(formattedRaw);
         setHtmlContent(extractedHtml);
         runParse(formattedRaw, extractedHtml, fallbackGrade, fallbackDomain, autoStandardizeIupac, file.name);
       } else {
-        const text = await file.text();
-        const formattedRaw = formatChemicalAndScientificText(text).text;
+        const buffer = await file.arrayBuffer();
+        const utf8Text = new TextDecoder('utf-8', { fatal: false }).decode(buffer);
+        const normalizedText = normalizeVietnameseUnicodeNFC(utf8Text);
+        const formattedRaw = formatChemicalAndScientificText(normalizedText).text;
         setRawText(formattedRaw);
         setHtmlContent(undefined);
         runParse(formattedRaw, undefined, fallbackGrade, fallbackDomain, autoStandardizeIupac, file.name);
@@ -266,7 +363,14 @@ export const WordQuestionImportModal: React.FC<WordQuestionImportModalProps> = (
     setNewExamTitle('Đề Kiểm Tra KHTN Tổng Hợp (Trắc Nghiệm + Tự Luận Từ Word)');
     setRawText(SAMPLE_WORD_QUIZ_TEXT);
     setHtmlContent(undefined);
-    runParse(SAMPLE_WORD_QUIZ_TEXT, undefined, fallbackGrade, fallbackDomain, autoStandardizeIupac, 'De_Kiem_Tra_KHTN_Trac_Nghiem_Tu_Luan_Mau.docx');
+    runParse(
+      SAMPLE_WORD_QUIZ_TEXT,
+      undefined,
+      fallbackGrade,
+      fallbackDomain,
+      autoStandardizeIupac,
+      'De_Kiem_Tra_KHTN_Trac_Nghiem_Tu_Luan_Mau.docx'
+    );
   };
 
   const handleLoadSample4Types = () => {
@@ -275,7 +379,31 @@ export const WordQuestionImportModal: React.FC<WordQuestionImportModalProps> = (
     setNewExamTitle('Đề Kiểm Tra KHTN Đầy Đủ 4 Dạng Chuẩn GDPT 2018');
     setRawText(SAMPLE_WORD_4_TYPES_TEXT);
     setHtmlContent(undefined);
-    runParse(SAMPLE_WORD_4_TYPES_TEXT, undefined, fallbackGrade, fallbackDomain, autoStandardizeIupac, 'De_KHTN_4_Dang_GDPT_2018_Mau.docx');
+    runParse(
+      SAMPLE_WORD_4_TYPES_TEXT,
+      undefined,
+      fallbackGrade,
+      fallbackDomain,
+      autoStandardizeIupac,
+      'De_KHTN_4_Dang_GDPT_2018_Mau.docx'
+    );
+  };
+
+  const handleLoadLegacyFontSample = () => {
+    setFileError(null);
+    setUploadedFileName('De_Cu_Font_TCVN3_VnTime.docx');
+    setNewExamTitle('Đề Kiểm Tra Chuyển Đổi Font TCVN3 Sang Unicode');
+    setRawText(SAMPLE_LEGACY_TCVN3_TEXT);
+    setHtmlContent('<p style="font-family: .VnTime">Câu hỏi font TCVN3 cũ</p>');
+    runParse(
+      SAMPLE_LEGACY_TCVN3_TEXT,
+      '<p style="font-family: .VnTime">Câu hỏi font TCVN3 cũ</p>',
+      fallbackGrade,
+      fallbackDomain,
+      autoStandardizeIupac,
+      'De_Cu_Font_TCVN3_VnTime.docx',
+      false
+    );
   };
 
   const handleDownloadSampleTemplate = () => {
@@ -294,6 +422,7 @@ export const WordQuestionImportModal: React.FC<WordQuestionImportModalProps> = (
     regenerateExp = false
   ) => {
     setHasUnsavedChanges(true);
+    pushUndoSnapshot(parsedQuestions);
     setParsedQuestions((prev) => {
       const next = [...prev];
       if (!next[idx]) return prev;
@@ -301,6 +430,10 @@ export const WordQuestionImportModal: React.FC<WordQuestionImportModalProps> = (
       const updated: ParsedWordQuestion = {
         ...current,
         ...patch,
+        question:
+          patch.question !== undefined
+            ? normalizeVietnameseUnicodeNFC(patch.question)
+            : current.question,
         updatedAt: new Date().toISOString(),
       };
 
@@ -364,16 +497,48 @@ export const WordQuestionImportModal: React.FC<WordQuestionImportModalProps> = (
 
   const handleGenerateAiSolutionForQuestion = (idx: number) => {
     setHasUnsavedChanges(true);
+    pushUndoSnapshot(parsedQuestions);
     setParsedQuestions((prev) => {
       const next = [...prev];
       if (!next[idx]) return prev;
-      next[idx] = generateStructured4StepSolution(next[idx]);
+      next[idx] = generateConciseSolution(next[idx]);
       return next;
     });
+    setStatusMessage(`Đã tạo lời giải ngắn gọn, mạch lạc cho Câu ${idx + 1} (cần giáo viên duyệt).`);
+  };
+
+  const handlePreviewNormalizeSolution = (idx: number) => {
+    const q = parsedQuestions[idx];
+    if (!q) return;
+    const normalized = normalizeSolutionPresentation(q.explanation || '').normalizedText;
+    setNormalizedPreviewMap((prev) => ({
+      ...prev,
+      [q.id]: normalized,
+    }));
+  };
+
+  const handleConfirmNormalizeSolution = (idx: number) => {
+    const q = parsedQuestions[idx];
+    if (!q) return;
+    const normalized =
+      normalizedPreviewMap[q.id] ??
+      normalizeSolutionPresentation(q.explanation || '').normalizedText;
+    const steps = parseExplanationIntoSteps(normalized);
+    handleUpdateQuestionField(idx, {
+      explanation: normalized,
+      solutionSteps: steps,
+    });
+    setNormalizedPreviewMap((prev) => {
+      const copy = { ...prev };
+      delete copy[q.id];
+      return copy;
+    });
+    setStatusMessage(`Đã chuẩn hóa trình bày lời giải Câu ${idx + 1} sang dạng ngắn gọn.`);
   };
 
   const handleApproveSolutionForQuestion = (idx: number) => {
     setHasUnsavedChanges(true);
+    pushUndoSnapshot(parsedQuestions);
     setParsedQuestions((prev) => {
       const next = [...prev];
       if (!next[idx]) return prev;
@@ -390,19 +555,37 @@ export const WordQuestionImportModal: React.FC<WordQuestionImportModalProps> = (
 
   const handleRegenerateAllExplanations = () => {
     setHasUnsavedChanges(true);
+    pushUndoSnapshot(parsedQuestions);
     setParsedQuestions((prev) =>
       prev.map((q) =>
         !q.autoGeneratedExplanation && q.solutionStatus === 'needs_review'
           ? q
-          : generateStructured4StepSolution(q)
+          : generateConciseSolution(q)
       )
     );
-    setStatusMessage('Đã tạo lời giải chi tiết 4 bước cho toàn bộ danh sách câu hỏi.');
+    setStatusMessage('Đã tạo lời giải ngắn gọn, mạch lạc cho toàn bộ danh sách câu hỏi.');
+  };
+
+  const handleBulkNormalizeAllExplanations = () => {
+    setHasUnsavedChanges(true);
+    pushUndoSnapshot(parsedQuestions);
+    setParsedQuestions((prev) =>
+      prev.map((q) => {
+        const cleaned = normalizeSolutionPresentation(q.explanation || '').normalizedText;
+        return {
+          ...q,
+          explanation: cleaned,
+          solutionSteps: parseExplanationIntoSteps(cleaned),
+        };
+      })
+    );
+    setStatusMessage('Đã chuẩn hóa trình bày ngắn gọn (bỏ Bước 1..4) cho toàn bộ lời giải.');
   };
 
   const handleBulkApplyMetadata = () => {
     if (selectedIds.size === 0) return;
     setHasUnsavedChanges(true);
+    pushUndoSnapshot(parsedQuestions);
     setParsedQuestions((prev) =>
       prev.map((q) =>
         selectedIds.has(q.id)
@@ -421,14 +604,17 @@ export const WordQuestionImportModal: React.FC<WordQuestionImportModalProps> = (
 
   const handleBulkApproveSolutions = () => {
     setHasUnsavedChanges(true);
+    pushUndoSnapshot(parsedQuestions);
     setParsedQuestions((prev) =>
       prev.map((q) => {
         if (!selectedIds.has(q.id) && selectedIds.size > 0) return q;
         const updated: ParsedWordQuestion = {
           ...q,
           approvalStatus: 'approved',
-          solutionStatus: q.explanation?.trim() && !q.hasAnswerMismatch ? 'provided' : q.solutionStatus,
-          solutionWarnings: q.explanation?.trim() && !q.hasAnswerMismatch ? [] : q.solutionWarnings,
+          solutionStatus:
+            q.explanation?.trim() && !q.hasAnswerMismatch ? 'provided' : q.solutionStatus,
+          solutionWarnings:
+            q.explanation?.trim() && !q.hasAnswerMismatch ? [] : q.solutionWarnings,
         };
         updated.validationStatus = computeQuestionValidationStatus(updated);
         return updated;
@@ -442,6 +628,8 @@ export const WordQuestionImportModal: React.FC<WordQuestionImportModalProps> = (
     if (!q) return;
     const saved = await saveAdminQuestion({
       ...q,
+      question: normalizeVietnameseUnicodeNFC(q.question),
+      explanation: normalizeVietnameseUnicodeNFC(q.explanation),
       approvalStatus: 'approved',
     });
     setSavedSingleIds((prev) => new Set([...prev, saved.id]));
@@ -450,6 +638,7 @@ export const WordQuestionImportModal: React.FC<WordQuestionImportModalProps> = (
 
   const handleRemoveQuestion = (idx: number) => {
     setHasUnsavedChanges(true);
+    pushUndoSnapshot(parsedQuestions);
     setParsedQuestions((prev) => {
       const removed = prev[idx];
       const next = prev.filter((_, i) => i !== idx);
@@ -474,6 +663,62 @@ export const WordQuestionImportModal: React.FC<WordQuestionImportModalProps> = (
     handleUpdateQuestionField(idx, { question: nextText });
     if (questionInputRef.current) {
       questionInputRef.current.focus();
+    }
+  };
+
+  const openFormulaEditorForTarget = (target: FormulaTarget, initial = '') => {
+    setFormulaTarget(target);
+    setFormulaInitialValue(initial);
+    setFormulaModalOpen(true);
+  };
+
+  const handleInsertFormulaFromModal = (formula: string) => {
+    const { qIdx } = formulaTarget;
+    const q = parsedQuestions[qIdx];
+    if (!q) return;
+
+    const appendFormula = (existing: string) =>
+      `${existing}${existing.endsWith(' ') || !existing ? '' : ' '}${formula}`;
+
+    if (formulaTarget.type === 'question') {
+      handleUpdateQuestionField(qIdx, { question: appendFormula(q.question) });
+    } else if (formulaTarget.type === 'option') {
+      const nextOpts = [...q.options];
+      nextOpts[formulaTarget.optIdx] = appendFormula(nextOpts[formulaTarget.optIdx] || '');
+      handleUpdateQuestionField(qIdx, { options: nextOpts });
+    } else if (formulaTarget.type === 'tf_statement') {
+      const nextStmts = [...(q.trueFalseStatements || [])];
+      const currentStmt = nextStmts[formulaTarget.sIdx];
+      if (currentStmt) {
+        nextStmts[formulaTarget.sIdx] = {
+          ...currentStmt,
+          text: appendFormula(currentStmt.text),
+        };
+        handleUpdateQuestionField(qIdx, {
+          trueFalseStatements: nextStmts,
+          options: nextStmts.map((s) => `${s.label}) ${s.text}`),
+        });
+      }
+    } else if (formulaTarget.type === 'tf_explanation') {
+      const nextStmts = [...(q.trueFalseStatements || [])];
+      const currentStmt = nextStmts[formulaTarget.sIdx];
+      if (currentStmt) {
+        nextStmts[formulaTarget.sIdx] = {
+          ...currentStmt,
+          explanation: appendFormula(currentStmt.explanation || ''),
+        };
+        handleUpdateQuestionField(qIdx, { trueFalseStatements: nextStmts });
+      }
+    } else if (formulaTarget.type === 'short_answer') {
+      handleUpdateQuestionField(qIdx, {
+        shortAnswer: appendFormula(q.shortAnswer || ''),
+      });
+    } else if (formulaTarget.type === 'explanation') {
+      const nextExp = appendFormula(q.explanation || '');
+      handleUpdateQuestionField(qIdx, {
+        explanation: nextExp,
+        solutionSteps: parseExplanationIntoSteps(nextExp),
+      });
     }
   };
 
@@ -507,7 +752,21 @@ export const WordQuestionImportModal: React.FC<WordQuestionImportModalProps> = (
   const buildQuestionsPayload = (list: ParsedWordQuestion[], targetQuizId?: string) => {
     return list.map((q, idx) => {
       const qType = q.questionType || 'single_choice';
-      const steps = parseExplanationIntoSteps(q.explanation, q.solutionSteps, {
+      const normalizedExp = normalizeVietnameseUnicodeNFC(
+        q.explanation?.trim() ||
+          generateDetailedExplanation({
+            question: q.question,
+            options: q.options,
+            correctAnswer: q.correctAnswer ?? 0,
+            questionType: qType,
+            domain: q.domain,
+            grade: q.grade,
+            trueFalseStatements: q.trueFalseStatements,
+            shortAnswer: q.shortAnswer,
+            shortAnswerUnit: q.shortAnswerUnit,
+          })
+      );
+      const steps = parseExplanationIntoSteps(normalizedExp, q.solutionSteps, {
         question: q.question,
         options: q.options,
         correctAnswer: q.correctAnswer,
@@ -523,33 +782,29 @@ export const WordQuestionImportModal: React.FC<WordQuestionImportModalProps> = (
         topicId: targetQuizId,
         grade: q.grade,
         domain: q.domain,
-        question: q.question,
+        question: normalizeVietnameseUnicodeNFC(q.question),
         questionType: qType,
         options:
           qType === 'essay' || qType === 'short_answer'
             ? []
             : qType === 'true_false' && q.trueFalseStatements?.length
-            ? q.trueFalseStatements.map((st) => `${st.label}) ${st.text}`)
-            : q.options,
+            ? q.trueFalseStatements.map((st) =>
+                normalizeVietnameseUnicodeNFC(`${st.label}) ${st.text}`)
+              )
+            : q.options.map((opt) => normalizeVietnameseUnicodeNFC(opt)),
         correctAnswer: q.correctAnswer ?? 0,
         correctAnswers: q.correctAnswers,
-        trueFalseStatements: q.trueFalseStatements,
-        shortAnswer: q.shortAnswer,
+        trueFalseStatements: q.trueFalseStatements?.map((st) => ({
+          ...st,
+          text: normalizeVietnameseUnicodeNFC(st.text),
+          explanation: st.explanation
+            ? normalizeVietnameseUnicodeNFC(st.explanation)
+            : undefined,
+        })),
+        shortAnswer: q.shortAnswer ? normalizeVietnameseUnicodeNFC(q.shortAnswer) : undefined,
         shortAnswerUnit: q.shortAnswerUnit,
         shortAnswerTolerance: q.shortAnswerTolerance,
-        explanation:
-          q.explanation?.trim() ||
-          generateDetailedExplanation({
-            question: q.question,
-            options: q.options,
-            correctAnswer: q.correctAnswer ?? 0,
-            questionType: qType,
-            domain: q.domain,
-            grade: q.grade,
-            trueFalseStatements: q.trueFalseStatements,
-            shortAnswer: q.shortAnswer,
-            shortAnswerUnit: q.shortAnswerUnit,
-          }),
+        explanation: normalizedExp,
         solutionSteps: steps,
         sampleAnswer: q.sampleAnswer || (qType === 'essay' ? steps.join('\n') : undefined),
         rubric: q.rubric,
@@ -595,7 +850,9 @@ export const WordQuestionImportModal: React.FC<WordQuestionImportModalProps> = (
         const primaryDomain = savedQuestions[0]?.domain || fallbackDomain;
         createdQuiz = await saveAdminQuiz({
           id: targetQuizId,
-          title: newExamTitle.trim() || `Đề kiểm tra KHTN (${savedQuestions.length} câu)`,
+          title: normalizeVietnameseUnicodeNFC(
+            newExamTitle.trim() || `Đề kiểm tra KHTN (${savedQuestions.length} câu)`
+          ),
           grade: primaryGrade,
           domain: primaryDomain,
           durationMinutes: newExamDuration || 15,
@@ -603,7 +860,7 @@ export const WordQuestionImportModal: React.FC<WordQuestionImportModalProps> = (
           questionCount: savedQuestions.length,
           description: `Bộ đề được chuyển đổi tự động từ file Word (${
             uploadedFileName || 'Văn bản Word'
-          }) hỗ trợ 4 dạng câu hỏi chuẩn GDPT 2018 kèm hướng dẫn giải chi tiết.`,
+          }) hỗ trợ 4 dạng câu hỏi chuẩn GDPT 2018 kèm lời giải ngắn gọn, mạch lạc.`,
           isPublished: true,
         });
       }
@@ -658,6 +915,19 @@ export const WordQuestionImportModal: React.FC<WordQuestionImportModalProps> = (
     },
   };
 
+  const getFormulaTargetLabel = (): string => {
+    const qNum = formulaTarget.qIdx + 1;
+    if (formulaTarget.type === 'question') return `Câu ${qNum} – Nội dung câu hỏi`;
+    if (formulaTarget.type === 'option')
+      return `Câu ${qNum} – Phương án ${String.fromCharCode(65 + formulaTarget.optIdx)}`;
+    if (formulaTarget.type === 'tf_statement')
+      return `Câu ${qNum} – Ý ${String.fromCharCode(97 + formulaTarget.sIdx)})`;
+    if (formulaTarget.type === 'tf_explanation')
+      return `Câu ${qNum} – Giải thích ý ${String.fromCharCode(97 + formulaTarget.sIdx)})`;
+    if (formulaTarget.type === 'short_answer') return `Câu ${qNum} – Đáp án trả lời ngắn`;
+    return `Câu ${qNum} – Lời giải chi tiết`;
+  };
+
   const renderQuestionInspector = (q: ParsedWordQuestion, qIdx: number) => {
     const badge = sourceBadges[q.detectedAnswerSource] || sourceBadges.default_first;
     const valStatus = computeQuestionValidationStatus(q);
@@ -678,6 +948,8 @@ export const WordQuestionImportModal: React.FC<WordQuestionImportModalProps> = (
       shortAnswer: q.shortAnswer,
       shortAnswerUnit: q.shortAnswerUnit,
     });
+
+    const normalizedPreview = normalizedPreviewMap[q.id];
 
     return (
       <div
@@ -770,7 +1042,7 @@ export const WordQuestionImportModal: React.FC<WordQuestionImportModalProps> = (
             </span>
           </div>
 
-          {/* Action Buttons per Question (Section 6.2) */}
+          {/* Action Buttons per Question */}
           <div className="flex flex-wrap items-center gap-1.5">
             <button
               type="button"
@@ -797,7 +1069,7 @@ export const WordQuestionImportModal: React.FC<WordQuestionImportModalProps> = (
               onClick={() => handleGenerateAiSolutionForQuestion(qIdx)}
               data-testid={`ai-generate-solution-btn-${qIdx + 1}`}
               className="px-2.5 py-1 rounded-lg bg-teal-700 hover:bg-teal-600 text-white font-bold text-[11px] flex items-center gap-1 shadow-xs cursor-pointer"
-              title="Tạo lời giải chi tiết 4 bước chuẩn sư phạm"
+              title="Tạo lời giải ngắn gọn, mạch lạc đi thẳng vào công thức và phép tính"
             >
               <Sparkles className="w-3.5 h-3.5 text-amber-200" />
               <span>AI TẠO LỜI GIẢI</span>
@@ -862,31 +1134,73 @@ export const WordQuestionImportModal: React.FC<WordQuestionImportModalProps> = (
           </div>
         )}
 
-        {/* Rich Scientific Formatting Toolbar (Section 7) */}
-        <div className="flex flex-wrap items-center gap-1 p-2 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
-          <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 px-1.5">
-            Công cụ KHTN:
-          </span>
+        {/* Rich Scientific & MathType-like Formatting Toolbar (Section 8) */}
+        <div className="flex flex-wrap items-center gap-1.5 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+          {/* Primary MathType-like Formula Editor Modal Trigger */}
+          <button
+            type="button"
+            data-testid={`open-formula-editor-btn-${qIdx + 1}`}
+            onClick={() => openFormulaEditorForTarget({ type: 'question', qIdx })}
+            className="px-3 py-1.5 rounded-lg bg-teal-700 hover:bg-teal-600 text-white font-extrabold text-[11px] flex items-center gap-1.5 shadow-xs cursor-pointer"
+            title="Mở hộp thoại trình soạn thảo công thức Toán - Lí - Hóa trực quan (tương tự MathType)"
+          >
+            <Sigma className="w-3.5 h-3.5 text-amber-300" />
+            <span>CÔNG THỨC</span>
+          </button>
+
+          {/* Undo / Redo */}
+          <button
+            type="button"
+            disabled={undoStack.length === 0}
+            onClick={handleUndo}
+            className="px-2 py-1 rounded-lg bg-white dark:bg-slate-900 hover:bg-slate-100 disabled:opacity-40 border border-slate-200 dark:border-slate-700 text-[11px] font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1 cursor-pointer"
+            title="Hoàn tác (Undo)"
+          >
+            <Undo2 className="w-3.5 h-3.5" />
+            <span>Hoàn tác</span>
+          </button>
+          <button
+            type="button"
+            disabled={redoStack.length === 0}
+            onClick={handleRedo}
+            className="px-2 py-1 rounded-lg bg-white dark:bg-slate-900 hover:bg-slate-100 disabled:opacity-40 border border-slate-200 dark:border-slate-700 text-[11px] font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1 cursor-pointer"
+            title="Làm lại (Redo)"
+          >
+            <Redo2 className="w-3.5 h-3.5" />
+            <span>Làm lại</span>
+          </button>
+
+          {/* Text style & script buttons */}
           {[
-            { label: 'H₂SO₄', snippet: 'H₂SO₄' },
-            { label: 'Ca(OH)₂', snippet: 'Ca(OH)₂' },
-            { label: 'Fe³⁺', snippet: 'Fe³⁺' },
-            { label: 'SO₄²⁻', snippet: 'SO₄²⁻' },
-            { label: 'H⁺', snippet: 'H⁺' },
-            { label: 'e⁻', snippet: 'e⁻' },
-            { label: '→', snippet: ' → ' },
-            { label: '⇄', snippet: ' ⇄ ' },
-            { label: '↑', snippet: '↑' },
-            { label: '↓', snippet: '↓' },
-            { label: 't°', snippet: '(t°)' },
-            { label: 'Phân số a/b', snippet: '\\frac{a}{b}' },
-            { label: 'Căn √x', snippet: '√(x)' },
-            { label: 'x²', snippet: '²' },
-            { label: 'x₂', snippet: '₂' },
+            { label: 'B', title: 'In đậm', snippet: '**chữ đậm**' },
+            { label: 'I', title: 'In nghiêng', snippet: '*chữ nghiêng*' },
+            { label: 'U', title: 'Gạch chân', snippet: '__gạch chân__' },
+            { label: 'x²', title: 'Chỉ số trên (Số mũ)', snippet: '²' },
+            { label: 'H₂O', title: 'Chỉ số dưới (Hóa học)', snippet: 'H₂O' },
+            { label: 'Phân số a/b', title: 'Chèn phân số', snippet: '\\frac{a}{b}' },
+            { label: 'Căn √x', title: 'Chèn căn bậc hai', snippet: '\\sqrt{x}' },
+            { label: 'H₂SO₄', title: 'Sulfuric acid', snippet: 'H₂SO₄' },
+            { label: 'Al₂(SO₄)₃', title: 'Aluminium sulfate', snippet: 'Al₂(SO₄)₃' },
+            { label: 'CuSO₄·5H₂O', title: 'Tinh thể ngậm nước', snippet: 'CuSO₄·5H₂O' },
+            { label: 'Fe²⁺', title: 'Ion Iron(II)', snippet: 'Fe²⁺' },
+            { label: 'Fe³⁺', title: 'Ion Iron(III)', snippet: 'Fe³⁺' },
+            { label: 'SO₄²⁻', title: 'Ion Sulfate', snippet: 'SO₄²⁻' },
+            { label: 'CO₃²⁻', title: 'Ion Carbonate', snippet: 'CO₃²⁻' },
+            { label: 'NH₄⁺', title: 'Ion Ammonium', snippet: 'NH₄⁺' },
+            { label: '→', title: 'Mũi tên phản ứng một chiều', snippet: ' → ' },
+            { label: '→ (t°)', title: 'Mũi tên phản ứng có đun nóng (t° trên mũi tên)', snippet: ' → (t°) ' },
+            { label: '→ (t°, xt)', title: 'Mũi tên phản ứng có nhiệt độ, xúc tác', snippet: ' → (t°, xt) ' },
+            { label: '⇄', title: 'Phản ứng thuận nghịch hai chiều', snippet: ' ⇄ ' },
+            { label: '↑', title: 'Chất khí thoát ra', snippet: '↑' },
+            { label: '↓', title: 'Chất kết tủa', snippet: '↓' },
+            { label: 'Δ', title: 'Delta / Nhiệt phân', snippet: 'Δ' },
+            { label: '°C', title: 'Độ C', snippet: '°C' },
+            { label: 'Ω', title: 'Ohm', snippet: 'Ω' },
           ].map((tool) => (
             <button
               key={tool.label}
               type="button"
+              title={tool.title}
               onClick={() => insertFormattingIntoQuestion(qIdx, tool.snippet)}
               className="px-2 py-1 rounded-lg bg-white dark:bg-slate-900 hover:bg-teal-50 dark:hover:bg-teal-950 border border-slate-200 dark:border-slate-700 text-[11px] font-mono font-bold text-slate-700 dark:text-slate-200 cursor-pointer"
             >
@@ -896,7 +1210,7 @@ export const WordQuestionImportModal: React.FC<WordQuestionImportModalProps> = (
 
           <label className="px-2 py-1 rounded-lg bg-white dark:bg-slate-900 hover:bg-teal-50 border border-slate-200 dark:border-slate-700 text-[11px] font-bold text-teal-700 dark:text-teal-300 flex items-center gap-1 cursor-pointer">
             <ImagePlus className="w-3.5 h-3.5" />
-            <span>Chèn ảnh</span>
+            <span>Hình ảnh</span>
             <input
               type="file"
               accept="image/*"
@@ -911,15 +1225,25 @@ export const WordQuestionImportModal: React.FC<WordQuestionImportModalProps> = (
             className="px-2 py-1 rounded-lg bg-white dark:bg-slate-900 hover:bg-teal-50 border border-slate-200 dark:border-slate-700 text-[11px] font-bold text-indigo-700 dark:text-indigo-300 flex items-center gap-1 cursor-pointer"
           >
             <Table className="w-3.5 h-3.5" />
-            <span>Chèn bảng</span>
+            <span>Bảng</span>
           </button>
         </div>
 
         {/* Question Stem Editor & Live Scientific Preview */}
         <div className="space-y-1.5">
-          <label className="text-[11px] font-extrabold text-slate-700 dark:text-slate-300 block">
-            Nội dung câu hỏi (tự động bảo toàn công thức Hóa học, ion và phương trình):
-          </label>
+          <div className="flex items-center justify-between">
+            <label className="text-[11px] font-extrabold text-slate-700 dark:text-slate-300">
+              Nội dung câu hỏi (tự động bảo toàn công thức Hóa học, ion, phân số và phương trình):
+            </label>
+            <button
+              type="button"
+              onClick={() => openFormulaEditorForTarget({ type: 'question', qIdx })}
+              className="text-[11px] font-bold text-teal-700 dark:text-teal-400 hover:underline flex items-center gap-1 cursor-pointer"
+            >
+              <Sigma className="w-3.5 h-3.5" />
+              <span>Chèn công thức vào đề</span>
+            </button>
+          </div>
           <textarea
             ref={questionInputRef}
             rows={2}
@@ -930,7 +1254,7 @@ export const WordQuestionImportModal: React.FC<WordQuestionImportModalProps> = (
             }
             className="w-full px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 font-bold text-slate-900 dark:text-white text-xs sm:text-sm"
           />
-          <div className="px-3 py-2 rounded-lg bg-sky-50/60 dark:bg-slate-800/50 border border-sky-200/70 dark:border-slate-700/80 text-xs sm:text-sm font-serif text-slate-900 dark:text-slate-100">
+          <div className="px-3 py-2 rounded-lg bg-sky-50/60 dark:bg-slate-800/50 border border-sky-200/70 dark:border-slate-700/80 text-xs sm:text-sm font-sans font-medium text-slate-900 dark:text-slate-100 leading-relaxed">
             <span className="font-sans text-[11px] font-bold text-teal-700 dark:text-teal-400 mr-1.5">
               Hiển thị Web:
             </span>
@@ -1033,7 +1357,9 @@ export const WordQuestionImportModal: React.FC<WordQuestionImportModalProps> = (
                   >
                     <button
                       type="button"
-                      data-testid={`select-correct-option-${qIdx + 1}-${String.fromCharCode(65 + optIdx)}`}
+                      data-testid={`select-correct-option-${qIdx + 1}-${String.fromCharCode(
+                        65 + optIdx
+                      )}`}
                       onClick={() =>
                         handleUpdateQuestionField(
                           qIdx,
@@ -1063,6 +1389,20 @@ export const WordQuestionImportModal: React.FC<WordQuestionImportModalProps> = (
                       }}
                       className="flex-1 bg-transparent border-0 text-xs font-medium text-slate-800 dark:text-slate-100 focus:outline-none"
                     />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        openFormulaEditorForTarget({
+                          type: 'option',
+                          qIdx,
+                          optIdx,
+                        })
+                      }
+                      className="p-1 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 text-teal-700 dark:text-teal-300 shrink-0 cursor-pointer"
+                      title={`Chèn công thức vào phương án ${String.fromCharCode(65 + optIdx)}`}
+                    >
+                      <Sigma className="w-3.5 h-3.5" />
+                    </button>
                     {isCorrect && (
                       <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                     )}
@@ -1078,7 +1418,7 @@ export const WordQuestionImportModal: React.FC<WordQuestionImportModalProps> = (
           <div className="p-3.5 rounded-2xl bg-indigo-50/60 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800 space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-xs font-extrabold text-indigo-950 dark:text-indigo-200">
-                Dạng 2 – Các mệnh đề Đúng / Sai (Mỗi ý a, b, c, d có đáp án Đúng/Sai và giải thích riêng):
+                Dạng 2 – Các mệnh đề Đúng / Sai (Giải thích ngắn gọn hiển thị trực tiếp ngay dưới từng ý a, b, c, d):
               </span>
               <span className="text-[11px] font-semibold text-indigo-700 dark:text-indigo-300">
                 Thang điểm GDPT 2018: Đúng 1 ý (10%) • 2 ý (25%) • 3 ý (50%) • 4 ý (100%)
@@ -1108,6 +1448,21 @@ export const WordQuestionImportModal: React.FC<WordQuestionImportModalProps> = (
                       }}
                       className="flex-1 px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold"
                     />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        openFormulaEditorForTarget({
+                          type: 'tf_statement',
+                          qIdx,
+                          sIdx,
+                        })
+                      }
+                      className="px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-teal-50 text-teal-700 dark:text-teal-300 text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                      title={`Chèn công thức vào ý ${stmt.label})`}
+                    >
+                      <Sigma className="w-3 h-3" />
+                      <span>Công thức</span>
+                    </button>
 
                     <div className="flex items-center gap-1 shrink-0">
                       <button
@@ -1153,17 +1508,33 @@ export const WordQuestionImportModal: React.FC<WordQuestionImportModalProps> = (
                     </div>
                   </div>
 
-                  <input
-                    type="text"
-                    value={stmt.explanation || ''}
-                    onChange={(e) => {
-                      const nextStmts = [...(q.trueFalseStatements || [])];
-                      nextStmts[sIdx] = { ...stmt, explanation: e.target.value };
-                      handleUpdateQuestionField(qIdx, { trueFalseStatements: nextStmts });
-                    }}
-                    placeholder={`Giải thích riêng cho ý ${stmt.label})...`}
-                    className="w-full px-2.5 py-1 rounded-lg bg-slate-50/70 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700 text-[11px] text-slate-600 dark:text-slate-300"
-                  />
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={stmt.explanation || ''}
+                      onChange={(e) => {
+                        const nextStmts = [...(q.trueFalseStatements || [])];
+                        nextStmts[sIdx] = { ...stmt, explanation: e.target.value };
+                        handleUpdateQuestionField(qIdx, { trueFalseStatements: nextStmts });
+                      }}
+                      placeholder={`Giải thích ngắn gọn hiển thị dưới ý ${stmt.label}) (không lặp lại chữ "${stmt.label})")...`}
+                      className="flex-1 px-2.5 py-1 rounded-lg bg-slate-50/70 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700 text-[11px] text-slate-600 dark:text-slate-300"
+                    />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        openFormulaEditorForTarget({
+                          type: 'tf_explanation',
+                          qIdx,
+                          sIdx,
+                        })
+                      }
+                      className="p-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-teal-700 dark:text-teal-300 cursor-pointer"
+                      title="Chèn công thức vào giải thích ý này"
+                    >
+                      <Sigma className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -1174,9 +1545,21 @@ export const WordQuestionImportModal: React.FC<WordQuestionImportModalProps> = (
         {isShortAnswer && (
           <div className="p-3.5 rounded-2xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <label className="text-[11px] font-extrabold text-amber-950 dark:text-amber-200 block mb-1">
-                Đáp án chuẩn (Số hoặc từ khóa ngắn):
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-[11px] font-extrabold text-amber-950 dark:text-amber-200">
+                  Đáp án chuẩn (Số hoặc công thức):
+                </label>
+                <button
+                  type="button"
+                  onClick={() =>
+                    openFormulaEditorForTarget({ type: 'short_answer', qIdx })
+                  }
+                  className="text-[10px] font-bold text-teal-700 dark:text-teal-300 hover:underline flex items-center gap-0.5 cursor-pointer"
+                >
+                  <Sigma className="w-3 h-3" />
+                  <span>Công thức</span>
+                </button>
+              </div>
               <input
                 type="text"
                 value={q.shortAnswer || ''}
@@ -1263,31 +1646,88 @@ export const WordQuestionImportModal: React.FC<WordQuestionImportModalProps> = (
           </div>
         )}
 
-        {/* Detailed Step-by-Step Explanation Box */}
+        {/* Concise Coherent Explanation Box (Section 10) */}
         <div className="p-3.5 rounded-2xl bg-teal-50/60 dark:bg-teal-950/30 border border-teal-200 dark:border-teal-800/80 space-y-2.5">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="text-[11px] font-extrabold text-teal-800 dark:text-teal-300 flex items-center gap-1.5">
               <ListChecks className="w-4 h-4 text-teal-600 dark:text-teal-400" />
               <span>
-                Lời giải chi tiết bài tập{' '}
+                Lời giải ngắn gọn, mạch lạc{' '}
                 {q.solutionStatus === 'needs_review'
                   ? '(Cần kiểm tra)'
                   : q.autoGeneratedExplanation
-                  ? '(AI / Hệ thống tạo 4 bước)'
-                  : '(Từ Word / Giáo viên đã duyệt)'}
+                  ? '(AI tạo tự động - Chờ giáo viên duyệt)'
+                  : '(Đã duyệt)'}
               </span>
             </span>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => openFormulaEditorForTarget({ type: 'explanation', qIdx })}
+                className="px-2 py-1 rounded-lg bg-white dark:bg-slate-900 border border-teal-300 dark:border-teal-700 text-[11px] font-bold text-teal-700 dark:text-teal-300 flex items-center gap-1 cursor-pointer"
+              >
+                <Sigma className="w-3 h-3" />
+                <span>Chèn công thức</span>
+              </button>
+
+              <button
+                type="button"
+                data-testid={`normalize-solution-btn-${qIdx + 1}`}
+                onClick={() => handlePreviewNormalizeSolution(qIdx)}
+                className="px-2.5 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 dark:bg-amber-950/80 text-amber-900 dark:text-amber-200 font-bold text-[11px] flex items-center gap-1 cursor-pointer"
+                title="Loại bỏ Bước 1, Bước 2, Phân tích dữ kiện... và đưa về lời giải ngắn gọn chuẩn Mục 10"
+              >
+                <Wand2 className="w-3 h-3" />
+                <span>Chuẩn hóa trình bày</span>
+              </button>
+
               <button
                 type="button"
                 onClick={() => handleGenerateAiSolutionForQuestion(qIdx)}
                 className="text-[11px] font-bold text-teal-700 dark:text-teal-400 hover:underline flex items-center gap-1 cursor-pointer"
               >
-                <Wand2 className="w-3 h-3" />
-                <span>Tạo lời giải 4 bước từ dữ kiện đề bài</span>
+                <Sparkles className="w-3 h-3" />
+                <span>Tạo lại lời giải ngắn gọn</span>
               </button>
             </div>
           </div>
+
+          {/* Preview & Confirm Normalization Box (Section 10.6) */}
+          {normalizedPreview !== undefined && (
+            <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-700 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-extrabold text-amber-950 dark:text-amber-200">
+                  Xem trước lời giải sau khi chuẩn hóa trình bày (đã lược bỏ "Bước 1..4", "Phân tích dữ kiện"...):
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    data-testid={`confirm-normalize-solution-btn-${qIdx + 1}`}
+                    onClick={() => handleConfirmNormalizeSolution(qIdx)}
+                    className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-[11px] cursor-pointer"
+                  >
+                    Áp dụng chuẩn hóa
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setNormalizedPreviewMap((prev) => {
+                        const copy = { ...prev };
+                        delete copy[q.id];
+                        return copy;
+                      })
+                    }
+                    className="px-2 py-1 rounded-lg bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-[11px] cursor-pointer"
+                  >
+                    Hủy
+                  </button>
+                </div>
+              </div>
+              <pre className="p-2.5 rounded-lg bg-white dark:bg-slate-900 border border-amber-200 dark:border-slate-700 text-xs font-sans whitespace-pre-wrap text-slate-800 dark:text-slate-100">
+                {normalizedPreview}
+              </pre>
+            </div>
+          )}
 
           {q.solutionStatus === 'needs_review' && (
             <div
@@ -1319,8 +1759,9 @@ export const WordQuestionImportModal: React.FC<WordQuestionImportModalProps> = (
           )}
 
           <textarea
-            rows={7}
+            rows={5}
             value={q.explanation}
+            data-testid={`question-explanation-input-${qIdx + 1}`}
             onChange={(e) => {
               const val = e.target.value;
               const checked = generateScientificSolution({
@@ -1336,7 +1777,7 @@ export const WordQuestionImportModal: React.FC<WordQuestionImportModalProps> = (
                 autoGeneratedExplanation: false,
               });
             }}
-            placeholder="Nhập các bước giải (Bước 1. Phân tích đề bài..., Bước 2. Phương pháp giải..., Bước 3. Thực hiện..., Bước 4. Kết luận...)..."
+            placeholder="Nhập lời giải ngắn gọn, đi thẳng vào công thức, phép tính và kết luận (VD: n_Zn = 6,5 / 65 = 0,1 mol... Đáp án: B)..."
             className="w-full p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-teal-200/80 dark:border-teal-800 text-xs text-slate-700 dark:text-slate-200 leading-relaxed"
           />
         </div>
@@ -1358,7 +1799,7 @@ export const WordQuestionImportModal: React.FC<WordQuestionImportModalProps> = (
                 <span>Nhập Câu Hỏi Từ File Word (.docx) – Chuẩn GDPT 2018 (4 Dạng Câu Hỏi)</span>
               </h2>
               <p className="text-xs text-teal-100/90">
-                Hỗ trợ Trắc nghiệm A-D, Đúng/Sai 4 ý (a,b,c,d), Trả lời ngắn & Tự luận • Bảo toàn công thức Hóa học, ion, bảng biểu và hình ảnh
+                Chuẩn hóa tiếng Việt Unicode NFC • Sửa lỗi font TCVN3/VNI • Trình soạn CÔNG THỨC trực quan • Lời giải ngắn gọn, mạch lạc
               </p>
             </div>
           </div>
@@ -1402,7 +1843,7 @@ export const WordQuestionImportModal: React.FC<WordQuestionImportModalProps> = (
           </div>
         )}
 
-        {/* Progress Bar & Status Notification (Section 3.1) */}
+        {/* Progress Bar & Status Notification */}
         {(isReadingFile || parseProgress > 0) && (
           <div className="px-6 py-2 bg-teal-950/5 dark:bg-teal-950/40 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-4 shrink-0">
             <div className="flex items-center gap-2 text-xs font-bold text-teal-800 dark:text-teal-300">
@@ -1442,7 +1883,7 @@ export const WordQuestionImportModal: React.FC<WordQuestionImportModalProps> = (
                     1. Tải lên tệp Word (.docx, .txt)
                   </h3>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    Tự động nhận diện đủ <strong>4 dạng câu hỏi GDPT 2018</strong>: Nhiều lựa chọn (A-D), Đúng/Sai (a,b,c,d), Trả lời ngắn & Tự luận
+                    Tự động nhận diện đủ <strong>4 dạng câu hỏi GDPT 2018</strong> • Chuẩn hóa Unicode NFC & công thức Hóa học
                   </p>
                 </div>
 
@@ -1476,6 +1917,16 @@ export const WordQuestionImportModal: React.FC<WordQuestionImportModalProps> = (
                   >
                     <Layers className="w-4 h-4 text-amber-200" />
                     <span>Đề mẫu 4 dạng GDPT 2018</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleLoadLegacyFontSample}
+                    data-testid="load-legacy-font-sample-btn"
+                    className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-[11px] shadow-sm flex items-center gap-1.5 transition cursor-pointer"
+                  >
+                    <Type className="w-3.5 h-3.5" />
+                    <span>Thử mẫu lỗi font TCVN3 / VNI</span>
                   </button>
                 </div>
 
@@ -1573,30 +2024,36 @@ export const WordQuestionImportModal: React.FC<WordQuestionImportModalProps> = (
 
             {/* Right Text Paste / Raw Content Area (7 cols) */}
             <div className="lg:col-span-7 flex flex-col justify-between space-y-2">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <label className="font-extrabold text-slate-800 dark:text-white">
-                  2. Nội dung văn bản từ Word (có thể dán trực tiếp hoặc chỉnh sửa nhanh):
+                  2. Nội dung văn bản từ Word (tự động khử lỗi Font, Công thức &amp; Mũi tên PTHH):
                 </label>
                 <button
                   type="button"
                   onClick={() => {
-                    const normalizedRaw = formatChemicalAndScientificText(rawText).text;
+                    const unicodeFixed = convertLegacyVietnameseToUnicode(rawText);
+                    const normalizedRaw = formatChemicalAndScientificText(
+                      normalizeVietnameseUnicodeNFC(unicodeFixed)
+                    ).text;
                     setRawText(normalizedRaw);
                     runParse(normalizedRaw, htmlContent);
                   }}
                   className="px-3 py-1.5 rounded-xl bg-teal-700 hover:bg-teal-600 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer"
                 >
                   <Wand2 className="w-3.5 h-3.5" />
-                  <span>Phân tích & Tạo hướng dẫn giải từng bước</span>
+                  <span>Chuẩn hóa Font, CTHH, Mũi tên &amp; Phân tích</span>
                 </button>
               </div>
 
               <textarea
                 rows={8}
                 value={rawText}
+                data-testid="word-raw-text-input"
                 onChange={(e) => {
-                  setRawText(e.target.value);
+                  const val = e.target.value;
+                  setRawText(val);
                   setHtmlContent(undefined);
+                  setFontDetection(detectLegacyVietnameseEncoding(val, undefined));
                 }}
                 placeholder={`Dán nội dung câu hỏi copy từ Word vào đây hoặc bấm "Chọn file Word (.docx)" ở bên trái...\nHỗ trợ:\n- Dạng 1: Trắc nghiệm A. B. C. D.\n- Dạng 2: Đúng/Sai a) b) c) d)\n- Dạng 3: Trả lời ngắn (Đáp án: 2,48)\n- Dạng 4: Tự luận`}
                 className="w-full flex-1 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 font-mono text-xs leading-relaxed focus:ring-2 focus:ring-teal-500 focus:outline-none"
@@ -1604,7 +2061,48 @@ export const WordQuestionImportModal: React.FC<WordQuestionImportModalProps> = (
             </div>
           </div>
 
-          {/* Step 2: Two-Pane Preview & Edit Interface (Section 6) */}
+          {/* Legacy Font Warning & Conversion Preview Banner (Section 6.2) */}
+          {fontDetection?.hasLegacyFontIssue && (
+            <div
+              data-testid="legacy-font-warning-banner"
+              className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/60 border-2 border-amber-400 dark:border-amber-700 space-y-3"
+            >
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-start gap-2.5">
+                  <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="text-xs sm:text-sm font-extrabold text-amber-950 dark:text-amber-200">
+                      Phát hiện tài liệu dùng bảng mã tiếng Việt cũ ({fontDetection.detectedEncoding.toUpperCase()})
+                    </h4>
+                    <p className="text-[11px] text-amber-800 dark:text-amber-300">
+                      {fontDetection.warningMessage}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  data-testid="confirm-convert-legacy-font-btn"
+                  onClick={handleConfirmLegacyFontConversion}
+                  className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-extrabold text-xs shadow-sm shrink-0 cursor-pointer"
+                >
+                  Xác nhận chuyển mã sang Unicode chuẩn
+                </button>
+              </div>
+
+              {fontDetection.previewConvertedText && (
+                <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-amber-200 dark:border-slate-700 space-y-1">
+                  <div className="text-[11px] font-bold text-teal-700 dark:text-teal-400">
+                    Xem trước kết quả sau khi chuyển mã sang Unicode NFC:
+                  </div>
+                  <pre className="text-xs font-sans whitespace-pre-wrap text-slate-800 dark:text-slate-100 max-h-32 overflow-y-auto">
+                    {fontDetection.previewConvertedText}
+                  </pre>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Step 2: Two-Pane Preview & Edit Interface */}
           {parsedQuestions.length > 0 && (
             <div className="space-y-4 pt-4 border-t border-slate-200 dark:border-slate-800">
               {/* Summary & View Mode Toggle Banner */}
@@ -1613,19 +2111,31 @@ export const WordQuestionImportModal: React.FC<WordQuestionImportModalProps> = (
                   <CheckCircle2 className="w-6 h-6 text-emerald-600 dark:text-emerald-400 shrink-0" />
                   <div>
                     <h4 className="text-sm font-extrabold text-emerald-950 dark:text-emerald-200">
-                      Đã chuyển đổi thành công {parsedQuestions.length} câu hỏi sang chuẩn Web!
+                      Đã chuyển đổi thành công {parsedQuestions.length} câu hỏi sang chuẩn Unicode Web!
                     </h4>
                     <p className="text-[11px] text-emerald-800 dark:text-emerald-300">
                       Nhiều lựa chọn:{' '}
                       <strong>
-                        {parsedQuestions.filter((q) => q.questionType === 'single_choice' || q.questionType === 'multiple_choice').length}
+                        {
+                          parsedQuestions.filter(
+                            (q) =>
+                              q.questionType === 'single_choice' ||
+                              q.questionType === 'multiple_choice'
+                          ).length
+                        }
                       </strong>{' '}
                       • Đúng/Sai (a,b,c,d):{' '}
-                      <strong>{parsedQuestions.filter((q) => q.questionType === 'true_false').length}</strong>{' '}
+                      <strong>
+                        {parsedQuestions.filter((q) => q.questionType === 'true_false').length}
+                      </strong>{' '}
                       • Trả lời ngắn:{' '}
-                      <strong>{parsedQuestions.filter((q) => q.questionType === 'short_answer').length}</strong>{' '}
+                      <strong>
+                        {parsedQuestions.filter((q) => q.questionType === 'short_answer').length}
+                      </strong>{' '}
                       • Tự luận:{' '}
-                      <strong>{parsedQuestions.filter((q) => q.questionType === 'essay').length}</strong>
+                      <strong>
+                        {parsedQuestions.filter((q) => q.questionType === 'essay').length}
+                      </strong>
                     </p>
                   </div>
                 </div>
@@ -1658,12 +2168,22 @@ export const WordQuestionImportModal: React.FC<WordQuestionImportModalProps> = (
 
                   <button
                     type="button"
+                    onClick={handleBulkNormalizeAllExplanations}
+                    data-testid="bulk-normalize-solutions-btn"
+                    className="px-3 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs flex items-center gap-1.5 shrink-0 shadow-sm cursor-pointer"
+                  >
+                    <Wand2 className="w-3.5 h-3.5" />
+                    <span>Chuẩn hóa trình bày hàng loạt</span>
+                  </button>
+
+                  <button
+                    type="button"
                     onClick={handleRegenerateAllExplanations}
                     data-testid="bulk-ai-generate-solutions-btn"
                     className="px-3.5 py-2 rounded-xl bg-teal-700 hover:bg-teal-600 text-white font-bold text-xs flex items-center gap-1.5 shrink-0 shadow-sm cursor-pointer"
                   >
                     <Sparkles className="w-3.5 h-3.5 text-amber-200" />
-                    <span>AI Tạo lời giải 4 bước hàng loạt</span>
+                    <span>AI Tạo lời giải ngắn gọn hàng loạt</span>
                   </button>
 
                   <button
@@ -1678,7 +2198,7 @@ export const WordQuestionImportModal: React.FC<WordQuestionImportModalProps> = (
                 </div>
               </div>
 
-              {/* Bulk Edit Toolbar (Section 6.4) */}
+              {/* Bulk Edit Toolbar */}
               <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <button
@@ -1777,7 +2297,7 @@ export const WordQuestionImportModal: React.FC<WordQuestionImportModalProps> = (
                       Đồng thời tạo thành 1 Bộ Đề Kiểm Tra mới trên trang Luyện tập (/luyen-tap)
                     </span>
                     <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                      Học sinh có thể làm đủ 4 dạng câu hỏi, tải ảnh tự luận và xem lời giải đã duyệt sau khi nộp bài
+                      Học sinh có thể làm đủ 4 dạng câu hỏi, tải ảnh tự luận và xem lời giải ngắn gọn đã duyệt sau khi nộp bài
                     </span>
                   </div>
                 </label>
@@ -1904,8 +2424,8 @@ export const WordQuestionImportModal: React.FC<WordQuestionImportModalProps> = (
             <span>
               {parsedQuestions.length > 0
                 ? pendingReviewCount > 0
-                  ? `Còn ${pendingReviewCount} câu cần kiểm tra dữ kiện, đáp án hoặc lời giải trước khi lưu toàn bộ.`
-                  : `Sẵn sàng lưu ${parsedQuestions.length} câu hỏi có hướng dẫn giải từng bước vào hệ thống.`
+                  ? `Còn ${pendingReviewCount} câu cần kiểm tra dữ kiện, đáp án hoặc duyệt lời giải trước khi lưu toàn bộ.`
+                  : `Sẵn sàng lưu ${parsedQuestions.length} câu hỏi chuẩn Unicode vào hệ thống.`
                 : 'Hãy chọn tệp Word (.docx) hoặc bấm "Dùng thử Đề Word mẫu" để bắt đầu.'}
             </span>
           </div>
@@ -1937,6 +2457,15 @@ export const WordQuestionImportModal: React.FC<WordQuestionImportModalProps> = (
           </div>
         </div>
       </div>
+
+      {/* MathType-like Visual Formula Editor Modal (Section 8) */}
+      <FormulaEditorModal
+        isOpen={formulaModalOpen}
+        onClose={() => setFormulaModalOpen(false)}
+        initialFormula={formulaInitialValue}
+        targetLabel={getFormulaTargetLabel()}
+        onInsertFormula={handleInsertFormulaFromModal}
+      />
     </div>
   );
 };

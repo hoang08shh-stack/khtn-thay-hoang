@@ -1,6 +1,32 @@
 import { Grade, SubjectDomain, QuizQuestion, QuestionType, TrueFalseStatement } from '../types/index.ts';
-import { generateScientificSolution, explanationSteps, type SolutionInput, type ScientificSolution } from './scientificSolution.ts';
-export { generateScientificSolution } from './scientificSolution.ts';
+import {
+  generateScientificSolution,
+  explanationSteps,
+  normalizeSolutionPresentation,
+  type SolutionInput,
+  type ScientificSolution,
+} from './scientificSolution.ts';
+import {
+  normalizeVietnameseUnicodeNFC,
+  convertWordOmmlToReadableFormula,
+  detectLegacyVietnameseEncoding,
+  convertLegacyVietnameseToUnicode,
+  detectLegacyOleEquations,
+  type LegacyEncodingType,
+  type EncodingDetectionResult,
+} from './vietnameseFontFixer.ts';
+
+export {
+  generateScientificSolution,
+  normalizeSolutionPresentation,
+  normalizeVietnameseUnicodeNFC,
+  convertWordOmmlToReadableFormula,
+  detectLegacyVietnameseEncoding,
+  convertLegacyVietnameseToUnicode,
+  detectLegacyOleEquations,
+  type LegacyEncodingType,
+  type EncodingDetectionResult,
+};
 
 export type QuestionValidationStatus =
   | 'valid'
@@ -17,6 +43,7 @@ export interface ParsedWordQuestion extends Omit<QuizQuestion, 'id'> {
   validationStatus?: QuestionValidationStatus;
   hasAnswerMismatch?: boolean;
   inferredAnswerIndex?: number | null;
+  hasOleEquationWarning?: boolean;
   detectedAnswerSource:
     | 'explicit_key'
     | 'asterisk'
@@ -80,7 +107,9 @@ export function regenerateImportedQuestion(q: ParsedWordQuestion, preserveProvid
   const formattedStatements = q.trueFalseStatements?.map((st) => ({
     ...st,
     text: formatChemicalAndScientificText(st.text).text,
-    explanation: st.explanation ? formatChemicalAndScientificText(st.explanation).text : st.explanation,
+    explanation: st.explanation
+      ? formatChemicalAndScientificText(st.explanation.replace(/^[a-d]\s*[.)]\s*/i, '')).text
+      : st.explanation,
   }));
 
   const normalizedQ: ParsedWordQuestion = {
@@ -148,10 +177,14 @@ export function regenerateImportedQuestion(q: ParsedWordQuestion, preserveProvid
 }
 
 /**
- * Generates a structured 4-step pedagogical solution (Bước 1..4) for "AI TẠO LỜI GIẢI"
- * Never overwrites an existing teacher answer key if a mismatch is detected; flags a warning instead.
+ * Tạo lời giải ngắn gọn, mạch lạc, chính xác cho nút "AI TẠO LỜI GIẢI" (Quy định mới - Mục 10):
+ * - KHÔNG ghi "Bước 1", "Bước 2", "Bước 3", "Bước 4".
+ * - KHÔNG ghi "Phân tích dữ kiện", "Dữ kiện đề bài", "Yêu cầu bài toán", "Phương pháp giải".
+ * - KHÔNG lặp lại cả 4 phương án A, B, C, D.
+ * - Với câu Đúng/Sai: giải thích ngắn gọn trực tiếp cho từng ý a, b, c, d mà không lặp lại ký hiệu a), b), c), d).
+ * - Không tự động ghi đè đáp án của giáo viên nếu phát hiện lệch; đánh dấu cảnh báo để giáo viên kiểm tra.
  */
-export function generateStructured4StepSolution(q: ParsedWordQuestion): ParsedWordQuestion {
+export function generateConciseSolution(q: ParsedWordQuestion): ParsedWordQuestion {
   const base = regenerateImportedQuestion(
     {
       ...q,
@@ -160,71 +193,70 @@ export function generateStructured4StepSolution(q: ParsedWordQuestion): ParsedWo
     false
   );
 
-  const rawSteps = base.solutionSteps || [];
-  const duKienLine = rawSteps.find((s) => /^Dữ kiện\s*:/i.test(s)) || `Dữ kiện: ${base.question}`;
-  const contentSteps = rawSteps
-    .filter((s) => !/^Dữ kiện\s*:/i.test(s))
-    .map((s) => s.replace(/^Bước\s*\d+\s*[:.)]?\s*/i, '').trim())
-    .filter(Boolean);
+  const norm = normalizeSolutionPresentation((base.solutionSteps || []).join('\n'));
+  const conciseSteps = norm.normalizedSteps.length > 0 ? norm.normalizedSteps : base.solutionSteps || [];
 
-  const domainLabel =
-    base.domain === 'vat-li'
-      ? 'Vật lí KHTN'
-      : base.domain === 'sinh-hoc'
-      ? 'Sinh học KHTN'
-      : 'Hóa học KHTN (Danh pháp IUPAC)';
-
-  let step1 = `Bước 1. Phân tích đề bài: ${duKienLine.replace(/^Dữ kiện\s*:\s*/i, '')}`;
-  let step2 = `Bước 2. Phương pháp giải: Áp dụng kiến thức chuẩn ${domainLabel} Lớp ${base.grade} (Chương trình GDPT 2018).`;
-  let step3 = `Bước 3. Thực hiện: ${contentSteps.slice(0, Math.max(1, contentSteps.length - 1)).join('\n') || 'Đối chiếu dữ kiện đề bài với quy tắc khoa học.'}`;
-  let step4 = `Bước 4. Kết luận: `;
-
-  if (base.questionType === 'single_choice' || base.questionType === 'multiple_choice') {
-    const chosenIdx =
-      typeof base.correctAnswer === 'number' && base.correctAnswer >= 0
-        ? base.correctAnswer
-        : base.inferredAnswerIndex ?? -1;
-    if (chosenIdx >= 0 && base.options[chosenIdx]) {
-      step4 += `Chọn đáp án ${String.fromCharCode(65 + chosenIdx)} (${base.options[chosenIdx]}).`;
-    } else {
-      step4 += contentSteps[contentSteps.length - 1] || 'Cần giáo viên xác nhận đáp án đúng.';
+  // Đảm bảo dòng kết luận ngắn gọn "Đáp án: ..." ở cuối nếu chưa có
+  const hasConclusionLine = conciseSteps.some((line) => /^(?:Đáp án|Chọn đáp án|Đáp số)\b/i.test(line));
+  if (!hasConclusionLine) {
+    if (base.questionType === 'single_choice' || base.questionType === 'multiple_choice') {
+      const chosenIdx =
+        typeof base.correctAnswer === 'number' && base.correctAnswer >= 0
+          ? base.correctAnswer
+          : base.inferredAnswerIndex ?? -1;
+      if (chosenIdx >= 0 && base.options[chosenIdx]) {
+        conciseSteps.push(`Đáp án: ${String.fromCharCode(65 + chosenIdx)} (${base.options[chosenIdx]}).`);
+      }
+    } else if (base.questionType === 'short_answer' && base.shortAnswer) {
+      conciseSteps.push(
+        `Đáp án: ${base.shortAnswer}${base.shortAnswerUnit ? ` ${base.shortAnswerUnit}` : ''}.`
+      );
     }
-  } else if (base.questionType === 'true_false' && base.trueFalseStatements?.length) {
-    step3 = `Bước 3. Thực hiện:\n${base.trueFalseStatements
-      .map(
-        (st) =>
-          `- Ý ${st.label}) ${st.text}: ${st.isTrue === true ? 'Đúng' : st.isTrue === false ? 'Sai' : 'Chưa xác định'}${
-            st.explanation ? ` (${st.explanation})` : ''
-          }`
-      )
-      .join('\n')}`;
-    step4 += `Đáp án Đúng/Sai các ý: ${base.trueFalseStatements
-      .map((st) => `${st.label}) ${st.isTrue === true ? 'Đúng' : st.isTrue === false ? 'Sai' : '?'}`)
-      .join(' ; ')}.`;
-  } else if (base.questionType === 'short_answer') {
-    step4 += `Đáp số trả lời ngắn: ${base.shortAnswer || 'Chưa xác định'}${base.shortAnswerUnit ? ` ${base.shortAnswerUnit}` : ''}.`;
-  } else {
-    step4 += contentSteps[contentSteps.length - 1] || 'Hoàn thành các ý tự luận và kiểm tra đơn vị.';
   }
 
-  const structuredSteps = [step1, step2, step3, step4];
-  const mismatchWarning = base.solutionWarnings?.find((w) => /PHÁT HIỆN ĐÁP ÁN KHÔNG KHỚP|mâu thuẫn/i.test(w));
+  // Đối với câu Đúng/Sai: cập nhật giải thích ngắn gọn vào từng ý (không lặp lại ký hiệu a), b), c), d))
+  let updatedTfStatements = base.trueFalseStatements;
+  if (base.questionType === 'true_false' && base.trueFalseStatements?.length) {
+    updatedTfStatements = base.trueFalseStatements.map((st) => {
+      const inferred = inferTrueFalseStatementScience(st.text);
+      const cleanExp = (st.explanation || inferred?.explanation || '')
+        .replace(/^[a-d]\s*[.)]\s*/i, '')
+        .trim();
+      const verdict = st.isTrue === true ? 'Đúng' : st.isTrue === false ? 'Sai' : 'Chưa xác định';
+      return {
+        ...st,
+        explanation:
+          cleanExp ||
+          `Phát biểu này ${verdict.toLowerCase()} theo kiến thức chuẩn KHTN Lớp ${base.grade}.`,
+      };
+    });
+  }
+
+  const mismatchWarning = base.solutionWarnings?.find((w) =>
+    /PHÁT HIỆN ĐÁP ÁN KHÔNG KHỚP|mâu thuẫn/i.test(w)
+  );
   const explanationText = [
-    ...structuredSteps,
-    ...(mismatchWarning ? [`⚠️ ${mismatchWarning}`] : []),
+    ...conciseSteps,
+    ...(mismatchWarning && !conciseSteps.some((s) => s.includes(mismatchWarning))
+      ? [`⚠️ ${mismatchWarning}`]
+      : []),
   ].join('\n');
 
   const result: ParsedWordQuestion = {
     ...base,
-    solutionSteps: structuredSteps,
+    trueFalseStatements: updatedTfStatements,
+    solutionSteps: conciseSteps,
     explanation: explanationText,
-    sampleAnswer: base.questionType === 'essay' ? structuredSteps.join('\n') : base.sampleAnswer,
+    sampleAnswer: base.questionType === 'essay' ? conciseSteps.join('\n') : base.sampleAnswer,
     approvalStatus: 'pending_review',
     autoGeneratedExplanation: true,
   };
   result.validationStatus = computeQuestionValidationStatus(result);
   return result;
 }
+
+/** Giữ tên hàm tương thích ngược nhưng xuất ra định dạng ngắn gọn mới của Mục 10 */
+export const generateStructured4StepSolution = generateConciseSolution;
 
 export interface ParsedWordQuestionResult {
   questions: ParsedWordQuestion[];
@@ -362,9 +394,10 @@ export function convertHtmlSubSupToUnicode(input: string): string {
  * and maintaining paragraph breaks.
  */
 export function extractFormattedTextFromMammothHtml(html: string, fallbackRawText = ''): string {
-  if (!html || !html.trim()) return fallbackRawText;
+  if (!html || !html.trim()) return normalizeVietnameseUnicodeNFC(fallbackRawText);
 
-  let working = convertHtmlSubSupToUnicode(html);
+  let working = convertWordOmmlToReadableFormula(html);
+  working = convertHtmlSubSupToUnicode(working);
 
   // Preserve embedded images as [IMG:src] tokens before stripping HTML tags
   working = working.replace(/<img\b[^>]*?\bsrc=["']([^"']+)["'][^>]*>/gi, (_m, src: string) => {
@@ -419,7 +452,12 @@ export function extractFormattedTextFromMammothHtml(html: string, fallbackRawTex
     .replace(/&ge;|&#8805;/gi, '≥')
     .replace(/&ne;|&#8800;/gi, '≠')
     .replace(/&approx;|&#8776;/gi, '≈')
+    .replace(/&alpha;|&#945;/gi, 'α')
+    .replace(/&beta;|&#946;/gi, 'β')
+    .replace(/&gamma;|&#947;/gi, 'γ')
+    .replace(/&Delta;|&#916;/g, 'Δ')
     .replace(/&Omega;|&#937;/g, 'Ω')
+    .replace(/&pi;|&#960;/gi, 'π')
     .replace(/&lt;/gi, '<')
     .replace(/&gt;/gi, '>')
     .replace(/&quot;/gi, '"')
@@ -433,7 +471,7 @@ export function extractFormattedTextFromMammothHtml(html: string, fallbackRawTex
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 
-  return cleanedLines || fallbackRawText;
+  return normalizeVietnameseUnicodeNFC(cleanedLines || fallbackRawText);
 }
 
 /**
@@ -442,28 +480,103 @@ export function extractFormattedTextFromMammothHtml(html: string, fallbackRawTex
  */
 export function formatChemicalAndScientificText(text: string): { text: string; changed: boolean } {
   if (!text) return { text: '', changed: false };
-  let current = convertHtmlSubSupToUnicode(text);
+  let current = normalizeVietnameseUnicodeNFC(
+    convertHtmlSubSupToUnicode(convertWordOmmlToReadableFormula(text))
+  );
 
-  // 1. Reaction conditions & temperature symbols
+  // 0. Unwrap LaTeX \ce{...} and \text{...} wrappers from MathType / ChemDraw / Overleaf
   current = current
-    .replace(/--\s*\(([^)]+)\)\s*-->/g, ' → ($1) ')
-    .replace(/-\s*\(([^)]+)\)\s*->/g, ' → ($1) ')
+    .replace(/\\ce\{([^{}]+)\}/g, '$1')
+    .replace(/\\(?:text|mathrm)\{([^{}]+)\}/g, '$1');
+
+  // 1. Reaction conditions, LaTeX arrows (\xrightarrow, \to, \rightleftharpoons) & Word arrow extenders
+  current = current
+    // LaTeX \xrightarrow[sub]{sup} and \xrightarrow{cond}
+    .replace(/[ \t]*\\xrightarrow\[([^\]]+)\]\s*\{([^{}]+)\}[ \t]*/g, ' → ($2, $1) ')
+    .replace(/[ \t]*\\xrightarrow\s*\{([^{}]+)\}[ \t]*/g, ' → ($1) ')
+    .replace(/[ \t]*\\xrightleftharpoons\[([^\]]+)\]\s*\{([^{}]+)\}[ \t]*/g, ' ⇄ ($2, $1) ')
+    .replace(/[ \t]*\\xrightleftharpoons\s*\{([^{}]+)\}[ \t]*/g, ' ⇄ ($1) ')
+    .replace(/[ \t]*\\(?:longrightarrow|rightarrow|to)\b[ \t]*/g, ' → ')
+    .replace(/[ \t]*\\(?:rightleftharpoons|leftrightarrow|Longleftrightarrow)\b[ \t]*/g, ' ⇄ ')
+    .replace(/\\uparrow\b/g, '↑')
+    .replace(/\\downarrow\b/g, '↓')
+    // Word inline arrows with parenthesized or bare conditions: --(t°)--> , -(t°, xt)-> , ⎯⎯t°→ , --t°--> , ==t°==>
+    .replace(/[ \t]*(?:--|==|[⎯─━―]{1,})\s*\(([^)]+)\)\s*(?:-->|==>|->|[⎯─━―]*\s*(?:→|➔|➜|➞|➡|►|>))[ \t]*/g, ' → ($1) ')
+    .replace(/[ \t]*-\s*\(([^)]+)\)\s*->[ \t]*/g, ' → ($1) ')
+    .replace(
+      /[ \t]*(?:--|==|[⎯─━―]{1,})\s*(t\^?[0o°](?:\s*,\s*(?:xt|p|đpdd|đpnc|as|xúc\s*tác|áp\s*suất))?|đpdd|đpnc|xt|ánh\s*sáng|as|men\s*giấm|lên\s*men)\s*(?:-->|==>|->|[⎯─━―]*\s*(?:→|➔|➜|➞|➡|►|>))[ \t]*/gi,
+      ' → ($1) '
+    )
+    .replace(
+      /[ \t]*-\s*(t\^?[0o°](?:\s*,\s*(?:xt|p|đpdd|đpnc|as))?|đpdd|đpnc)\s*->[ \t]*/gi,
+      ' → ($1) '
+    )
+    // Normalize t^o, t^0, t0, to inside reaction condition parentheses
     .replace(/\(\s*t\^?[0o°]\s*(?:,\s*([^)]+))?\)/gi, (_m, extra) =>
       extra ? `(t°, ${extra.trim()})` : '(t°)'
     )
+    // Normalize bare "→ t°" or "→(t°)" into " → (t°) "
+    .replace(/[ \t]*→[ \t]*\(\s*([^)]+?)\s*\)[ \t]*/g, ' → ($1) ')
+    .replace(/[ \t]*⇄[ \t]*\(\s*([^)]+?)\s*\)[ \t]*/g, ' ⇄ ($1) ')
+    .replace(/[ \t]*→[ \t]+t(?:°|\^?[0o])\b[ \t]*/gi, ' → (t°) ')
     .replace(/(\d)\s*(?:\^0|\^o)\s*C\b/g, '$1°C')
     .replace(/\b(\d+)\s*oC\b/g, '$1°C');
 
   // 2. Reversible and forward reaction arrows (avoid touching <= or >= comparisons)
   current = current
-    .replace(/[ \t]*(?:<===>|<==>|<=>|<--->|<-->|<->|⇌)[ \t]*/g, ' ⇄ ')
-    .replace(/[ \t]*(?:===>|==>|--->|-->|->|⟶|➔)[ \t]*/g, ' → ');
+    .replace(/[ \t]*(?:<===>|<==>|<=>|<--->|<-->|<->|⇌|⇄)[ \t]*/g, ' ⇄ ')
+    .replace(/[ \t]*(?:[⎯─━―]{1,}\s*(?:→|➔|➜|➞|➡|►|>)|───►|──►|===>|==>|--->|-->|->|⟶|➔|➜|➞|➡|→)[ \t]*/g, ' → ');
 
-  // 3. Gas evolution arrows after common gaseous formulas (e.g. H2^, CO2^, SO2^, O2^, NH3^)
-  current = current.replace(
-    /\b(\d*(?:H[2₂]|O[2₂]|N[2₂]|Cl[2₂]|CO[2₂]|SO[2₂]|NH[3₃]|H[2₂]S|NO[2₂]?|CH[4₄]|C[2₂]H[24₂₄]))\^/g,
-    '$1↑'
-  );
+  // 2b. Repair spaced & underscored chemical formulas from Word/PDF/OCR before gas/precipitate arrows & subscripts
+  // e.g. "H_2SO_4" -> "H2SO4", "Al_2(SO_4)_3" -> "Al2(SO4)3", "H 2 SO 4" -> "H2SO4", "2KClO 3" -> "2KClO3", "3O 2^" -> "3O2^"
+  current = current
+    // Collapse spaces inside & after parenthetical chemical groups: "Al 2 ( SO 4 ) 3" -> "Al2(SO4)3", "Ca ( OH ) 2" -> "Ca(OH)2"
+    .replace(
+      /(?<![\p{L}])(\d*)([A-Z][a-z]?)(?:[ \t]*(\d+))?[ \t]*\([ \t]*([A-Z][A-Za-z0-9₀-₉ \t]*?)[ \t]*\)[ \t]*([0-9₀-₉n]+)\b/gu,
+      (full, coeff: string, metal: string, metalSub: string | undefined, groupInner: string, groupSub: string) => {
+        if (!CHEMICAL_ELEMENTS.has(metal)) return full;
+        const compactGroup = groupInner.replace(/[ \t]+/g, '');
+        const groupEls = compactGroup.match(/[A-Z][a-z]?/g) || [];
+        if (groupEls.length === 0 || !groupEls.every((el) => CHEMICAL_ELEMENTS.has(el))) return full;
+        return `${coeff}${metal}${metalSub || ''}(${compactGroup})${groupSub}`;
+      }
+    )
+    // Collapse spaces in multi-element or diatomic spaced formulas like "H 2 SO 4", "BaCl 2", "BaSO 4(kết tủa)", "2KClO 3", "3O 2^", "C 6 H 12 O 6"
+    .replace(
+      /(?<![\p{L}])(\d*)((?:[A-Z][a-z]?)+(?:\d+)?(?:[ \t]+(?:(?:[A-Z][a-z]?)+(?:\d+)?|\d+))+)(?=\^|\s|$|[.,;:!?()[\]{}→⇄+])/gu,
+      (full, coeff: string, seq: string) => {
+        const collapsed = seq.replace(/[ \t]+/g, '');
+        if (!/\d/.test(collapsed)) return full;
+        if (NON_CHEMICAL_TOKENS.has(collapsed)) return full;
+        const els = collapsed.match(/[A-Z][a-z]?/g) || [];
+        if (els.length === 0 || !els.every((el) => CHEMICAL_ELEMENTS.has(el))) return full;
+        if (els.length === 1 && !SINGLE_ELEMENT_MOLECULES.has(collapsed)) return full;
+        return `${coeff}${collapsed}`;
+      }
+    )
+    // Strip underscores inside pure chemical formulas (e.g. H_2SO_4 -> H2SO4, Ca(OH)_2 -> Ca(OH)2, O_2 -> O2) without touching physics symbols (n_Zn, V_H2)
+    .replace(
+      /\b((?:[A-Z][a-z]?|\([A-Za-z0-9_]+\))(?:_\{?\d+\}?|[0-9])*){1,}\b/g,
+      (full) => {
+        if (!full.includes('_')) return full;
+        const stripped = full.replace(/_\{?(\d+)\}?/g, '$1');
+        const els = stripped.match(/[A-Z][a-z]?/g) || [];
+        if (els.length === 0 || !els.every((el) => CHEMICAL_ELEMENTS.has(el))) return full;
+        if (els.length === 1 && !SINGLE_ELEMENT_MOLECULES.has(stripped)) return full;
+        return stripped;
+      }
+    );
+
+  // 3. Gas evolution (↑) and Precipitate (↓) arrows after common formulas
+  current = current
+    .replace(
+      /\b(\d*(?:H[2₂]|O[2₂]|N[2₂]|Cl[2₂]|CO[2₂]|SO[2₂]|NH[3₃]|H[2₂]S|NO[2₂]?|CH[4₄]|C[2₂]H[24₂₄]))(?:\^|\s*\(\s*khí\s*\))/gi,
+      '$1↑'
+    )
+    .replace(
+      /\b(\d*(?:BaSO[4₄]|AgCl|AgBr|AgI|CaCO[3₃]|BaCO[3₃]|Cu\(OH\)[2₂]|Fe\(OH\)[23₂₃]|Al\(OH\)[3₃]|Mg\(OH\)[2₂]|Zn\(OH\)[2₂]|FeS|CuS|PbS|BaSO[3₃]|CaSO[3₃]))\s*\(\s*kết\s*tủa\s*\)/gi,
+      '$1↓'
+    );
 
   // 3b. Electron symbol e- or e^- -> e⁻
   current = current.replace(
@@ -516,7 +629,7 @@ export function formatChemicalAndScientificText(text: string): { text: string; c
 
   // 7. General chemical formulas (multi-element compounds, parenthetical groups like Al2(SO4)3, Ca(OH)2, hydrates, and diatomic molecules)
   current = current.replace(
-    /(?<![\p{L}\p{N}\\])(\d*)((?:[A-Z][a-z]?[0-9₀-₉]*|\([A-Za-z0-9₀-₉]+\)[0-9₀-₉nₙ]*)+)(?:\.(\d+|n)(H[2₂]O))?(?![\p{L}\p{N}])/gu,
+    /(?<![\p{L}\p{N}\\])(\d*)((?:[A-Z][a-z]?[0-9₀-₉]*|\([A-Za-z0-9₀-₉\-=≡]+\)[0-9₀-₉nₙ]*)+)(?:[ \t]*[·.][ \t]*(\d+|n)[ \t]*(H[2₂]\s*O))?(?![\p{L}\p{N}])/gu,
     (fullMatch, coeff: string, core: string, hydrateCoeff?: string, hydrateWater?: string) => {
       if (!/[0-9]|\)n\b/.test(core) && !hydrateWater) return fullMatch;
 
@@ -541,7 +654,7 @@ export function formatChemicalAndScientificText(text: string): { text: string; c
         .replace(/\)n$/g, ')ₙ');
 
       const formattedHydrate = hydrateWater
-        ? `.${hydrateCoeff || ''}H₂O`
+        ? `·${hydrateCoeff || ''}H₂O`
         : '';
 
       return `${coeff}${formattedCore}${formattedHydrate}`;
@@ -1107,16 +1220,39 @@ export function parseWordContentToQuestions(
     };
   }
 
-  // Always prefer Mammoth HTML if it contains sub/sup, images, or tables
+  // Detect legacy MathType / OLE equation objects and emit a clear warning
+  const oleCheck = detectLegacyOleEquations(`${rawText || ''}\n${htmlContent || ''}`);
+  if (oleCheck.hasOleEquation) {
+    warnings.push(
+      `Phát hiện ${oleCheck.count} công thức dạng đối tượng cũ (MathType/OLE). Hệ thống đã giữ nguyên hình ảnh và đánh dấu để giáo viên kiểm tra.`
+    );
+  }
+
+  // Automatically convert legacy Vietnamese encodings (TCVN3, VNI-Windows, UTF-8 Mojibake, NFD, detached accents)
+  const encodingInfo = detectLegacyVietnameseEncoding(rawText || '', htmlContent || '');
+  const cleanRawText = convertLegacyVietnameseToUnicode(
+    rawText || '',
+    encodingInfo.hasLegacyFontIssue ? encodingInfo.detectedEncoding : undefined
+  );
+  const cleanHtmlContent = htmlContent
+    ? convertLegacyVietnameseToUnicode(
+        htmlContent,
+        encodingInfo.hasLegacyFontIssue ? encodingInfo.detectedEncoding : undefined
+      )
+    : undefined;
+
+  // Always prefer Mammoth HTML if it contains sub/sup, images, tables, or OMML equations
   const shouldUseHtml =
-    Boolean(htmlContent && htmlContent.trim()) &&
-    (/<(?:sub|sup|img|table)\b/i.test(htmlContent!) || !rawText.trim());
+    Boolean(cleanHtmlContent && cleanHtmlContent.trim()) &&
+    (/<(?:sub|sup|img|table|m:oMath)\b/i.test(cleanHtmlContent!) || !cleanRawText.trim());
 
   const sourceText = shouldUseHtml
-    ? extractFormattedTextFromMammothHtml(htmlContent!, rawText)
-    : /<(?:sub|sup|img|table)\b/i.test(rawText)
-    ? extractFormattedTextFromMammothHtml(rawText, rawText)
-    : convertHtmlSubSupToUnicode(rawText);
+    ? extractFormattedTextFromMammothHtml(cleanHtmlContent!, cleanRawText)
+    : /<(?:sub|sup|img|table|m:oMath)\b/i.test(cleanRawText)
+    ? extractFormattedTextFromMammothHtml(cleanRawText, cleanRawText)
+    : normalizeVietnameseUnicodeNFC(
+        convertHtmlSubSupToUnicode(convertWordOmmlToReadableFormula(cleanRawText))
+      );
 
   const normalizedText = sourceText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 
@@ -1404,10 +1540,7 @@ export function parseWordContentToQuestions(
         continue;
       }
 
-      if (
-        isCollectingExplanation &&
-        /^(?:[-•+*]?\s*(?:Dữ\s*kiện\s*:|Bước\s*\d+|Ý\s*[a-d]\b)|\[EQ\]|[-•+]\s+)/i.test(line)
-      ) {
+      if (isCollectingExplanation) {
         explanationLines.push(line.replace(/^[-•+*]\s*/, '').trim());
         continue;
       }
@@ -1637,13 +1770,21 @@ export function parseWordContentToQuestions(
       detectedSource = 'knowledge_inference';
     }
 
+    const blockHasOle = detectLegacyOleEquations(block.rawSourceText).hasOleEquation;
+    const itemWarnings = [
+      ...solution.warnings,
+      ...(blockHasOle
+        ? ['Chứa đối tượng công thức cũ (MathType/OLE). Cần kiểm tra hiển thị công thức.']
+        : []),
+    ];
+
     const solutionSteps = solution.steps;
     const detailedExplanation = solution.explanation;
     if (!hadExplanation) autoExplainedCount++;
-    solution.warnings.forEach((warning) => warnings.push(`Câu ${block.qNumber}: ${warning}`));
+    itemWarnings.forEach((warning) => warnings.push(`Câu ${block.qNumber}: ${warning}`));
 
     const hasMismatch = Boolean(
-      solution.warnings.some((w) => /PHÁT HIỆN ĐÁP ÁN KHÔNG KHỚP|mâu thuẫn/i.test(w))
+      itemWarnings.some((w) => /PHÁT HIỆN ĐÁP ÁN KHÔNG KHỚP|mâu thuẫn/i.test(w))
     );
 
     const parsedItem: ParsedWordQuestion = {
@@ -1674,7 +1815,7 @@ export function parseWordContentToQuestions(
       questionImages: questionImages.length > 0 ? questionImages : undefined,
       questionTables: questionTables.length > 0 ? questionTables : undefined,
       rawSourceBlock: block.rawSourceText,
-      approvalStatus: hadExplanation && !hasMismatch ? 'approved' : 'pending_review',
+      approvalStatus: hadExplanation && !hasMismatch && !blockHasOle ? 'approved' : 'pending_review',
       sourceDocument: sourceDocumentName || 'Tài liệu Word (.docx)',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -1682,7 +1823,7 @@ export function parseWordContentToQuestions(
       hint:
         extractedHint ||
         (qType === 'essay'
-          ? `Câu hỏi tự luận KHTN Lớp ${meta.grade}: Em hãy trình bày từng bước công thức, thay số kèm đơn vị chuẩn hoặc chụp ảnh bài giải viết tay tải lên hệ thống.`
+          ? `Câu hỏi tự luận KHTN Lớp ${meta.grade}: Em hãy trình bày công thức, thay số kèm đơn vị chuẩn hoặc chụp ảnh bài giải viết tay tải lên hệ thống.`
           : qType === 'true_false'
           ? `Câu trắc nghiệm Đúng/Sai GDPT 2018: Em hãy chọn Đúng hoặc Sai cho cả 4 phát biểu a, b, c, d.`
           : qType === 'short_answer'
@@ -1703,9 +1844,10 @@ export function parseWordContentToQuestions(
           ? 0.5
           : 0.25,
       autoGeneratedExplanation: !hadExplanation,
-      solutionStatus: solution.status,
-      solutionWarnings: solution.warnings,
+      solutionStatus: blockHasOle ? 'needs_review' : solution.status,
+      solutionWarnings: itemWarnings,
       hasAnswerMismatch: hasMismatch,
+      hasOleEquationWarning: blockHasOle,
       inferredAnswerIndex: solution.inferredAnswer,
       detectedAnswerSource: detectedSource,
     };
@@ -1743,10 +1885,8 @@ B. Hạt Electron mang điện tích âm và hạt Neutron
 C. Chỉ có các hạt Electron chuyển động xung quanh
 D. Hạt Proton và hạt Electron
 Lời giải:
-- Dữ kiện: Proton (p): điện tích +1 | Neutron (n): không mang điện (0) | Electron (e): điện tích -1 | Hạt nhân: nằm ở tâm nguyên tử
-- Bước 1 (a) Cấu tạo hạt nhân nguyên tử): Theo mô hình nguyên tử Rutherford – Bohr, hạt nhân nằm ở tâm nguyên tử gồm các hạt Proton (mang điện tích dương +1) và các hạt Neutron (không mang điện).
-- Bước 2 (b) Cấu tạo lớp vỏ nguyên tử): Các hạt Electron (mang điện tích âm -1) chuyển động xung quanh hạt nhân ở lớp vỏ nguyên tử ⇒ Loại B, C, D.
-- Bước 3 (c) Kết luận): Vậy đáp án đúng là A.
+Theo mô hình nguyên tử Rutherford – Bohr, hạt nhân nằm ở tâm nguyên tử gồm các hạt Proton (mang điện tích dương +1) và các hạt Neutron (không mang điện); các hạt Electron chuyển động xung quanh hạt nhân.
+Đáp án: A.
 
 Câu 2: Nhỏ vài giọt dung dịch Phenolphthalein vào ống nghiệm đựng dung dịch natri hiđroxit (NaOH). Hiện tượng quan sát được là gì?
 A. Dung dịch giữ nguyên không màu
@@ -1755,11 +1895,9 @@ C. Dung dịch chuyển sang màu xanh lam
 D. Có khí không màu thoát ra
 Đáp án: B
 Lời giải:
-- Dữ kiện: Dung dịch: Sodium hydroxide (NaOH) | Chất chỉ thị: Phenolphthalein | Môi trường Base: pH > 7
-- Bước 1 (a) Phân tích môi trường dung dịch): Dung dịch Sodium hydroxide (NaOH) là một Base tan (kiềm) phân li ra ion OH⁻ nên có môi trường pH > 7:
-[EQ] NaOH → Na⁺ + OH⁻   (pH > 7)
-- Bước 2 (b) Hiện tượng đổi màu chất chỉ thị): Trong môi trường Base (pH > 7), chất chỉ thị Phenolphthalein không màu chuyển sang màu hồng cánh sen (còn giấy quỳ tím chuyển sang màu xanh lam).
-- Bước 3 (c) Kết luận): Vậy đáp án đúng là B.
+NaOH → Na⁺ + OH⁻ (môi trường base, pH > 7).
+Chất chỉ thị Phenolphthalein không màu chuyển sang màu hồng cánh sen trong môi trường base.
+Đáp án: B.
 
 Câu 3: Đặt một hiệu điện thế U = 12 V vào hai đầu một đoạn dây dẫn có điện trở R = 6 Ω. Cường độ dòng điện I chạy qua dây dẫn theo định luật Ohm là bao nhiêu?
 A. I = 0,5 A
@@ -1768,12 +1906,8 @@ C. I = 18 A
 D. I = 72 A
 Đáp án: B
 Lời giải:
-- Dữ kiện: U = 12 V | R = 6 Ω
-- Bước 1 (a) Công thức Định luật Ohm): Cường độ dòng điện chạy qua dây dẫn tỉ lệ thuận với hiệu điện thế và tỉ lệ nghịch với điện trở:
-[EQ] I = \\frac{U}{R}
-- Bước 2 (b) Thay số tính cường độ dòng điện): Thay U = 12 V và R = 6 Ω vào công thức:
-[EQ] I = \\frac{U}{R} = \\frac{12}{6} = 2,0 A
-- Bước 3 (c) Kết luận): Vậy cường độ dòng điện là I = 2,0 A ⇒ Chọn đáp án B.
+I = \\frac{U}{R} = \\frac{12}{6} = 2,0 A.
+Đáp án: B.
 
 Câu 4: Trong phân tử DNA mạch kép, nguyên tắc bổ sung giữa các Nucleotide trên hai mạch đơn được thể hiện như thế nào?
 A. Adenine (A) liên kết với Cytosine (C) bằng 2 liên kết Hydrogen
@@ -1781,11 +1915,8 @@ A. Adenine (A) liên kết với Cytosine (C) bằng 2 liên kết Hydrogen
 C. Adenine (A) liên kết với Guanine (G) bằng 3 liên kết Hydrogen
 D. Tất cả các cặp Nucleotide đều liên kết bằng 1 liên kết cộng hóa trị
 Lời giải:
-- Dữ kiện: A liên kết T: 2 liên kết Hydrogen | G liên kết C: 3 liên kết Hydrogen
-- Bước 1 (a) Nguyên tắc bổ sung giữa hai mạch đơn DNA): Trên hai mạch đơn của phân tử DNA xoắn kép, Nucleotide có kích thước lớn (A, G) luôn liên kết bổ sung với Nucleotide có kích thước bé (T, C).
-- Bước 2 (b) Số liên kết Hydrogen giữa các cặp base): Adenine (A) liên kết với Thymine (T) bằng 2 liên kết Hydrogen; Guanine (G) liên kết với Cytosine (C) bằng 3 liên kết Hydrogen:
-[EQ] A = T (2 liên kết Hydrogen) ;   G ≡ C (3 liên kết Hydrogen)
-- Bước 3 (c) Kết luận): Vậy đáp án đúng là B.
+Trên hai mạch đơn của phân tử DNA xoắn kép: A liên kết với T bằng 2 liên kết Hydrogen; G liên kết với C bằng 3 liên kết Hydrogen.
+Đáp án: B.
 
 PHẦN II. TỰ LUẬN (Học sinh trình bày lời giải hoặc chụp ảnh bài làm tải lên)
 
@@ -1794,29 +1925,18 @@ a) Viết phương trình hóa học.
 b) Tính thể tích khí H₂ thu được.
 c) Tính nồng độ mol của dung dịch HCl đã dùng.
 Lời giải:
-- Dữ kiện: m(Zn) = 6,5 g | M(Zn) = 65 g/mol | V(dd HCl) = 200 mL = 0,200 L | Vₘ = 24,79 L/mol (25°C, 1 bar)
-- Bước 1 (a) Phương trình hóa học):
-[EQ] Zn + 2HCl → ZnCl₂ + H₂↑
-Số mol kẽm đã phản ứng:
-[EQ] n_{Zn} = \\frac{m_{Zn}}{M_{Zn}} = \\frac{6,5}{65} = 0,1 mol
-- Bước 2 (b) Thể tích khí hydrogen (H₂) thu được): Theo phương trình hóa học, tỉ lệ mol Zn : H₂ = 1 : 1, nên:
-[EQ] n_{H₂} = n_{Zn} = 0,1 mol
-Thể tích khí H₂ ở điều kiện chuẩn (25°C, 1 bar):
-[EQ] V_{H₂} = n_{H₂} × 24,79 = 0,1 × 24,79 = 2,479 L
-- Bước 3 (c) Nồng độ mol của dung dịch HCl): Theo phương trình hóa học, tỉ lệ mol Zn : HCl = 1 : 2, nên:
-[EQ] n_{HCl} = 2 × n_{Zn} = 2 × 0,1 = 0,2 mol
-Nồng độ mol của dung dịch HCl:
-[EQ] C_{M}(HCl) = \\frac{n_{HCl}}{V_{dd}} = \\frac{0,2}{0,200} = 1 mol/L = 1 M
+Zn + 2HCl → ZnCl₂ + H₂
+n(Zn) = \\frac{6,5}{65} = 0,1 mol.
+Theo phương trình hóa học:
+n(H₂) = n(Zn) = 0,1 mol ⇒ V(H₂) = 0,1 × 24,79 = 2,479 ≈ 2,48 lít.
+n(HCl) = 2 × n(Zn) = 0,2 mol ⇒ C_M(HCl) = \\frac{0,2}{0,200} = 1 M.
+Đáp án: 2,48 lít; 1 M.
 
 Câu 6 (Tự luận): Cho mạch điện gồm hai điện trở R₁ = 8 Ω và R₂ = 16 Ω mắc nối tiếp nhau vào nguồn điện có hiệu điện thế U = 12 V. Hãy tính điện trở tương đương R_{tđ}, cường độ dòng điện I trong mạch và công suất tiêu thụ điện P của cả đoạn mạch.
 Lời giải:
-- Dữ kiện: R₁ = 8 Ω | R₂ = 16 Ω | U = 12 V | Mạch mắc: R₁ nt R₂
-- Bước 1 (a) Điện trở tương đương của đoạn mạch nối tiếp): Vì R₁ mắc nối tiếp R₂ nên điện trở tương đương của đoạn mạch là:
-[EQ] R_{tđ} = R₁ + R₂ = 8 + 16 = 24 Ω
-- Bước 2 (b) Cường độ dòng điện chạy trong mạch): Áp dụng Định luật Ohm cho toàn mạch:
-[EQ] I = \\frac{U}{R_{tđ}} = \\frac{12}{24} = 0,5 A
-- Bước 3 (c) Công suất tiêu thụ điện của đoạn mạch): Công suất tiêu thụ điện của cả đoạn mạch là:
-[EQ] P = U × I = 12 × 0,5 = 6,0 W`;
+R_{tđ} = R₁ + R₂ = 8 + 16 = 24 Ω.
+I = \\frac{U}{R_{tđ}} = \\frac{12}{24} = 0,5 A.
+P = U × I = 12 × 0,5 = 6,0 W.`;
 
 /**
  * Sample Word Document with all 4 GDPT 2018 question types:
@@ -1858,11 +1978,10 @@ PHẦN IV. TỰ LUẬN
 
 Câu 5 (Tự luận). Nêu hiện tượng và viết phương trình hóa học khi cho đinh sắt (Fe) vào dung dịch CuSO4.
 Lời giải:
-- Dữ kiện: Cho Fe tác dụng với dung dịch CuSO₄
-- Bước 1: Hiện tượng: Một phần đinh sắt tan ra, có lớp kim loại màu đỏ gạch (Cu) bám ngoài đinh sắt và màu xanh lam của dung dịch CuSO₄ nhạt dần.
-- Bước 2: Phương trình hóa học:
-[EQ] Fe + CuSO₄ → FeSO₄ + Cu↓
+Một phần đinh sắt tan ra, có lớp kim loại màu đỏ gạch (Cu) bám ngoài đinh sắt và màu xanh lam của dung dịch CuSO₄ nhạt dần.
+Fe + CuSO₄ → FeSO₄ + Cu↓
 Biểu điểm: Nêu đúng hiện tượng: 1,0 điểm; Viết đúng phương trình hóa học: 1,5 điểm.`;
+
 
 
 

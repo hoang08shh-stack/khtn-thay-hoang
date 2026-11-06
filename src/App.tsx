@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Suspense, lazy } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { ThemeProvider } from './context/ThemeContext.tsx';
 import { AuthProvider, useAuth } from './context/AuthContext.tsx';
@@ -15,21 +15,16 @@ import { PushNotificationToast } from './components/notifications/PushNotificati
 
 import { AdminPage } from './pages/AdminPage.tsx';
 import { QuizPracticePage } from './pages/QuizPracticePage.tsx';
-
-// Lazy-loaded pages to optimize initial bundle size on Cloudflare Pages
-const Grade6Page = lazy(() => import('./pages/GradeTemplatePage.tsx').then((m) => ({ default: m.Grade6Page })));
-const Grade7Page = lazy(() => import('./pages/GradeTemplatePage.tsx').then((m) => ({ default: m.Grade7Page })));
-const Grade8Page = lazy(() => import('./pages/GradeTemplatePage.tsx').then((m) => ({ default: m.Grade8Page })));
-const Grade9Page = lazy(() => import('./pages/GradeTemplatePage.tsx').then((m) => ({ default: m.Grade9Page })));
-const TopicsPage = lazy(() => import('./pages/TopicsPage.tsx').then((m) => ({ default: m.TopicsPage })));
-const LessonDetailPage = lazy(() => import('./pages/LessonDetailPage.tsx').then((m) => ({ default: m.LessonDetailPage })));
-const DocumentsPage = lazy(() => import('./pages/DocumentsPage.tsx').then((m) => ({ default: m.DocumentsPage })));
-const VideosPage = lazy(() => import('./pages/VideosPage.tsx').then((m) => ({ default: m.VideosPage })));
-const Lab3DPage = lazy(() => import('./pages/Lab3DPage.tsx').then((m) => ({ default: m.Lab3DPage })));
-const SimulationDetailPage = lazy(() => import('./pages/SimulationDetailPage.tsx').then((m) => ({ default: m.SimulationDetailPage })));
-const ScienceGamesPage = lazy(() => import('./pages/ScienceGamesPage.tsx').then((m) => ({ default: m.ScienceGamesPage })));
-const AuthPage = lazy(() => import('./pages/AuthPage.tsx').then((m) => ({ default: m.AuthPage })));
-const StudentProgressPage = lazy(() => import('./pages/StudentProgressPage.tsx').then((m) => ({ default: m.StudentProgressPage })));
+import { Grade6Page, Grade7Page, Grade8Page, Grade9Page } from './pages/GradeTemplatePage.tsx';
+import { TopicsPage } from './pages/TopicsPage.tsx';
+import { LessonDetailPage } from './pages/LessonDetailPage.tsx';
+import { DocumentsPage } from './pages/DocumentsPage.tsx';
+import { VideosPage } from './pages/VideosPage.tsx';
+import { Lab3DPage } from './pages/Lab3DPage.tsx';
+import { SimulationDetailPage } from './pages/SimulationDetailPage.tsx';
+import { ScienceGamesPage } from './pages/ScienceGamesPage.tsx';
+import { AuthPage } from './pages/AuthPage.tsx';
+import { StudentProgressPage } from './pages/StudentProgressPage.tsx';
 
 // Loading indicator for code-split route transitions
 function PageLoadingFallback() {
@@ -94,14 +89,10 @@ function AppContent() {
             <Route path="/dang-nhap" element={<AuthPage />} />
             <Route path="/dang-ky" element={<AuthPage />} />
 
-            {/* Protected Routes */}
+            {/* Student Local Self-Tracking Route (No account required) */}
             <Route
               path="/tien-do"
-              element={
-                <ProtectedRoute requireAuth={true}>
-                  <StudentProgressPage currentUser={user} progress={progress} />
-                </ProtectedRoute>
-              }
+              element={<StudentProgressPage currentUser={user} progress={progress} />}
             />
             <Route
               path="/quan-tri"

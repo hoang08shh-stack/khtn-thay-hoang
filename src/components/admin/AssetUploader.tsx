@@ -105,6 +105,7 @@ export const AssetUploader: React.FC<AssetUploaderProps> = ({
         type: docType,
         fileSize: result.sizeFormatted || formatBytes(selectedFile.size),
         fileUrl: result.publicUrl,
+        fileName: result.fileName || selectedFile.name,
         storagePath: result.path,
         downloadsCount: 0,
       };

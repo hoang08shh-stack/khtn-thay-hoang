@@ -16,31 +16,14 @@ import {
   ExternalLink,
 } from 'lucide-react';
 
-// Lazy-load 3D simulation components to split heavy Three.js / R3F bundles
-const LabViewer = React.lazy(() =>
-  import('./lab/LabViewer.tsx').then((m) => ({ default: m.LabViewer }))
-);
-const ModelViewer = React.lazy(() =>
-  import('./lab/ModelViewer.tsx').then((m) => ({ default: m.ModelViewer }))
-);
-const AtomSimulation = React.lazy(() =>
-  import('./AtomSimulation.tsx').then((m) => ({ default: m.AtomSimulation }))
-);
-const MicroscopeSimulation = React.lazy(() =>
-  import('./MicroscopeSimulation.tsx').then((m) => ({ default: m.MicroscopeSimulation }))
-);
-const CircuitSimulation = React.lazy(() =>
-  import('./CircuitSimulation.tsx').then((m) => ({ default: m.CircuitSimulation }))
-);
-const AcidBaseSimulation = React.lazy(() =>
-  import('./AcidBaseSimulation.tsx').then((m) => ({ default: m.AcidBaseSimulation }))
-);
-const SolarSystemSimulation = React.lazy(() =>
-  import('./SolarSystemSimulation.tsx').then((m) => ({ default: m.SolarSystemSimulation }))
-);
-const OpticsSimulation = React.lazy(() =>
-  import('./OpticsSimulation.tsx').then((m) => ({ default: m.OpticsSimulation }))
-);
+import { LabViewer } from './lab/LabViewer.tsx';
+import { ModelViewer } from './lab/ModelViewer.tsx';
+import { AtomSimulation } from './AtomSimulation.tsx';
+import { MicroscopeSimulation } from './MicroscopeSimulation.tsx';
+import { CircuitSimulation } from './CircuitSimulation.tsx';
+import { AcidBaseSimulation } from './AcidBaseSimulation.tsx';
+import { SolarSystemSimulation } from './SolarSystemSimulation.tsx';
+import { OpticsSimulation } from './OpticsSimulation.tsx';
 
 const SimulationLoader: React.FC<{ title?: string }> = ({ title = 'Mô phỏng 3D' }) => (
   <div className="w-full h-full min-h-[420px] flex flex-col items-center justify-center bg-slate-950 text-slate-300 p-8 space-y-4 rounded-2xl">
