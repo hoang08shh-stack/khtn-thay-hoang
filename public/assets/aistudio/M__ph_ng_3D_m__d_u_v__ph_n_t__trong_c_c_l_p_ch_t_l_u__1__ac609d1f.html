@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="vi"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mô phỏng 3D mỏ dầu và phân tử trong các lớp chất lưu</title>
+<style>
+:root{--bg:#eef0f2;--pn:#fff;--tx:#1b2631;--mt:#5d6b78;--ac:#b8571a;--bd:#d3d9de;--k1:#dbe7ef;--k2:#9db4c4;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f161c;--pn:#18222b;--tx:#e7edf2;--mt:#93a2af;--ac:#ee9a58;--bd:#2b3945;--k1:#1c3446;--k2:#0a1218}}
+:root[data-theme="dark"]{--bg:#0f161c;--pn:#18222b;--tx:#e7edf2;--mt:#93a2af;--ac:#ee9a58;--bd:#2b3945;--k1:#1c3446;--k2:#0a1218}
+html,body{height:100%;margin:0}html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{background:var(--bg);color:var(--tx);font:15px/1.4 system-ui,"Segoe UI",Roboto,sans-serif;overflow:hidden}
+#app{display:grid;grid-template-columns:minmax(0,1fr) 320px;height:100%}
+#stage{position:relative;min-height:0;background:linear-gradient(var(--k1),var(--k2));overflow:hidden}
+#cv{width:100%;height:100%;display:block;touch-action:none}
+#labels{position:absolute;inset:0;pointer-events:none}
+.lb{position:absolute;transform:translate(6px,-50%);background:rgba(10,18,24,.8);color:#fff;font-size:13px;padding:2px 7px;border-radius:5px;white-space:nowrap;border-left:3px solid #f0a35e;display:none}
+.ov{position:absolute;background:rgba(10,18,24,.88);color:#fff;border-radius:9px;padding:8px 11px;font-size:14px}
+#card{left:8px;top:8px;max-width:min(380px,62%)}#tip{right:8px;top:8px;max-width:min(280px,34%);display:none}
+#mol{right:8px;top:8px;width:min(450px,96%);display:none;z-index:3}
+#mol canvas{width:100%;height:250px;display:block;touch-action:none;cursor:grab}
+#bar{left:8px;right:8px;bottom:8px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;justify-content:center;padding:6px}
+#load{position:absolute;inset:0;display:grid;place-items:center;background:var(--bg);z-index:5;text-align:center;padding:20px}
+button,select{font:inherit;font-size:13px;cursor:pointer;border:1px solid var(--bd);background:var(--pn);color:var(--tx);border-radius:7px;padding:5px 9px}
+button:hover{border-color:var(--ac)}button.on{background:var(--ac);color:#fff;border-color:var(--ac)}
+#side{background:var(--pn);border-left:1px solid var(--bd);overflow:auto;padding:10px 12px;min-height:0}
+h1{font-size:18px;margin:0}h3{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--mt);margin:12px 0 5px}
+.g{display:flex;flex-wrap:wrap;gap:5px}.ck{display:inline-block;width:49%;font-size:13px}
+.r{display:flex;justify-content:space-between;gap:8px;font-size:13px;margin-top:5px}
+.lgd div{font-size:13px;margin:3px 0}.lgd i{display:inline-block;width:14px;height:14px;border-radius:3px;margin-right:6px;vertical-align:-2px;border:1px solid #0005}
+small{color:var(--mt)}
+#quiz{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;place-items:center;z-index:9}
+.bx{background:var(--pn);color:var(--tx);max-width:min(520px,92vw);padding:16px;border-radius:12px}.bx button{display:block;width:100%;text-align:left;margin:6px 0}
+@media(max-width:820px){#app{grid-template-columns:1fr;grid-template-rows:minmax(0,58%) minmax(0,42%)}#side{border-left:0;border-top:1px solid var(--bd)}#card{max-width:92%;font-size:12px}#tip{top:auto;bottom:70px;max-width:60%}#mol{left:8px;width:auto}#mol canvas{height:190px}}
+</style></head><body>
+<div id="app"><main id="stage"><canvas id="cv"></canvas><div id="labels"></div>
+<div id="card" class="ov"></div><div id="tip" class="ov"></div>
+<div id="mol" class="ov"><div style="display:flex;justify-content:space-between;gap:6px"><b id="mT"></b><button id="mX">✕</button></div>
+<div class="g" id="mL" style="margin:5px 0"></div><div class="g" id="mTabs" style="margin-bottom:5px"></div>
+<canvas id="mv"></canvas><div id="mC" style="font-size:13px"></div>
+<small style="color:#c8d4dc">Que–quả cầu: ⚪H · ⚫C (xám) · 🔵N · 🔴O · 🟡S · 🟣Na⁺ · 🟢Cl⁻. Kéo chuột để xoay.</small></div>
+<div id="bar" class="ov"><button id="bB">⏮ QUAY LẠI</button><button id="bN">⏭ TIẾP THEO</button><button id="bH">🏠 RESET CAMERA</button><button id="bLb" class="on">Nhãn</button><button id="bM">🔬 PHÂN TỬ</button><button id="bQ">QUIZ</button></div>
+<div id="load">Đang tải mô phỏng 3D…</div></main>
+<aside id="side"><h1>Mỏ dầu và phân tử 3D</h1><small>Cấu tạo bẫy dầu khí · Oil trap structure</small>
+<h3>Bài học</h3><div class="g" id="sg"></div>
+<h3>Camera</h3><div class="g" id="cg"></div>
+<h3>Màu các lớp chất lưu</h3><div class="lgd">
+<div><i style="background:#fbf7e6"></i>Khí mỏ dầu: không màu (vẽ nhạt để dễ thấy)</div>
+<div><i style="background:#24150a"></i>Dầu thô: nâu sẫm đến đen</div>
+<div><i style="background:#2e86c1"></i>Nước vỉa: xanh lam, chứa muối hòa tan</div></div>
+<h3>Lớp hiển thị</h3><div id="ly"></div>
+<label class="r"><span>Độ trong suốt đất đá</span><input type="range" id="tr" min="0" max="100" value="35"></label>
+<label class="r"><span>Ngôn ngữ nhãn</span><select id="lg"><option value="vi+en">VI + EN</option><option value="vi">VI</option><option value="en">EN</option></select></label>
+<p><small>Nhấp vào lớp dầu, khí hoặc nước để xem phân tử của các chất trong lớp đó.</small></p>
+</aside></div><div id="quiz"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(()=>{
+const q=i=>document.getElementById(i),R=Math.random,cl=(v,a,b)=>Math.min(b,Math.max(a,v));
+if(!window.THREE){q('load').textContent='Không tải được thư viện 3D. Hãy kiểm tra mạng rồi tải lại trang.';return}
+const T=THREE,V=(x,y,z)=>new T.Vector3(x,y,z),P=a=>V(a[1],a[2],a[3]);
+let ren;try{ren=new T.WebGLRenderer({canvas:q('cv'),antialias:true,alpha:true})}catch(e){q('load').textContent='Trình duyệt không hỗ trợ WebGL.';return}
+ren.setPixelRatio(Math.min(devicePixelRatio||1,2));
+const sc=new T.Scene(),C3=new T.PerspectiveCamera(40,1,.1,300);
+sc.add(new T.HemisphereLight(0xffffff,0x5a6672,.9));const dl=new T.DirectionalLight(0xffffff,.65);dl.position.set(-18,30,34);sc.add(dl);
+const GOC=-9.4,OWC=-10.6,W=x=>2.6*Math.exp(-((x/10)**2))+.04*x,rt=x=>-11+W(x),rb=x=>-14+W(x);
+const srf=x=>.2+.12*Math.sin(.5*x),b1=x=>-1.8+.25*Math.sin(.35*x),b2=x=>-3.6+.2*W(x)+.2*Math.sin(.3*x),b3=x=>-6.2+.5*W(x)-.15*Math.sin(.4*x),b4=x=>-9.3+W(x);
+const sim={step:0,lang:'vi+en',labels:1},on={};
+const I={
+cap:['Đá chắn','Cap rock','Lớp đá có độ thấm rất thấp, giúp ngăn dầu và khí tiếp tục di chuyển lên phía trên.'],
+res:['Đá chứa','Reservoir rock','Đá xốp có lỗ rỗng và khe nứt nhỏ. Dầu, khí, nước nằm trong các lỗ rỗng chứ không phải trong hang rỗng.'],
+gas:['Khí mỏ dầu','Oil-field gas','Không màu (vẽ nhạt để dễ thấy). Chủ yếu là metan CH₄, kèm etan, propan, butan.'],
+oil:['Dầu thô','Crude oil','Màu nâu sẫm đến đen. Hỗn hợp nhiều hiđrocacbon cùng lượng nhỏ hợp chất của S, N, O.'],
+water:['Nước vỉa (nước mặn)','Formation water (brine)','Nước chứa muối hòa tan, chủ yếu NaCl; thường nằm ở phần dưới của bẫy.'],
+sed:['Lớp đá trầm tích','Sedimentary layers','Các lớp đá xếp chồng, khác nhau về màu sắc, độ dày và độ nghiêng.'],
+soil:['Lớp đất bề mặt','Surface soil','Đất, đá và địa hình bề mặt.']};
+const ST=[
+['Đá chứa','Đá xốp có nhiều lỗ rỗng nhỏ; dầu, khí, nước nằm trong các lỗ rỗng chứ không phải trong một hang rỗng lớn.','UNDERGROUND','res'],
+['Đá chắn','Lớp đá có độ thấm rất thấp nằm phía trên, giữ dầu và khí lại trong bẫy.','UNDERGROUND','cap'],
+['Khí – dầu – nước','Do khác khối lượng riêng, trong nhiều cấu trúc khí ở trên, dầu ở giữa, nước ở dưới (không tuyệt đối với mọi mỏ). Màu: khí nhạt, dầu nâu đen, nước xanh lam.','RESERVOIR',''],
+['Phân tử trong dầu','Nhấp vào lớp dầu để xem phân tử. Dầu thô là hỗn hợp, chủ yếu hiđrocacbon (ankan, xicloankan, aren) cùng lượng nhỏ hợp chất của S, N, O.','RESERVOIR','oil'],
+['Phân tử khí và nước','Nhấp vào lớp khí (chủ yếu CH₄) và lớp nước vỉa (H₂O hòa tan NaCl: ion Na⁺, Cl⁻).','RESERVOIR','gas']];
+const PRE={OVERVIEW:[0,-8,0,48,.45,1],UNDERGROUND:[0,-8,0,32,.3,1.2],RESERVOIR:[0,-10,.3,14,.15,1.4]};
+const cs={t:V(0,-8,0),r:32,th:.3,ph:1.2};let tw=null;
+// ---- cảnh địa chất
+const tcv=document.createElement('canvas');tcv.width=tcv.height=128;
+{const g=tcv.getContext('2d');g.fillStyle='#b4b4b4';g.fillRect(0,0,128,128);for(let i=0;i<1100;i++){const v=120+R()*135|0;g.fillStyle='rgb('+v+','+v+','+v+')';g.fillRect(R()*128,R()*128,2+R()*3,2+R()*3)}}
+const mkTex=r=>{const t=new T.CanvasTexture(tcv);t.wrapS=t.wrapT=T.RepeatWrapping;t.repeat.set(r,r);return t};
+const prism=(top,bot,zf,zb,x0=-20,x1=20,n=72)=>{const s=new T.Shape();s.moveTo(x0,top(x0));for(let i=1;i<=n;i++){const x=x0+(x1-x0)*i/n;s.lineTo(x,top(x))}for(let i=n;i>=0;i--){const x=x0+(x1-x0)*i/n;s.lineTo(x,bot(x))}const g=new T.ExtrudeGeometry(s,{depth:zf-zb,bevelEnabled:false});g.translate(0,0,zb);return g};
+const grp={},click=[],rockM=[],byK={};['surface','sed','cap','res','gas','oil','water'].forEach(k=>{grp[k]=new T.Group();sc.add(grp[k])});
+const mesh=(k,geo,mat,key)=>{const m=new T.Mesh(geo,mat);m.userData.k=key;grp[k].add(m);click.push(m);byK[key]=byK[key]||m;return m};
+const rock=(k,top,bot,col,key)=>{const m=new T.MeshLambertMaterial({color:col,map:mkTex(.35),transparent:true});rockM.push(m);return mesh(k,prism(top,bot,0,-16),m,key)};
+const soil=rock('surface',srf,b1,0x7a6440,'soil');
+rock('sed',b1,b2,0xcdb383,'sed');rock('sed',b2,b3,0xa98d7a,'sed');rock('sed',b3,b4,0x8e6a55,'sed');
+rock('cap',b4,rt,0x56626d,'cap');
+const resM=new T.MeshLambertMaterial({color:0xcdb68c,map:mkTex(1.1),transparent:true});rockM.push(resM);mesh('res',prism(rt,rb,0,-16),resM,'res');
+rock('sed',rb,()=>-21.5,0x3b444c,'sed');
+const zone=(lo,hi)=>{const bt=x=>Math.max(rb(x),Math.min(lo,rt(x)));return[x=>Math.max(bt(x),Math.min(rt(x),hi))+.003,bt]};
+const FC={gas:[0xfbf7e6,.6],oil:[0x24150a,.9],water:[0x2e86c1,.65]};
+const fl=(k,lo,hi)=>{const[t,b]=zone(lo,hi),m=mesh(k,prism(t,b,.04,-15.9,-19.9,19.9),new T.MeshBasicMaterial({color:FC[k][0],transparent:true,opacity:FC[k][1],depthWrite:false}),k);m.renderOrder=2;return m};
+fl('gas',GOC,99);fl('oil',OWC,GOC);fl('water',-99,OWC);
+// ---- nhãn
+const LB=[],vis=o=>{while(o){if(!o.visible)return false;o=o.parent}return true};
+const lab=(k,x,y,z,o)=>{const e=document.createElement('div');e.className='lb';q('labels').appendChild(e);LB.push({k,p:V(x,y,z),o,e})};
+lab('soil',-17,-.9,.1,soil);lab('sed',-15,-5.2,.1,grp.sed);lab('cap',-14.5,-10.2,.1,grp.cap);lab('res',-14.5,-12.6,.1,grp.res);
+lab('gas',-2,-9,.2,grp.gas);lab('oil',-7,-10.15,.2,grp.oil);lab('water',-6,-11.5,.2,grp.water);
+const nm=k=>{const i=I[k];return sim.lang==='vi'?i[0]:sim.lang==='en'?i[1]:i[0]+' – '+i[1]};
+const relabel=()=>LB.forEach(L=>L.e.textContent=nm(L.k));
+// ---- phân tử 3D
+const RAD={H:.26,C:.4,N:.38,O:.38,S:.52,Na:.6,Cl:.65},CE={H:0xffffff,C:0x909090,N:0x3050f8,O:0xff2020,S:0xf0d020,Na:0xab5cf2,Cl:0x1fd01f};
+const alk=n=>({at:[...Array(n)].map((_,i)=>['C',i*1.258,(i%2)*.888,0]),bd:[...Array(n-1)].map((_,i)=>[i,i+1])});
+const hex=(f,e)=>({at:[...Array(6)].map((_,i)=>[i||!e?'C':e,Math.cos(i*1.0472)*(f?1.45:1.4),Math.sin(i*1.0472)*(f?1.45:1.4),f?(i%2?.25:-.25):0]),bd:[[0,1],[1,2],[2,3],[3,4],[4,5],[5,0]]});
+const NAP={at:[[0,.7],[0,-.7],[1.212,1.4],[2.424,.7],[2.424,-.7],[1.212,-1.4],[-1.212,1.4],[-2.424,.7],[-2.424,-.7],[-1.212,-1.4]].map(([x,y])=>['C',x,y,0]),bd:[[0,1],[0,2],[2,3],[3,4],[4,5],[5,1],[0,6],[6,7],[7,8],[8,9],[9,1]]};
+const THI={at:[['S',0,0,0],['C',1.234,-1.19,0],['C',.71,-2.456,0],['C',-.71,-2.456,0],['C',-1.234,-1.19,0]],bd:[[0,1],[1,2],[2,3],[3,4],[4,0]]};
+const MD={
+oil:{t:'Lớp dầu thô',s:.5,m:'Dầu thô là hỗn hợp phức tạp, chủ yếu là hiđrocacbon (ankan, xicloankan, aren) cùng lượng nhỏ hợp chất của S, N, O; thành phần khác nhau giữa các mỏ. Hình chỉ minh họa vài chất tiêu biểu, không theo tỉ lệ thực.',d:[
+{t:'Ankan – octan',f:'C₈H₁₈',x:'Hiđrocacbon no, mạch hở (CnH2n+2); nhóm chất chiếm tỉ lệ lớn trong dầu thô.',...alk(8),n:2},
+{t:'Xicloankan – xiclohexan',f:'C₆H₁₂',x:'Hiđrocacbon no, mạch vòng (CnH2n); vòng 6 cạnh dạng ghế.',...hex(1),n:2},
+{t:'Aren – benzen',f:'C₆H₆',x:'Hiđrocacbon thơm: vòng 6 cạnh phẳng, có hệ liên kết π liên hợp.',...hex(0),ar:1,n:2},
+{t:'Aren – naphtalen',f:'C₁₀H₈',x:'Aren gồm hai vòng benzen ghép chung một cạnh.',...NAP,ar:1,n:1},
+{t:'Chứa S – thiophen',f:'C₄H₄S',x:'Hợp chất dị vòng chứa lưu huỳnh; dầu chỉ chứa lượng nhỏ hợp chất của S, N, O.',...THI,ar:1,n:1},
+{t:'Chứa N – piriđin',f:'C₅H₅N',x:'Hợp chất dị vòng chứa nitơ (lượng nhỏ).',...hex(0,'N'),ar:1,n:1}]},
+gas:{t:'Lớp khí mỏ dầu',s:.9,m:'Khí mỏ dầu chủ yếu là metan, kèm etan, propan, butan; tùy mỏ còn có CO₂, N₂, H₂S. Tỉ lệ trong hình chỉ minh họa.',d:[
+{t:'Metan',f:'CH₄',x:'Thành phần chính của khí mỏ dầu.',at:[['C',0,0,0]],bd:[],n:8},
+{t:'Etan',f:'C₂H₆',x:'Ankan 2 cacbon, có với lượng nhỏ hơn.',...alk(2),n:2},
+{t:'Propan',f:'C₃H₈',x:'Ankan 3 cacbon (thành phần của khí hóa lỏng LPG).',...alk(3),n:1},
+{t:'Butan',f:'C₄H₁₀',x:'Ankan 4 cacbon.',...alk(4),n:1}]},
+water:{t:'Lớp nước vỉa (nước mặn)',s:1.3,m:'Nước vỉa là nước chứa nhiều muối hòa tan (chủ yếu NaCl, ngoài ra có Ca²⁺, Mg²⁺...), nên gọi là nước mặn. Tỉ lệ trong hình chỉ minh họa.',d:[
+{t:'Nước',f:'H₂O',x:'Phân tử phân cực, là dung môi hòa tan muối.',at:[['O',0,0,0],['H',.757,.586,0],['H',-.757,.586,0]],bd:[[0,1],[0,2]],n:10},
+{t:'Ion natri',f:'Na⁺',x:'Cation chính của muối NaCl hòa tan trong nước vỉa.',at:[['Na',0,0,0]],bd:[],n:3},
+{t:'Ion clorua',f:'Cl⁻',x:'Anion chính của muối NaCl hòa tan trong nước vỉa.',at:[['Cl',0,0,0]],bd:[],n:3}]}};
+function addH(at,bd,ar){const nb=at.map(()=>[]);bd.forEach(([a,b])=>{nb[a].push(b);nb[b].push(a)});const out=at.slice(),B=bd.slice();
+ at.forEach((a,i)=>{if(a[0]!=='C')return;const p=P(a),u=nb[i].map(j=>P(at[j]).sub(p).normalize()),n=u.length;let d=[],L=1.09;
+  if(ar){L=1.08;if(n===2)d=[u[0].clone().add(u[1]).negate().normalize()]}
+  else if(n===0)d=[[1,1,1],[1,-1,-1],[-1,1,-1],[-1,-1,1]].map(v=>V(...v).normalize());
+  else if(n===1){const x=Math.abs(u[0].x)<.9?V(1,0,0):V(0,1,0),e1=x.sub(u[0].clone().multiplyScalar(x.dot(u[0]))).normalize(),e2=u[0].clone().cross(e1);d=[0,1,2].map(k=>{const f=k*2.0944;return u[0].clone().multiplyScalar(-.3338).add(e1.clone().multiplyScalar(.9426*Math.cos(f))).add(e2.clone().multiplyScalar(.9426*Math.sin(f)))})}
+  else if(n===2){const b=u[0].clone().add(u[1]).normalize(),c=u[0].clone().cross(u[1]).normalize();d=[1,-1].map(s=>b.clone().multiplyScalar(-.5764).add(c.clone().multiplyScalar(.8171*s)))}
+  d.forEach(v=>{B.push([i,out.length]);out.push(['H',a[1]+v.x*L,a[2]+v.y*L,a[3]+v.z*L])})});
+ return[out,B]}
+let mr,ms,mc,root,SG,CG,BM,molOpen=0,molLayer='oil',molIdx=-1,drag=0,lx=0,ly=0,movers=[],mw=0,mh=0;const mat={};
+const mt=e=>mat[e]||(mat[e]=new T.MeshPhongMaterial({color:CE[e],shininess:60}));
+function initMol(){if(mr)return 1;try{mr=new T.WebGLRenderer({canvas:q('mv'),antialias:true,alpha:true})}catch(e){q('mC').textContent='Không khởi tạo được khung 3D phân tử.';return 0}
+ mr.setPixelRatio(Math.min(devicePixelRatio||1,2));ms=new T.Scene();mc=new T.PerspectiveCamera(40,1.6,.1,100);mc.position.z=22;
+ ms.add(new T.AmbientLight(0xffffff,.65));const l=new T.DirectionalLight(0xffffff,.9);l.position.set(6,8,12);ms.add(l);
+ root=new T.Group();ms.add(root);SG=new T.SphereGeometry(1,18,14);CG=new T.CylinderGeometry(1,1,1,10);BM=new T.MeshPhongMaterial({color:0xcfd6dc,shininess:30});return 1}
+function build(d){const[at,bd]=addH(d.at,d.bd,d.ar),g=new T.Group(),c=V(0,0,0);let rad=0;
+ at.forEach(a=>c.add(P(a)));c.multiplyScalar(1/at.length);
+ at.forEach(a=>{const s=new T.Mesh(SG,mt(a[0])),p=P(a).sub(c),r=RAD[a[0]];s.position.copy(p);s.scale.setScalar(r);g.add(s);rad=Math.max(rad,p.length()+r)});
+ bd.forEach(([i,j])=>{const A=P(at[i]).sub(c),B=P(at[j]).sub(c),v=B.clone().sub(A),m=new T.Mesh(CG,BM);m.position.copy(A).add(B).multiplyScalar(.5);m.scale.set(.1,v.length(),.1);m.quaternion.setFromUnitVectors(V(0,1,0),v.normalize());g.add(m)});
+ g.userData.R=rad;return g}
+function molUI(){const L=MD[molLayer],d=L.d[molIdx];q('mT').textContent=L.t;
+ q('mL').innerHTML=[['oil','Dầu'],['gas','Khí'],['water','Nước']].map(([k,n])=>'<button data-l="'+k+'"'+(k===molLayer?' class="on"':'')+'>'+n+'</button>').join('');
+ q('mTabs').innerHTML='<button data-i="-1"'+(molIdx<0?' class="on"':'')+'>Hỗn hợp</button>'+L.d.map((x,i)=>'<button data-i="'+i+'"'+(i===molIdx?' class="on"':'')+'>'+x.f+'</button>').join('');
+ q('mC').innerHTML=d?'<b>'+d.t+' · '+d.f+'</b><br>'+d.x:L.m}
+function fillMol(){if(!initMol())return;const L=MD[molLayer];while(root.children.length)root.remove(root.children[0]);movers=[];root.rotation.set(.35,0,0);
+ if(molIdx>=0){const d=L.d[molIdx],g=d.g||(d.g=build(d)),c=g.clone();c.scale.setScalar(5.5/g.userData.R);root.add(c)}
+ else L.d.forEach(d=>{const g=d.g||(d.g=build(d));for(let k=0;k<d.n;k++){const c=g.clone();c.scale.setScalar(L.s);c.position.set((R()-.5)*15,(R()-.5)*8,(R()-.5)*6);c.rotation.set(R()*6,R()*6,R()*6);movers.push({o:c,v:V(R()-.5,R()-.5,R()-.5).multiplyScalar(1.2),w:V(R()-.5,R()-.5,R()-.5).multiplyScalar(1.5)});root.add(c)}});
+ molUI()}
+function openMol(k){molLayer=k;molIdx=-1;molOpen=1;q('mol').style.display='block';q('card').style.display=q('tip').style.display='none';fillMol()}
+q('mL').onclick=e=>{const b=e.target.closest('button');if(b)openMol(b.dataset.l)};
+q('mTabs').onclick=e=>{const b=e.target.closest('button');if(b){molIdx=+b.dataset.i;fillMol()}};
+q('mX').onclick=()=>{molOpen=0;q('mol').style.display='none';q('card').style.display='block'};
+q('bM').onclick=()=>openMol('oil');
+const mv=q('mv');
+mv.addEventListener('pointerdown',e=>{drag=1;lx=e.clientX;ly=e.clientY;mv.setPointerCapture(e.pointerId)});
+mv.addEventListener('pointermove',e=>{if(drag&&root){root.rotation.y+=(e.clientX-lx)*.01;root.rotation.x+=(e.clientY-ly)*.01;lx=e.clientX;ly=e.clientY}});
+mv.addEventListener('pointerup',()=>drag=0);mv.addEventListener('pointercancel',()=>drag=0);
+// ---- camera & chọn đối tượng
+const cv=q('cv'),ptr=new Map(),rc=new T.Raycaster();let moved=0,pd=1;
+const pinch=()=>{const a=[...ptr.values()];return Math.hypot(a[0][0]-a[1][0],a[0][1]-a[1][1])||1};
+cv.addEventListener('pointerdown',e=>{cv.setPointerCapture(e.pointerId);ptr.set(e.pointerId,[e.clientX,e.clientY]);tw=null;moved=0;if(ptr.size===2)pd=pinch()});
+cv.addEventListener('pointermove',e=>{const o=ptr.get(e.pointerId);if(!o)return;const dx=e.clientX-o[0],dy=e.clientY-o[1];ptr.set(e.pointerId,[e.clientX,e.clientY]);moved+=Math.abs(dx)+Math.abs(dy);
+ if(ptr.size===1){cs.th-=dx*.006;cs.ph=cl(cs.ph-dy*.006,.2,1.75)}else if(ptr.size===2){const d=pinch();cs.r=cl(cs.r*pd/d,5,90);pd=d}});
+cv.addEventListener('pointerup',e=>{if(ptr.size===1&&moved<5)pickAt(e);ptr.delete(e.pointerId)});
+cv.addEventListener('pointercancel',e=>ptr.delete(e.pointerId));
+cv.addEventListener('wheel',e=>{e.preventDefault();cs.r=cl(cs.r*(1+Math.sign(e.deltaY)*.1),5,90);tw=null},{passive:false});
+function pickAt(e){const r=cv.getBoundingClientRect();rc.setFromCamera({x:(e.clientX-r.left)/r.width*2-1,y:-(e.clientY-r.top)/r.height*2+1},C3);
+ const h=rc.intersectObjects(click,false).filter(i=>vis(i.object)&&i.object.material.opacity>.2),m=h.length?h[0].object:null;
+ hl(m);if(m&&MD[m.userData.k])openMol(m.userData.k)}
+let sel=null;
+function hl(m){if(sel)sel.material.color.setHex(sel.userData.c0);sel=m;const t=q('tip');
+ if(m){m.userData.c0=m.material.color.getHex();m.material.color.offsetHSL(0,0,.1);const k=m.userData.k;t.innerHTML='<b>'+nm(k)+'</b><br>'+I[k][2];t.style.display=molOpen?'none':'block'}else t.style.display='none'}
+function fly(n){tw={f:[cs.t.x,cs.t.y,cs.t.z,cs.r,cs.th,cs.ph],to:PRE[n],k:0};document.querySelectorAll('.cb').forEach(b=>b.classList.toggle('on',b.dataset.c===n))}
+// ---- giao diện
+function ui(){const s=ST[sim.step];q('card').innerHTML='<b>Bước '+(sim.step+1)+'/5 · '+s[0]+'</b><br>'+s[1];
+ document.querySelectorAll('.sb').forEach((b,i)=>b.classList.toggle('on',i===sim.step));q('bLb').classList.toggle('on',!!sim.labels)}
+function go(n){sim.step=cl(n,0,4);const s=ST[sim.step];fly(s[2]);hl(byK[s[3]]||null);ui()}
+q('sg').innerHTML=ST.map((s,i)=>'<button class="sb" data-i="'+i+'">'+(i+1)+'. '+s[0]+'</button>').join('');
+q('sg').onclick=e=>{const b=e.target.closest('.sb');if(b)go(+b.dataset.i)};
+q('cg').innerHTML=Object.keys(PRE).map(n=>'<button class="cb" data-c="'+n+'">'+n+'</button>').join('');
+q('cg').onclick=e=>{const b=e.target.closest('.cb');if(b)fly(b.dataset.c)};
+const LY=[['surface','Bề mặt'],['sed','Lớp trầm tích'],['cap','Đá chắn'],['res','Đá chứa'],['gas','Khí mỏ dầu'],['oil','Dầu thô'],['water','Nước vỉa']];
+q('ly').innerHTML=LY.map(([k,n])=>{on[k]=1;return '<label class="ck"><input type="checkbox" data-k="'+k+'" checked> '+n+'</label>'}).join('');
+q('ly').onchange=e=>{on[e.target.dataset.k]=e.target.checked;for(const k in grp)grp[k].visible=!!on[k]};
+const setTr=v=>rockM.forEach(m=>{m.opacity=1-v*.92;m.depthWrite=v<.03});
+q('tr').oninput=()=>setTr(q('tr').value/100);setTr(.35);
+q('bB').onclick=()=>go(sim.step-1);q('bN').onclick=()=>go(sim.step+1);q('bH').onclick=()=>fly('OVERVIEW');
+q('bLb').onclick=()=>{sim.labels^=1;ui()};
+q('lg').onchange=e=>{sim.lang=e.target.value;relabel();if(sel)hl(sel)};
+const QZ=[['Dầu mỏ chủ yếu tồn tại ở đâu trong tầng chứa?',['Trong một hang lớn dưới lòng đất','Trong hệ thống lỗ rỗng và khe nứt của đá chứa','Trong đá chắn','Trong lớp đất bề mặt'],1,'Dầu nằm trong lỗ rỗng và khe nứt của đá chứa, không phải trong hang rỗng.'],
+['Vai trò chính của đá chắn là gì?',['Tạo ra dầu','Ngăn dầu và khí tiếp tục di chuyển lên trên','Hòa tan muối trong nước vỉa','Tách khí khỏi dầu'],1,'Đá chắn có độ thấm rất thấp nên giữ dầu khí lại trong bẫy.'],
+['Dầu thô chủ yếu gồm các chất nào?',['Các hiđrocacbon (ankan, xicloankan, aren)','Chỉ có nước và muối','Chỉ có khí metan','Kim loại nguyên chất'],0,'Dầu thô là hỗn hợp hiđrocacbon, kèm lượng nhỏ hợp chất của S, N, O.'],
+['Thành phần chính của khí mỏ dầu là gì?',['Metan CH₄','Khí oxi','Natri clorua','Benzen'],0,'Khí mỏ dầu chủ yếu là metan, kèm etan, propan, butan.']];
+let qi=0,qs=0;const qd=q('quiz');
+function qshow(){if(qi>=QZ.length){qd.innerHTML='<div class="bx"><h2>Kết quả: '+qs+'/'+QZ.length+'</h2><button id="qc">Đóng</button></div>';q('qc').onclick=()=>qd.style.display='none';return}
+ const z=QZ[qi];qd.innerHTML='<div class="bx"><b>Câu '+(qi+1)+'/'+QZ.length+'.</b> '+z[0]+z[1].map((o,i)=>'<button data-i="'+i+'">'+'ABCD'[i]+'. '+o+'</button>').join('')+'<p id="fb"></p><button id="nx" style="display:none">Tiếp tục</button></div>';
+ qd.querySelectorAll('[data-i]').forEach(b=>b.onclick=()=>{const i=+b.dataset.i,ok=i===z[2];if(ok)qs++;qd.querySelectorAll('[data-i]').forEach(x=>x.disabled=true);q('fb').innerHTML=ok?'✅ <b>Chính xác.</b> '+z[3]:'❌ <b>Chưa chính xác.</b> '+z[3];q('nx').style.display='block';q('nx').onclick=()=>{qi++;qshow()}})}
+q('bQ').onclick=()=>{qi=qs=0;qd.style.display='grid';qshow()};qd.onclick=e=>{if(e.target===qd)qd.style.display='none'};
+// ---- vòng lặp
+let last=performance.now(),fr=0,cw=0,ch=0;
+function loop(now){requestAnimationFrame(loop);const dt=Math.min(.05,(now-last)/1000);last=now;fr++;
+ const st=q('stage'),w=st.clientWidth,h=st.clientHeight;if(w&&h&&(w!==cw||h!==ch)){cw=w;ch=h;ren.setSize(w,h,false);C3.aspect=w/h;C3.updateProjectionMatrix()}
+ if(tw){tw.k=Math.min(1,tw.k+dt/1.6);const e=tw.k<.5?2*tw.k*tw.k:1-Math.pow(2-2*tw.k,2)/2,v=tw.f.map((a,i)=>a+(tw.to[i]-a)*e);cs.t.set(v[0],v[1],v[2]);cs.r=v[3];cs.th=v[4];cs.ph=v[5];if(tw.k>=1)tw=null}
+ C3.position.set(cs.t.x+cs.r*Math.sin(cs.ph)*Math.sin(cs.th),cs.t.y+cs.r*Math.cos(cs.ph),cs.t.z+cs.r*Math.sin(cs.ph)*Math.cos(cs.th));C3.lookAt(cs.t);C3.updateMatrixWorld();
+ LB.forEach(L=>{let ok=sim.labels&&vis(L.o);if(ok){const p=L.p.clone().project(C3);ok=p.z<1&&Math.abs(p.x)<1.1&&Math.abs(p.y)<1.1;if(ok){L.e.style.left=(p.x+1)/2*cw+'px';L.e.style.top=(1-p.y)/2*ch+'px'}}L.e.style.display=ok?'block':'none'});
+ ren.render(sc,C3);
+ if(molOpen&&mr){const mw2=mv.clientWidth,mh2=mv.clientHeight;if(mw2&&(mw2!==mw||mh2!==mh)){mw=mw2;mh=mh2;mr.setSize(mw,mh,false);mc.aspect=mw/mh;mc.updateProjectionMatrix()}
+  if(!drag)root.rotation.y+=dt*.35;
+  movers.forEach(m=>{const p=m.o.position;p.addScaledVector(m.v,dt);m.o.rotation.x+=m.w.x*dt;m.o.rotation.y+=m.w.y*dt;m.o.rotation.z+=m.w.z*dt;
+   if(p.x>8&&m.v.x>0||p.x<-8&&m.v.x<0)m.v.x*=-1;if(p.y>4.5&&m.v.y>0||p.y<-4.5&&m.v.y<0)m.v.y*=-1;if(p.z>3&&m.v.z>0||p.z<-3&&m.v.z<0)m.v.z*=-1});
+  mr.render(ms,mc)}
+ if(fr===3)q('load').remove()}
+try{relabel();go(0);requestAnimationFrame(loop)}catch(e){q('load').textContent='Lỗi khởi tạo mô phỏng: '+e.message}
+})();
+</script></body></html>
