@@ -1,0 +1,1104 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phản Xạ Toàn Phần & Cáp Quang 3D - KHTN 9</title>
+    <!-- Three.js & OrbitControls -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <!-- Font chữ Nunito tròn đáng yêu -->
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --bg-page: #f8fafc;
+            --primary: #0284c7;
+            --primary-light: #38bdf8;
+            --accent-pink: #e11d48;
+            --accent-purple: #8b5cf6;
+            --accent-green: #10b981;
+            --text-dark: #0f172a;
+            --card-bg: #ffffff;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Nunito', 'Segoe UI', sans-serif;
+            user-select: none;
+        }
+
+        body {
+            background-color: var(--bg-page);
+            color: var(--text-dark);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* KHUNG HIỂN THỊ 3D VIEWPORT */
+        #viewport-container {
+            flex: 1;
+            position: relative;
+            height: 100%;
+            background: radial-gradient(circle at 50% 25%, #ffffff 0%, #e0f2fe 65%, #cbd5e1 100%);
+        }
+
+        #webgl-canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /* BẢNG THÔNG SỐ HUD GỌN GÀNG */
+        .hud-banner {
+            position: absolute;
+            top: 16px;
+            left: 18px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(8px);
+            padding: 10px 16px;
+            border-radius: 16px;
+            border: 2px solid #38bdf8;
+            box-shadow: 0 6px 20px rgba(2, 132, 199, 0.15);
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .hud-title {
+            color: var(--primary);
+            font-size: 13.5px;
+            font-weight: 900;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .hud-tags {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .hud-tag {
+            background: #f0f9ff;
+            padding: 4px 10px;
+            border-radius: 10px;
+            font-size: 12.5px;
+            font-weight: 800;
+            color: #0369a1;
+            border: 1px solid #bae6fd;
+        }
+
+        .hud-tag span {
+            color: var(--accent-pink);
+            font-size: 14px;
+        }
+
+        .tir-badge {
+            background: #ffe4e6;
+            color: #be123c;
+            border: 1.5px dashed #f43f5e;
+            padding: 4px 10px;
+            border-radius: 10px;
+            font-size: 12px;
+            font-weight: 900;
+            display: inline-block;
+            margin-top: 2px;
+        }
+
+        /* CHÚ THÍCH TINH GỌN GÓC DƯỚI PHẢI */
+        .simple-env-box {
+            position: absolute;
+            bottom: 16px;
+            right: 16px;
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: blur(6px);
+            border-radius: 14px;
+            padding: 8px 14px;
+            border: 1.5px solid #cbd5e1;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.06);
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            font-size: 11.5px;
+            font-weight: 800;
+            pointer-events: none;
+        }
+
+        .simple-env-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .env-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .hint-bar {
+            position: absolute;
+            bottom: 16px;
+            left: 18px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 6px 14px;
+            border-radius: 18px;
+            font-size: 12px;
+            font-weight: 700;
+            color: #64748b;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            pointer-events: none;
+        }
+
+        /* SIDEBAR ĐIỀU KHIỂN */
+        #sidebar {
+            width: clamp(320px, 36vw, 410px);
+            background: var(--card-bg);
+            border-left: 2px solid #e2e8f0;
+            display: flex;
+            flex-direction: column;
+            box-shadow: -6px 0 20px rgba(0, 0, 0, 0.05);
+            z-index: 10;
+        }
+
+        @media (max-width: 960px) {
+            .hint-bar { display: none; }
+            .hud-banner { top: 10px; left: 10px; right: 10px; padding: 8px 12px; }
+            .hud-tags { flex-wrap: wrap; gap: 4px; }
+            .hud-tag { font-size: 11px; padding: 3px 8px; }
+            .simple-env-box { bottom: 10px; left: 10px; right: auto; font-size: 10.5px; padding: 6px 10px; }
+        }
+
+        .header {
+            padding: 14px 18px;
+            background: linear-gradient(135deg, #e0f2fe 0%, #fef3c7 100%);
+            border-bottom: 2px solid #bae6fd;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 17px;
+            font-weight: 900;
+            color: #0284c7;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .header p {
+            font-size: 12px;
+            color: #64748b;
+            font-weight: 700;
+            margin-top: 2px;
+        }
+
+        /* TAB BAR */
+        .tab-bar {
+            display: flex;
+            padding: 8px 10px;
+            background: #f8fafc;
+            gap: 6px;
+            border-bottom: 2px solid #f1f5f9;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 9px 4px;
+            background: #ffffff;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            color: #64748b;
+            font-size: 12px;
+            font-weight: 800;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .tab-btn.active {
+            background: #0284c7;
+            color: #ffffff;
+            border-color: #0369a1;
+            box-shadow: 0 4px 10px rgba(2, 132, 199, 0.25);
+            transform: translateY(-1px);
+        }
+
+        .tab-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* CARD TRANG TRÍ */
+        .card {
+            background: #ffffff;
+            border-radius: 14px;
+            padding: 13px;
+            margin-bottom: 12px;
+            border: 2px solid #f1f5f9;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.03);
+        }
+
+        .card h3 {
+            font-size: 13px;
+            font-weight: 900;
+            color: #0369a1;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .control-group {
+            margin-bottom: 10px;
+        }
+
+        .control-group label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            font-weight: 800;
+            color: #475569;
+            margin-bottom: 4px;
+        }
+
+        select, input[type="range"] {
+            font-family: 'Nunito', sans-serif;
+        }
+
+        select {
+            width: 100%;
+            padding: 8px 10px;
+            border-radius: 10px;
+            border: 2px solid #cbd5e1;
+            background: #f8fafc;
+            color: #1e293b;
+            font-size: 12.5px;
+            font-weight: 700;
+            outline: none;
+            cursor: pointer;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            height: 8px;
+            border-radius: 5px;
+            background: #e2e8f0;
+            outline: none;
+            accent-color: var(--accent-pink);
+            cursor: pointer;
+        }
+
+        .btn-cute {
+            width: 100%;
+            padding: 10px;
+            border-radius: 12px;
+            border: none;
+            background: linear-gradient(135deg, #e11d48 0%, #f43f5e 100%);
+            color: #ffffff;
+            font-size: 13.5px;
+            font-weight: 900;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(225, 29, 72, 0.25);
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .btn-sub {
+            background: #f1f5f9;
+            color: #475569;
+            font-size: 12px;
+            font-weight: 800;
+            border: 2px solid #e2e8f0;
+            box-shadow: none;
+            margin-top: 6px;
+        }
+
+        .fact-box {
+            background: #f0fdf4;
+            border: 1.5px dashed #86efac;
+            border-radius: 12px;
+            padding: 10px;
+            font-size: 12px;
+            line-height: 1.6;
+            color: #166534;
+            font-weight: 700;
+        }
+
+        .game-status-board {
+            display: flex;
+            justify-content: space-between;
+            background: #fef3c7;
+            border: 1.5px solid #fde68a;
+            border-radius: 12px;
+            padding: 8px 12px;
+            margin-bottom: 10px;
+            font-weight: 900;
+            color: #b45309;
+            font-size: 13px;
+        }
+
+        .game-msg {
+            margin-top: 8px;
+            padding: 8px;
+            border-radius: 10px;
+            font-size: 12px;
+            font-weight: 800;
+            text-align: center;
+            display: none;
+        }
+
+        .quiz-opt-btn {
+            width: 100%;
+            text-align: left;
+            padding: 9px 11px;
+            border-radius: 10px;
+            border: 2px solid #e2e8f0;
+            background: #f8fafc;
+            color: #334155;
+            font-size: 12px;
+            font-weight: 700;
+            margin-bottom: 6px;
+            cursor: pointer;
+            transition: 0.2s;
+            line-height: 1.4;
+        }
+
+        .quiz-opt-btn:hover {
+            border-color: #38bdf8;
+            background: #f0f9ff;
+        }
+
+        .quiz-opt-btn.opt-correct {
+            background: #dcfce7 !important;
+            border-color: #22c55e !important;
+            color: #15803d !important;
+        }
+
+        .quiz-opt-btn.opt-wrong {
+            background: #fee2e2 !important;
+            border-color: #ef4444 !important;
+            color: #b91c1c !important;
+        }
+
+        .quiz-feedback {
+            padding: 9px 11px;
+            border-radius: 10px;
+            font-size: 12px;
+            font-weight: 800;
+            line-height: 1.5;
+            margin-top: 8px;
+            display: none;
+        }
+
+        .quiz-feedback.pass {
+            background: #dcfce7;
+            color: #15803d;
+            border: 1.5px solid #86efac;
+            display: block;
+        }
+
+        .quiz-feedback.fail {
+            background: #fee2e2;
+            color: #b91c1c;
+            border: 1.5px solid #fca5a5;
+            display: block;
+        }
+
+        .result-summary-card {
+            display: none;
+            text-align: center;
+            padding: 16px;
+            border-radius: 14px;
+            background: #f0f9ff;
+            border: 2px solid #bae6fd;
+        }
+
+        .score-circle {
+            width: 75px;
+            height: 75px;
+            border-radius: 50%;
+            background: #0284c7;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: 900;
+            margin: 10px auto;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- KHU VỰC HIỂN THỊ 3D VIEWPORT -->
+    <div id="viewport-container">
+        <canvas id="webgl-canvas"></canvas>
+
+        <div class="hud-banner">
+            <div class="hud-title">💎 PHẢN XẠ TOÀN PHẦN & CÁP QUANG KHTN 9</div>
+            <div class="hud-tags">
+                <div class="hud-tag">Góc tới (i): <span id="hud-i">50.0°</span></div>
+                <div class="hud-tag">Góc giới hạn (i<sub>gh</sub>): <span id="hud-igh">41.8°</span></div>
+                <div class="hud-tag">Góc khúc xạ (r): <span id="hud-r">Phản xạ 100%</span></div>
+            </div>
+            <div id="badge-tir">
+                <div class="tir-badge" id="tirStatusText">🔥 ĐANG XẢY RA PHẢN XẠ TOÀN PHẦN (i ≥ i_gh)</div>
+            </div>
+        </div>
+
+        <div class="simple-env-box">
+            <div class="simple-env-item">
+                <span class="env-dot" style="background:#38bdf8;"></span>
+                <span id="txtEnv1">Môi trường 1 (Chứa tia tới): Thủy tinh bán trụ (n₁ = 1.50)</span>
+            </div>
+            <div class="simple-env-item">
+                <span class="env-dot" style="background:#e11d48;"></span>
+                <span>Mặt phân cách phẳng P - Q</span>
+            </div>
+            <div class="simple-env-item">
+                <span class="env-dot" style="background:#eab308;"></span>
+                <span id="txtEnv2">Môi trường 2 (Bên ngoài): Không khí (n₂ = 1.00)</span>
+            </div>
+        </div>
+
+        <div class="hint-bar">
+            🐬 <b>Thao tác:</b> Kéo chuột xoay 360° | Cuộn chuột phóng to/thu nhỏ
+        </div>
+    </div>
+
+    <!-- SIDEBAR ĐIỀU KHIỂN -->
+    <div id="sidebar">
+        <div class="header">
+            <h1>💎 PHẢN XẠ TOÀN PHẦN 3D</h1>
+            <p>Khảo sát Góc giới hạn i<sub>gh</sub> & Nguyên lý Cáp quang</p>
+        </div>
+
+        <div class="tab-bar">
+            <button class="tab-btn active" onclick="setTab('sim')">🧪 Thí Nghiệm</button>
+            <button class="tab-btn" onclick="setTab('game')">🎮 Truyền Cáp Quang</button>
+            <button class="tab-btn" onclick="setTab('quiz')">📝 Bài Tập (10 Câu)</button>
+        </div>
+
+        <!-- TAB 1: THÍ NGHIỆM -->
+        <div id="tab-sim" class="tab-content active">
+            <div class="card">
+                <h3>🔮 Chọn Cặp Môi Trường (n₁ &gt; n₂)</h3>
+                <div class="control-group">
+                    <label>Môi trường 1 (Chiết quang hơn - Chứa tia tới):</label>
+                    <select id="env1Select" onchange="applyEnvironment()">
+                        <option value="1.500" selected>🔮 Bản bán trụ Thủy tinh (n₁ = 1.50)</option>
+                        <option value="1.333">💧 Khối Nước trong suốt (n₁ = 1.33)</option>
+                        <option value="2.417">💎 Pha lê Kim Cương (n₁ = 2.42)</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label>Môi trường 2 (Chiết quang kém hơn):</label>
+                    <select id="env2Select" onchange="applyEnvironment()">
+                        <option value="1.000" selected>💨 Không khí (n₂ = 1.00)</option>
+                        <option value="1.333">💧 Nước tinh khiết (n₂ = 1.33)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>🔦 Điều Chỉnh Góc Tới i (Từ dưới chiếu lên tâm I)</h3>
+                <div class="control-group">
+                    <label>
+                        <span>Góc tới <i>i</i>:</span>
+                        <span id="label-i-val" style="color:var(--accent-pink); font-size:14px; font-weight:900;">50°</span>
+                    </label>
+                    <input type="range" id="angleSlider" min="0" max="85" value="50" oninput="changeAngle(this.value)">
+                </div>
+
+                <div style="display:flex; gap:6px; margin-top:6px;">
+                    <button class="btn-cute btn-sub" style="margin-top:0;" onclick="setExactCriticalAngle()">
+                        🎯 Đặt đúng i = i<sub>gh</sub>
+                    </button>
+                    <button class="btn-cute btn-sub" style="margin-top:0;" onclick="changeAngle(60)">
+                        ⚡ Góc phản xạ toàn phần (60°)
+                    </button>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>📖 Điều Kiện Phản Xạ Toàn Phần KHTN 9</h3>
+                <div class="fact-box" id="factContent"></div>
+            </div>
+        </div>
+
+        <!-- TAB 2: MINI GAME TRUYỀN TÍN HIỆU CÁP QUANG -->
+        <div id="tab-game" class="tab-content">
+            <div class="card">
+                <h3>🌐 Thử Thách: Truyền Tín Hiệu Internet Qua Cáp Quang</h3>
+                <p style="font-size:12px; color:#64748b; line-height:1.5; margin-bottom:10px; font-weight:700;">
+                    Để xung ánh sáng Laser truyền đi trọn vẹn bên trong lõi cáp quang mà không bị rò rỉ ra ngoài vỏ, góc tới <i>i</i> phải <b>lớn hơn hoặc bằng góc giới hạn i<sub>gh</sub></b> và trúng cổng thu tín hiệu!
+                </p>
+
+                <div class="game-status-board">
+                    <span>Tín hiệu đạt: <b id="gameScore" style="color:#0284c7;">0</b> Mbps</span>
+                    <span>Lượt phát: <b id="gameShots" style="color:var(--accent-pink);">5</b> 🎯</span>
+                </div>
+
+                <div class="control-group">
+                    <label>Căn chỉnh góc bắn <i>i</i>: <b id="gameAngleLabel" style="color:var(--accent-pink)">50°</b></label>
+                    <input type="range" id="gameAngleSlider" min="15" max="80" value="50" oninput="onGameAngle(this.value)">
+                </div>
+
+                <button class="btn-cute" onclick="shootFiberSignal()">🚀 PHÁT XUNG LASER CÁP QUANG!</button>
+                <button class="btn-cute btn-sub" onclick="generateNewReceiver()">🔄 Đổi vị trí Cổng Thu Quang Học</button>
+
+                <div class="game-msg" id="gameFeedback"></div>
+            </div>
+        </div>
+
+        <!-- TAB 3: BÀI TẬP 10 CÂU -->
+        <div id="tab-quiz" class="tab-content">
+            <div class="card" id="quizCard">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                    <h3>📝 Trắc Nghiệm Phản Xạ Toàn Phần</h3>
+                    <span id="quizIndexBadge" style="font-size:11.5px; font-weight:800; color:var(--primary); background:#e0f2fe; padding:3px 9px; border-radius:10px;">Câu 1/10</span>
+                </div>
+                <p id="quizQuestionText" style="font-size:12.5px; font-weight:800; color:#1e293b; line-height:1.5; margin-bottom:10px;"></p>
+                <div id="quizOptionsContainer"></div>
+                <div class="quiz-feedback" id="quizFeedbackBox"></div>
+                <button class="btn-cute btn-sub" id="btnNextQuiz" onclick="nextQuizQuestion()" style="display:none; margin-top:10px;">
+                    Câu tiếp theo ➔
+                </button>
+            </div>
+
+            <div class="result-summary-card" id="resultSummaryBox">
+                <h2 style="color:#0284c7; font-size:17px; margin-bottom:3px;">🎉 HOÀN THÀNH BÀI TẬP!</h2>
+                <p style="font-size:12px; color:#64748b; font-weight:700;">Kết quả luyện tập Phản xạ toàn phần KHTN 9:</p>
+                <div class="score-circle" id="scoreDisplay">10/10</div>
+                <div style="font-size:12.5px; font-weight:800; margin:8px 0;" id="scoreComment"></div>
+                <div style="background:#ffffff; border-radius:10px; padding:10px; font-size:12px; font-weight:700; color:#334155; margin-bottom:10px; text-align:left; line-height:1.6;">
+                    • Số câu trả lời đúng: <b style="color:#16a34a;" id="correctCountTxt">10</b> câu<br>
+                    • Số câu chưa chính xác: <b style="color:#dc2626;" id="wrongCountTxt">0</b> câu<br>
+                    • Điểm số quy đổi: <b style="color:#0284c7;" id="finalScore10Txt">10.0</b> điểm
+                </div>
+                <button class="btn-cute" onclick="restartQuiz()">🔄 Làm lại bài tập</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const container = document.getElementById('viewport-container');
+        const canvas = document.getElementById('webgl-canvas');
+
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0xf1f5f9, 0.005);
+
+        const camera = new THREE.PerspectiveCamera(42, container.clientWidth / container.clientHeight, 0.1, 1000);
+        camera.position.set(0, 12, 64);
+
+        const renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.minDistance = 24;
+        controls.maxDistance = 110;
+
+        scene.add(new THREE.HemisphereLight(0xffffff, 0xcfd8dc, 0.95));
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1.15);
+        dirLight.position.set(20, 40, 30);
+        scene.add(dirLight);
+
+        const mainGroup = new THREE.Group();
+        scene.add(mainGroup);
+
+        // Bản bán trụ thủy tinh ở nửa dưới (y <= 0)
+        const semiGeo = new THREE.CylinderGeometry(18, 18, 10, 48, 1, false, 0, Math.PI);
+        const semiMat = new THREE.MeshPhongMaterial({
+            color: 0x38bdf8,
+            emissive: 0x0284c7,
+            emissiveIntensity: 0.22,
+            specular: 0xffffff,
+            shininess: 95,
+            transparent: true,
+            opacity: 0.62,
+            side: THREE.DoubleSide
+        });
+        const semiCylinder = new THREE.Mesh(semiGeo, semiMat);
+        semiCylinder.rotation.x = Math.PI / 2;
+        semiCylinder.rotation.y = Math.PI / 2;
+        mainGroup.add(semiCylinder);
+
+        // Mặt phẳng phân cách P - Q
+        const pqLine = new THREE.Line(
+            new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-22, 0, 0), new THREE.Vector3(22, 0, 0)]),
+            new THREE.LineBasicMaterial({ color: 0xe11d48, linewidth: 3 })
+        );
+        mainGroup.add(pqLine);
+
+        // Pháp tuyến N - N'
+        const normalMat = new THREE.LineDashedMaterial({ color: 0xea580c, dashSize: 0.8, gapSize: 0.5, linewidth: 2 });
+        const normalLine = new THREE.Line(
+            new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 20, 0), new THREE.Vector3(0, -20, 0)]),
+            normalMat
+        );
+        normalLine.computeLineDistances();
+        mainGroup.add(normalLine);
+
+        // Điểm tới I
+        const pointI = new THREE.Mesh(
+            new THREE.SphereGeometry(0.55, 16, 16),
+            new THREE.MeshBasicMaterial({ color: 0xe11d48 })
+        );
+        mainGroup.add(pointI);
+
+        // Đèn chiếu Laser ở dưới chiếu lên tâm I
+        const laserGun = new THREE.Group();
+        const gunBody = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.8, 1.1, 4.2, 16),
+            new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.3 })
+        );
+        gunBody.rotation.z = Math.PI / 2;
+        laserGun.add(gunBody);
+        mainGroup.add(laserGun);
+
+        function createBeam(colorHex, radius = 0.32) {
+            const mesh = new THREE.Mesh(
+                new THREE.CylinderGeometry(radius, radius, 1, 16),
+                new THREE.MeshBasicMaterial({ color: colorHex, transparent: true, opacity: 0.95 })
+            );
+            mainGroup.add(mesh);
+            return mesh;
+        }
+
+        const incidentBeam = createBeam(0xe11d48, 0.34);
+        const reflectedBeam = createBeam(0xe11d48, 0.34);
+        const refractedBeam = createBeam(0x38bdf8, 0.28);
+
+        // Cổng thu quang học cho Mini-game
+        const receiverOrb = new THREE.Mesh(
+            new THREE.OctahedronGeometry(1.4, 0),
+            new THREE.MeshStandardMaterial({ color: 0x10b981, emissive: 0x059669, roughness: 0.2 })
+        );
+        receiverOrb.position.set(14, -12, 0);
+        receiverOrb.visible = false;
+        mainGroup.add(receiverOrb);
+
+        function setBeamTransform(mesh, p1, p2) {
+            const dist = p1.distanceTo(p2);
+            if (dist < 0.01) {
+                mesh.visible = false;
+                return;
+            }
+            mesh.visible = true;
+            mesh.scale.set(1, dist, 1);
+            mesh.position.copy(p1).add(p2).multiplyScalar(0.5);
+            const dir = new THREE.Vector3().subVectors(p2, p1).normalize();
+            mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+        }
+
+        let n1 = 1.500;
+        let n2 = 1.000;
+        let angleI = 50;
+        const RAY_LEN = 20;
+
+        function getCriticalAngleDeg() {
+            if (n1 <= n2) return null;
+            return (Math.asin(n2 / n1) * 180) / Math.PI;
+        }
+
+        function updateOpticsPhysics() {
+            const i_rad = (angleI * Math.PI) / 180;
+            const O = new THREE.Vector3(0, 0, 0);
+
+            // Tia tới đi từ dưới (môi trường 1 chiết quang hơn) lên tâm I(0,0,0)
+            const startP = new THREE.Vector3(-RAY_LEN * Math.sin(i_rad), -RAY_LEN * Math.cos(i_rad), 0);
+            laserGun.position.copy(startP);
+            laserGun.lookAt(O);
+            laserGun.rotateY(Math.PI / 2);
+            setBeamTransform(incidentBeam, startP, O);
+
+            // Tia phản xạ quay ngược lại xuống môi trường 1
+            const reflP = new THREE.Vector3(RAY_LEN * Math.sin(i_rad), -RAY_LEN * Math.cos(i_rad), 0);
+            setBeamTransform(reflectedBeam, O, reflP);
+
+            const sin_r = (n1 / n2) * Math.sin(i_rad);
+            const igh = getCriticalAngleDeg();
+            const tirStatus = document.getElementById('tirStatusText');
+
+            document.getElementById('hud-i').innerText = `${angleI.toFixed(1)}°`;
+            document.getElementById('hud-igh').innerText = igh ? `${igh.toFixed(1)}°` : 'Không có';
+            document.getElementById('label-i-val').innerText = `${angleI}°`;
+
+            if (sin_r >= 0.999) {
+                refractedBeam.visible = false;
+                reflectedBeam.material.opacity = 1.0;
+                document.getElementById('hud-r').innerText = 'Phản xạ 100%';
+                tirStatus.style.background = '#ffe4e6';
+                tirStatus.style.color = '#be123c';
+                tirStatus.innerText = `🔥 ĐANG XẢY RA PHẢN XẠ TOÀN PHẦN (i = ${angleI.toFixed(1)}° ≥ i_gh = ${igh ? igh.toFixed(1) : ''}°)`;
+                updateFactContent(null, true, igh);
+            } else {
+                const r_rad = Math.asin(sin_r);
+                const r_deg = (r_rad * 180) / Math.PI;
+                const refrP = new THREE.Vector3(RAY_LEN * Math.sin(r_rad), RAY_LEN * Math.cos(r_rad), 0);
+                setBeamTransform(refractedBeam, O, refrP);
+                refractedBeam.visible = true;
+                reflectedBeam.material.opacity = 0.45;
+                document.getElementById('hud-r').innerText = `${r_deg.toFixed(1)}°`;
+                tirStatus.style.background = '#e0f2fe';
+                tirStatus.style.color = '#0369a1';
+                tirStatus.innerText = `💧 Chưa phản xạ toàn phần (i < i_gh): Vẫn còn tia khúc xạ ló ra ngoài (r = ${r_deg.toFixed(1)}°)`;
+                updateFactContent(r_deg, false, igh);
+            }
+        }
+
+        function updateFactContent(r_deg, isTIR, igh) {
+            const box = document.getElementById('factContent');
+            if (isTIR) {
+                box.innerHTML = `
+                    🔥 <b>Hiện tượng Phản Xạ Toàn Phần đã xảy ra!</b><br>
+                    • <b>Điều kiện 1:</b> Ánh sáng truyền từ môi trường chiết quang hơn (n<sub>1</sub> = ${n1.toFixed(2)}) sang chiết quang kém hơn (n<sub>2</sub> = ${n2.toFixed(2)}).<br>
+                    • <b>Điều kiện 2:</b> Góc tới i (${angleI.toFixed(1)}°) ≥ Góc giới hạn i<sub>gh</sub> (${igh.toFixed(1)}°), với <b>sin(i<sub>gh</sub>) = n<sub>2</sub> / n<sub>1</sub></b>.<br>
+                    • Toàn bộ 100% tia sáng bị phản xạ ngược lại vào bản bán trụ!
+                `;
+            } else {
+                box.innerHTML = `
+                    💡 <b>Khúc xạ kèm phản xạ một phần (i &lt; i<sub>gh</sub>):</b><br>
+                    • Góc khúc xạ <b>r = ${r_deg.toFixed(1)}° &gt; i = ${angleI.toFixed(1)}°</b> (tia khúc xạ lệch xa pháp tuyến).<br>
+                    • Hãy tăng góc tới <i>i</i> vượt qua ngưỡng <b>i<sub>gh</sub> = ${igh ? igh.toFixed(1) + '°' : 'N/A'}</b> để quan sát tia khúc xạ biến mất hoàn toàn!
+                `;
+            }
+        }
+
+        function applyEnvironment() {
+            n1 = parseFloat(document.getElementById('env1Select').value);
+            n2 = parseFloat(document.getElementById('env2Select').value);
+            if (n1 <= n2) {
+                n1 = 1.500;
+                n2 = 1.000;
+                document.getElementById('env1Select').value = '1.500';
+                document.getElementById('env2Select').value = '1.000';
+            }
+            const s1 = document.getElementById('env1Select');
+            const s2 = document.getElementById('env2Select');
+            document.getElementById('txtEnv1').innerText = `Môi trường 1: ${s1.options[s1.selectedIndex].text}`;
+            document.getElementById('txtEnv2').innerText = `Môi trường 2: ${s2.options[s2.selectedIndex].text}`;
+            updateOpticsPhysics();
+        }
+
+        function changeAngle(val) {
+            angleI = parseFloat(val);
+            document.getElementById('angleSlider').value = angleI;
+            updateOpticsPhysics();
+        }
+
+        function setExactCriticalAngle() {
+            const igh = getCriticalAngleDeg();
+            if (igh) {
+                changeAngle(Math.ceil(igh));
+            }
+        }
+
+        // MINI-GAME
+        let gameScore = 0;
+        let gameShots = 5;
+        let targetAngle = 55;
+
+        function generateNewReceiver() {
+            const igh = getCriticalAngleDeg() || 42;
+            targetAngle = Math.round(igh + 6 + Math.random() * 25);
+            const rad = (targetAngle * Math.PI) / 180;
+            receiverOrb.position.set(16 * Math.sin(rad), -16 * Math.cos(rad), 0);
+            const fb = document.getElementById('gameFeedback');
+            fb.style.display = 'block';
+            fb.style.background = '#f1f5f9';
+            fb.style.color = '#334155';
+            fb.innerHTML = `🎯 Cổng thu quang học đang nằm ở góc phản xạ toàn phần! Hãy chỉnh góc i ≥ ${igh.toFixed(1)}° để bắn trúng!`;
+        }
+
+        function onGameAngle(val) {
+            document.getElementById('gameAngleLabel').innerText = `${val}°`;
+            changeAngle(val);
+        }
+
+        function shootFiberSignal() {
+            const fb = document.getElementById('gameFeedback');
+            fb.style.display = 'block';
+            if (gameShots <= 0) {
+                fb.style.background = '#fee2e2';
+                fb.style.color = '#b91c1c';
+                fb.innerHTML = 'Hết lượt phát xung! Bấm "Đổi vị trí Cổng Thu" để tiếp tục!';
+                return;
+            }
+            gameShots--;
+            document.getElementById('gameShots').innerText = gameShots;
+
+            const igh = getCriticalAngleDeg() || 42;
+            if (angleI < igh) {
+                fb.style.background = '#fee2e2';
+                fb.style.color = '#b91c1c';
+                fb.innerHTML = `⚠️ Góc tới i = ${angleI}° < i_gh (${igh.toFixed(1)}°): Tia sáng bị khúc xạ thất thoát ra ngoài vỏ cáp!`;
+                return;
+            }
+
+            if (Math.abs(angleI - targetAngle) <= 3) {
+                gameScore += 200;
+                document.getElementById('gameScore').innerText = gameScore;
+                fb.style.background = '#dcfce7';
+                fb.style.color = '#15803d';
+                fb.innerHTML = `🎉 <b>TRUYỀN TÍN HIỆU THÀNH CÔNG 100%!</b> (+200 Mbps) Phản xạ toàn phần hoàn hảo!`;
+                setTimeout(generateNewReceiver, 1500);
+            } else {
+                fb.style.background = '#fef3c7';
+                fb.style.color = '#b45309';
+                fb.innerHTML = `Đã phản xạ toàn phần nhưng lệch cổng thu ${Math.abs(angleI - targetAngle).toFixed(0)}°! Gợi ý: Chỉnh góc khoảng ${targetAngle}°!`;
+            }
+        }
+
+        // QUIZ 10 CÂU
+        const quizList = [
+            {
+                q: "1. Hiện tượng phản xạ toàn phần là hiện tượng:",
+                opts: [
+                    "Toàn bộ tia tới bị phản xạ tại mặt phân cách, không còn tia khúc xạ",
+                    "Tia sáng truyền thẳng qua mặt phân cách không đổi hướng",
+                    "Tia sáng bị tách thành 7 màu cầu vồng",
+                    "Tia sáng bị hấp thụ hoàn toàn vào mặt phân cách"
+                ],
+                correct: 0,
+                explain: "Chính xác! Khi xảy ra phản xạ toàn phần, tia khúc xạ biến mất hoàn toàn và 100% ánh sáng phản xạ ngược lại môi trường cũ."
+            },
+            {
+                q: "2. Điều kiện về chiết suất để có thể xảy ra phản xạ toàn phần khi ánh sáng truyền từ môi trường (1) sang môi trường (2) là:",
+                opts: [
+                    "n₁ > n₂ (truyền từ môi trường chiết quang hơn sang môi trường chiết quang kém)",
+                    "n₁ < n₂ (truyền từ không khí vào nước)",
+                    "n₁ = n₂",
+                    "Không phụ thuộc vào chiết suất hai môi trường"
+                ],
+                correct: 0,
+                explain: "Đúng rồi! Ánh sáng bắt buộc phải truyền từ môi trường có chiết suất lớn hơn (n₁) sang môi trường có chiết suất nhỏ hơn (n₂)."
+            },
+            {
+                q: "3. Công thức tính góc tới giới hạn phản xạ toàn phần i_gh là:",
+                opts: [
+                    "sin(i_gh) = n₂ / n₁ (với n₁ > n₂)",
+                    "sin(i_gh) = n₁ / n₂",
+                    "sin(i_gh) = n₁ × n₂",
+                    "cos(i_gh) = n₂ / n₁"
+                ],
+                correct: 0,
+                explain: "Chính xác! Khi r = 90° thì n₁·sin(i_gh) = n₂·sin(90°) = n₂ ⇒ sin(i_gh) = n₂ / n₁."
+            },
+            {
+                q: "4. Khi tia sáng truyền từ thủy tinh (n₁ = 1,5) ra không khí (n₂ = 1,0), giá trị sin(i_gh) bằng:",
+                opts: [
+                    "sin(i_gh) = 1 / 1,5 = 2/3 ≈ 0,667 (i_gh ≈ 41,8°)",
+                    "sin(i_gh) = 1,5",
+                    "sin(i_gh) = 0,5",
+                    "sin(i_gh) = 0,75"
+                ],
+                correct: 0,
+                explain: "Tuyệt vời! sin(i_gh) = n₂ / n₁ = 1,0 / 1,5 = 2/3 ≈ 0,667 ⇒ i_gh ≈ 41,8°."
+            },
+            {
+                q: "5. Với bản bán trụ thủy tinh (i_gh ≈ 41,8°) đặt trong không khí, nếu chiếu tia sáng từ thủy tinh ra không khí với góc tới i = 50° thì:",
+                opts: [
+                    "Xảy ra phản xạ toàn phần với góc phản xạ i' = 50°",
+                    "Tia sáng khúc xạ ra ngoài với góc r = 50°",
+                    "Tia sáng đi là là mặt phân cách",
+                    "Tia sáng truyền thẳng không đổi hướng"
+                ],
+                correct: 0,
+                explain: "Rất chuẩn! Vì i = 50° > i_gh (41,8°) nên xảy ra phản xạ toàn phần, góc phản xạ i' = i = 50°."
+            },
+            {
+                q: "6. Khi góc tới i bằng đúng góc giới hạn i_gh (i = i_gh), tia khúc xạ sẽ:",
+                opts: [
+                    "Đi là là sát mặt phân cách giữa hai môi trường (góc khúc xạ r = 90°)",
+                    "Vuông góc với mặt phân cách (r = 0°)",
+                    "Hợp với pháp tuyến góc 45°",
+                    "Quay ngược lại 180°"
+                ],
+                correct: 0,
+                explain: "Chính xác! Tại ngưỡng i = i_gh, góc khúc xạ đạt cực đại r = 90°, tia khúc xạ đi sát mặt phân cách."
+            },
+            {
+                q: "7. Trong cấu tạo sợi cáp quang truyền Internet, chiết suất của phần lõi (n_lõi) và phần vỏ bọc (n_vỏ) phải thỏa mãn:",
+                opts: [
+                    "n_lõi > n_vỏ để ánh sáng phản xạ toàn phần liên tục trong lõi",
+                    "n_lõi < n_vỏ",
+                    "n_lõi = n_vỏ",
+                    "Phần lõi làm bằng kim loại đồng đặc"
+                ],
+                correct: 0,
+                explain: "Đúng rồi! Lõi cáp quang có chiết suất lớn hơn vỏ bọc (n_lõi > n_vỏ) để xung ánh sáng phản xạ toàn phần liên tiếp từ đầu này tới đầu kia."
+            },
+            {
+                q: "8. Vì sao viên kim cương (n = 2,42) lại lấp lánh rực rỡ hơn thủy tinh thường (n = 1,50)?",
+                opts: [
+                    "Vì kim cương có chiết suất rất lớn nên góc giới hạn i_gh rất nhỏ (≈ 24,4°), ánh sáng dễ dàng phản xạ toàn phần nhiều lần bên trong",
+                    "Vì kim cương tự phát sáng trong bóng tối",
+                    "Vì kim cương không cho ánh sáng đi vào",
+                    "Vì kim cương có góc giới hạn bằng 90°"
+                ],
+                correct: 0,
+                explain: "Xuất sắc! Với n = 2,42, góc giới hạn của kim cương chỉ khoảng 24,4°, khiến ánh sáng đi vào bị phản xạ toàn phần liên tục trước khi ló ra mắt người."
+            },
+            {
+                q: "9. Trường hợp nào sau đây KHÔNG THỂ xảy ra phản xạ toàn phần dù tăng góc tới i lớn đến đâu?",
+                opts: [
+                    "Chiếu tia sáng từ không khí (n₁ = 1,00) vào nước (n₂ = 1,33)",
+                    "Chiếu tia sáng từ nước (n₁ = 1,33) ra không khí (n₂ = 1,00)",
+                    "Chiếu tia sáng từ thủy tinh (n₁ = 1,50) sang nước (n₂ = 1,33)",
+                    "Chiếu tia sáng từ kim cương (n₁ = 2,42) ra không khí (n₂ = 1,00)"
+                ],
+                correct: 0,
+                explain: "Chính xác! Đi từ không khí vào nước (n₁ < n₂) luôn có r < i nên không bao giờ xảy ra phản xạ toàn phần."
+            },
+            {
+                q: "10. Thiết bị y tế nào ứng dụng trực tiếp bó sợi quang học và hiện tượng phản xạ toàn phần để quan sát bên trong dạ dày?",
+                opts: [
+                    "Ống nội soi dạ dày y học",
+                    "Nhiệt kế thủy ngân",
+                    "Ống nghe nhịp tim",
+                    "Máy đo huyết áp cơ học"
+                ],
+                correct: 0,
+                explain: "Tuyệt vời! Ống nội soi sử dụng bó sợi cáp quang dẫn truyền ánh sáng và hình ảnh bên trong cơ thể nhờ phản xạ toàn phần."
+            }
+        ];
+
+        let quizIdx = 0;
+        let userCorrectCount = 0;
+
+        function loadQuizUI() {
+            const q = quizList[quizIdx];
+            document.getElementById('quizIndexBadge').innerText = `Câu ${quizIdx + 1}/${quizList.length}`;
+            document.getElementById('quizQuestionText').innerText = q.q;
+            document.getElementById('quizFeedbackBox').style.display = 'none';
+            document.getElementById('btnNextQuiz').style.display = 'none';
+
+            const box = document.getElementById('quizOptionsContainer');
+            box.innerHTML = '';
+            q.opts.forEach((text, i) => {
+                const btn = document.createElement('button');
+                btn.className = 'quiz-opt-btn';
+                btn.id = `optBtn_${i}`;
+                btn.innerText = `${String.fromCharCode(65 + i)}. ${text}`;
+                btn.onclick = () => selectQuizOption(i);
+                box.appendChild(btn);
+            });
+        }
+
+        function selectQuizOption(idx) {
+            const q = quizList[quizIdx];
+            const fb = document.getElementById('quizFeedbackBox');
+            document.querySelectorAll('.quiz-opt-btn').forEach(b => b.disabled = true);
+
+            if (idx === q.correct) {
+                userCorrectCount++;
+                document.getElementById(`optBtn_${idx}`).classList.add('opt-correct');
+                fb.className = 'quiz-feedback pass';
+                fb.innerHTML = `🎯 <b>CHÍNH XÁC!</b><br>${q.explain}`;
+            } else {
+                document.getElementById(`optBtn_${idx}`).classList.add('opt-wrong');
+                document.getElementById(`optBtn_${q.correct}`).classList.add('opt-correct');
+                fb.className = 'quiz-feedback fail';
+                fb.innerHTML = `Đáp án đúng là <b>${String.fromCharCode(65 + q.correct)}</b>.<br>${q.explain}`;
+            }
+
+            const nextBtn = document.getElementById('btnNextQuiz');
+            nextBtn.innerText = (quizIdx === quizList.length - 1) ? "Xem Bảng Tổng Kết Kết Quả 🏆" : "Câu tiếp theo ➔";
+            nextBtn.style.display = 'block';
+        }
+
+        function nextQuizQuestion() {
+            quizIdx++;
+            if (quizIdx >= quizList.length) {
+                showFinalSummary();
+            } else {
+                loadQuizUI();
+            }
+        }
+
+        function showFinalSummary() {
+            document.getElementById('quizCard').style.display = 'none';
+            document.getElementById('resultSummaryBox').style.display = 'block';
+            const total = quizList.length;
+            const score10 = (userCorrectCount / total) * 10;
+            document.getElementById('scoreDisplay').innerText = `${userCorrectCount}/${total}`;
+            document.getElementById('correctCountTxt').innerText = userCorrectCount;
+            document.getElementById('wrongCountTxt').innerText = total - userCorrectCount;
+            document.getElementById('finalScore10Txt').innerText = score10.toFixed(1);
+            document.getElementById('scoreComment').innerHTML = score10 >= 8
+                ? "🏆 <b>XUẤT SẮC!</b> Em đã làm chủ hoàn toàn kiến thức Phản xạ toàn phần & Cáp quang!"
+                : "💪 <b>CỐ GẮNG LÊN!</b> Hãy thực hành thêm trên mô hình 3D để đạt 10/10 nhé!";
+        }
+
+        function restartQuiz() {
+            quizIdx = 0;
+            userCorrectCount = 0;
+            document.getElementById('quizCard').style.display = 'block';
+            document.getElementById('resultSummaryBox').style.display = 'none';
+            loadQuizUI();
+        }
+
+        function setTab(tabId) {
+            document.querySelectorAll('.tab-btn').forEach((b, i) => {
+                b.classList.toggle('active',
+                    (i === 0 && tabId === 'sim') ||
+                    (i === 1 && tabId === 'game') ||
+                    (i === 2 && tabId === 'quiz')
+                );
+            });
+            document.getElementById('tab-sim').classList.toggle('active', tabId === 'sim');
+            document.getElementById('tab-game').classList.toggle('active', tabId === 'game');
+            document.getElementById('tab-quiz').classList.toggle('active', tabId === 'quiz');
+
+            if (tabId === 'game') {
+                receiverOrb.visible = true;
+                generateNewReceiver();
+            } else {
+                receiverOrb.visible = false;
+            }
+            if (tabId === 'quiz') {
+                if (quizIdx >= quizList.length) showFinalSummary();
+                else loadQuizUI();
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            if (receiverOrb.visible) {
+                receiverOrb.rotation.y += 0.025;
+            }
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        });
+
+        applyEnvironment();
+        animate();
+    </script>
+</body>
+</html>

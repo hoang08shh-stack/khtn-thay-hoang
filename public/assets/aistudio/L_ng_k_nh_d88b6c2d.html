@@ -1,0 +1,1194 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Thí Nghiệm Ảo 3D: Tán Sắc Ánh Sáng (Hình 7.5 KHTN 9)</title>
+    <!-- Three.js & OrbitControls -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <!-- Font Nunito dễ thương -->
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --bg-page: #6b7280;
+            --primary: #0284c7;
+            --accent-pink: #e11d48;
+            --text-dark: #0f172a;
+            --card-bg: #ffffff;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Nunito', 'Segoe UI', sans-serif;
+            user-select: none;
+        }
+
+        body {
+            background-color: #374151;
+            color: var(--text-dark);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* KHUNG HIỂN THỊ 3D THEO MÀU PHÔNG XÁM CHUẨN SGK */
+        #viewport-container {
+            flex: 1;
+            position: relative;
+            height: 100%;
+            background: radial-gradient(circle at 45% 40%, #6b7280 0%, #4b5563 70%, #374151 100%);
+        }
+
+        #webgl-canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /* BẢNG CHÚ GIẢI 7 MÀU NẰM GÓC PHẢI MÀN HÌNH (Y HỆT HÌNH 7.5) */
+        .spectrum-card {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(8px);
+            padding: 12px 16px;
+            border-radius: 14px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+            border: 2px solid #e5e7eb;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            pointer-events: none;
+        }
+
+        .spectrum-card-title {
+            font-size: 13px;
+            font-weight: 900;
+            color: #1e293b;
+            text-align: center;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 4px;
+            margin-bottom: 4px;
+        }
+
+        .color-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 12px;
+            font-weight: 800;
+        }
+
+        .color-block {
+            width: 32px;
+            height: 16px;
+            border-radius: 4px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+
+        /* HUD THÔNG TIN */
+        .hud-banner {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 10px 16px;
+            border-radius: 14px;
+            border: 2px solid #38bdf8;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.2);
+            font-size: 13px;
+            font-weight: 800;
+            color: #0369a1;
+            pointer-events: none;
+        }
+
+        .hint-bar {
+            position: absolute;
+            bottom: 16px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 6px 14px;
+            border-radius: 18px;
+            font-size: 12px;
+            font-weight: 700;
+            color: #475569;
+            pointer-events: none;
+        }
+
+        /* SIDEBAR ĐIỀU KHIỂN */
+        #sidebar {
+            width: clamp(320px, 36vw, 410px);
+            background: var(--card-bg);
+            border-left: 2px solid #cbd5e1;
+            display: flex;
+            flex-direction: column;
+            box-shadow: -6px 0 25px rgba(0, 0, 0, 0.2);
+            z-index: 10;
+        }
+
+        @media (max-width: 960px) {
+            .hint-bar { display: none; }
+            .hud-banner { top: 10px; left: 10px; padding: 7px 12px; font-size: 11.5px; }
+            .spectrum-card { top: auto; bottom: 10px; right: 10px; padding: 8px 11px; gap: 2px; }
+            .color-row { font-size: 10.5px; gap: 6px; }
+            .color-block { width: 22px; height: 12px; }
+        }
+
+        .header {
+            padding: 14px 18px;
+            background: linear-gradient(135deg, #e0f2fe 0%, #fef3c7 100%);
+            border-bottom: 2px solid #bae6fd;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 16.5px;
+            font-weight: 900;
+            color: #0284c7;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .header p {
+            font-size: 12px;
+            color: #64748b;
+            font-weight: 700;
+            margin-top: 2px;
+        }
+
+        /* TAB BAR */
+        .tab-bar {
+            display: flex;
+            padding: 8px 10px;
+            background: #f8fafc;
+            gap: 6px;
+            border-bottom: 2px solid #f1f5f9;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 9px 4px;
+            background: #ffffff;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            color: #64748b;
+            font-size: 12px;
+            font-weight: 800;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .tab-btn.active {
+            background: #0284c7;
+            color: #ffffff;
+            border-color: #0369a1;
+            box-shadow: 0 4px 10px rgba(2, 132, 199, 0.25);
+            transform: translateY(-1px);
+        }
+
+        .tab-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* THẺ CARD */
+        .card {
+            background: #ffffff;
+            border-radius: 14px;
+            padding: 13px;
+            margin-bottom: 12px;
+            border: 2px solid #f1f5f9;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.03);
+        }
+
+        .card h3 {
+            font-size: 13px;
+            font-weight: 900;
+            color: #0369a1;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .control-group {
+            margin-bottom: 10px;
+        }
+
+        .control-group label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            font-weight: 800;
+            color: #475569;
+            margin-bottom: 4px;
+        }
+
+        select, input[type="range"] {
+            font-family: 'Nunito', sans-serif;
+        }
+
+        select {
+            width: 100%;
+            padding: 8px 10px;
+            border-radius: 10px;
+            border: 2px solid #cbd5e1;
+            background: #f8fafc;
+            color: #1e293b;
+            font-size: 12.5px;
+            font-weight: 700;
+            outline: none;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            height: 8px;
+            border-radius: 5px;
+            background: #e2e8f0;
+            outline: none;
+            accent-color: var(--accent-pink);
+            cursor: pointer;
+        }
+
+        .btn-cute {
+            width: 100%;
+            padding: 10px;
+            border-radius: 12px;
+            border: none;
+            background: linear-gradient(135deg, #e11d48 0%, #f43f5e 100%);
+            color: #ffffff;
+            font-size: 13.5px;
+            font-weight: 900;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(225, 29, 72, 0.25);
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .btn-cute:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(225, 29, 72, 0.35);
+        }
+
+        .btn-sub {
+            background: #f1f5f9;
+            color: #475569;
+            font-size: 12px;
+            font-weight: 800;
+            border: 2px solid #e2e8f0;
+            box-shadow: none;
+            margin-top: 6px;
+        }
+
+        .fact-box {
+            background: #eff6ff;
+            border: 1.5px dashed #93c5fd;
+            border-radius: 12px;
+            padding: 10px;
+            font-size: 12px;
+            line-height: 1.6;
+            color: #1e3a8a;
+            font-weight: 700;
+        }
+
+        /* GIAO DIỆN GAME */
+        .game-board {
+            background: #fdf4ff;
+            border: 2px solid #e9d5ff;
+            border-radius: 14px;
+            padding: 12px;
+            margin-bottom: 12px;
+        }
+
+        .game-msg {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 10px;
+            font-size: 12.5px;
+            font-weight: 800;
+            text-align: center;
+            display: none;
+            line-height: 1.4;
+        }
+
+        /* BÀI TẬP */
+        .quiz-opt-btn {
+            width: 100%;
+            text-align: left;
+            padding: 9px 11px;
+            border-radius: 10px;
+            border: 2px solid #e2e8f0;
+            background: #f8fafc;
+            color: #334155;
+            font-size: 12px;
+            font-weight: 700;
+            margin-bottom: 6px;
+            cursor: pointer;
+            transition: 0.2s;
+            line-height: 1.4;
+        }
+
+        .quiz-opt-btn:hover {
+            border-color: #38bdf8;
+            background: #f0f9ff;
+        }
+
+        .quiz-opt-btn.opt-correct {
+            background: #dcfce7 !important;
+            border-color: #22c55e !important;
+            color: #15803d !important;
+        }
+
+        .quiz-opt-btn.opt-wrong {
+            background: #fee2e2 !important;
+            border-color: #ef4444 !important;
+            color: #b91c1c !important;
+        }
+
+        .quiz-feedback {
+            padding: 9px 11px;
+            border-radius: 10px;
+            font-size: 12px;
+            font-weight: 800;
+            line-height: 1.5;
+            margin-top: 8px;
+            display: none;
+        }
+
+        .quiz-feedback.pass {
+            background: #dcfce7;
+            color: #15803d;
+            border: 1.5px solid #86efac;
+            display: block;
+        }
+
+        .quiz-feedback.fail {
+            background: #fee2e2;
+            color: #b91c1c;
+            border: 1.5px solid #fca5a5;
+            display: block;
+        }
+
+        .result-summary-card {
+            display: none;
+            text-align: center;
+            padding: 16px;
+            border-radius: 14px;
+            background: #f0f9ff;
+            border: 2px solid #bae6fd;
+        }
+
+        .score-circle {
+            width: 75px;
+            height: 75px;
+            border-radius: 50%;
+            background: #0284c7;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: 900;
+            margin: 10px auto;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- KHU VỰC HIỂN THỊ 3D VIEWPORT -->
+    <div id="viewport-container">
+        <canvas id="webgl-canvas"></canvas>
+
+        <div class="hud-banner">
+            ✨ HÌNH 7.5: MÔ TẢ HIỆN TƯỢNG TÁN SẮC ÁNH SÁNG
+        </div>
+
+        <!-- BẢNG CHÚ GIẢI 7 MÀU NẰM BÊN PHẢI (CHÍNH XÁC NHƯ HÌNH 7.5) -->
+        <div class="spectrum-card">
+            <div class="spectrum-card-title">QUANG PHỔ (MÀN HỨNG)</div>
+            <div class="color-row"><span class="color-block" style="background:#ef4444;"></span> Đỏ (Lệch ít nhất)</div>
+            <div class="color-row"><span class="color-block" style="background:#f97316;"></span> Da cam</div>
+            <div class="color-row"><span class="color-block" style="background:#facc15;"></span> Vàng</div>
+            <div class="color-row"><span class="color-block" style="background:#22c55e;"></span> Lục</div>
+            <div class="color-row"><span class="color-block" style="background:#06b6d4;"></span> Lam</div>
+            <div class="color-row"><span class="color-block" style="background:#3b82f6;"></span> Chàm</div>
+            <div class="color-row"><span class="color-block" style="background:#8b5cf6;"></span> Tím (Lệch nhiều nhất)</div>
+        </div>
+
+        <div class="hint-bar">
+            🐬 <b>Thao tác:</b> Kéo chuột xoay 360° | Cuộn chuột phóng to/thu nhỏ
+        </div>
+    </div>
+
+    <!-- SIDEBAR ĐIỀU KHIỂN BÊN PHẢI -->
+    <div id="sidebar">
+        <div class="header">
+            <h1>🌈 TÁN SẮC ÁNH SÁNG 3D</h1>
+            <p>Mô phỏng chuẩn theo Hình 7.5 SGK KHTN 9</p>
+        </div>
+
+        <div class="tab-bar">
+            <button class="tab-btn active" onclick="setTab('sim')">🧪 Thí Nghiệm</button>
+            <button class="tab-btn" onclick="setTab('game')">🎮 Bắt Màu</button>
+            <button class="tab-btn" onclick="setTab('quiz')">📝 Bài Tập (10 Câu)</button>
+        </div>
+
+        <!-- TAB 1: THÍ NGHIỆM -->
+        <div id="tab-sim" class="tab-content active">
+            <div class="card">
+                <h3>🔦 Nguồn Phát Ánh Sáng</h3>
+                <div class="control-group">
+                    <label>Chế độ chùm sáng:</label>
+                    <select id="modeSelect" onchange="changeMode()">
+                        <option value="white" selected>☀️ Chùm Ánh Sáng Trắng (Chuẩn Hình 7.5)</option>
+                        <option value="laser">🔴 Tia Laser Đỏ Đơn Sắc (Đối chứng không tán sắc)</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label><span>Góc nghiêng đèn chiếu:</span> <b id="angleVal" style="color:#e11d48;">18°</b></label>
+                    <input type="range" id="angleSlider" min="10" max="35" value="18" oninput="changeAngle(this.value)">
+                </div>
+                <div class="control-group">
+                    <label><span>Khoảng cách Màn hứng:</span> <b id="screenDistVal" style="color:#0284c7;">Xa vừa</b></label>
+                    <input type="range" id="screenDistSlider" min="14" max="26" value="18" oninput="changeScreenDist(this.value)">
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>📖 Phân Tích Hiện Tượng Hình 7.5</h3>
+                <div class="fact-box" id="factText">
+                    <!-- Tự động cập nhật nội dung giải thích -->
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 2: MINI-GAME BẮT MÀU -->
+        <div id="tab-game" class="tab-content">
+            <div class="card">
+                <h3>🎯 Thử Thách: Bắt Đúng Dải Màu</h3>
+                <p style="font-size:12px; color:#64748b; line-height:1.5; margin-bottom:10px; font-weight:700;">
+                    Hãy chỉnh góc nghiêng của nguồn phát ánh sáng trắng sao cho tia màu được yêu cầu rọi trúng vào <b>Cảm biến quang học</b> trên Màn hứng!
+                </p>
+
+                <div class="game-board">
+                    <div style="display:flex; justify-content:space-between; font-weight:900; margin-bottom:8px;">
+                        <span id="targetColorTitle" style="color:#ef4444;">🎯 Cần bắt: TIA MÀU ĐỎ</span>
+                        <span>Điểm: <b id="gameScore" style="color:#0284c7;">0</b> ⭐</span>
+                    </div>
+                    <div style="font-size:11.5px; font-weight:800; color:#475569;">
+                        Số lượt còn lại: <b id="gameShots" style="color:#e11d48;">5</b> 🎯
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label>Chỉnh góc nguồn phát: <b id="gameAngleLabel" style="color:#e11d48;">18°</b></label>
+                    <input type="range" id="gameAngleSlider" min="10" max="35" value="18" oninput="onGameAngle(this.value)">
+                </div>
+
+                <button class="btn-cute" onclick="checkColorHit()">🚀 PHÁT TIA VÀ BẮT MÀU</button>
+                <button class="btn-cute btn-sub" onclick="nextColorTarget()">🔄 Đổi màu mục tiêu khác</button>
+
+                <div class="game-msg" id="gameFeedback"></div>
+            </div>
+        </div>
+
+        <!-- TAB 3: BÀI TẬP TRẮC NGHIỆM 10 CÂU -->
+        <div id="tab-quiz" class="tab-content">
+            <div class="card" id="quizCard">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                    <h3>📝 Đố Vui Về Hình 7.5</h3>
+                    <span id="quizIndexBadge" style="font-size:11.5px; font-weight:800; color:var(--primary); background:#e0f2fe; padding:3px 9px; border-radius:10px;">Câu 1/10</span>
+                </div>
+                <p id="quizQuestionText" style="font-size:12.5px; font-weight:800; color:#1e293b; line-height:1.5; margin-bottom:10px;">
+                    Nội dung câu hỏi...
+                </p>
+                <div id="quizOptionsContainer"></div>
+                <div class="quiz-feedback" id="quizFeedbackBox"></div>
+                <button class="btn-cute btn-sub" id="btnNextQuiz" onclick="nextQuizQuestion()" style="display:none; margin-top:10px;">
+                    Câu tiếp theo ➔
+                </button>
+            </div>
+
+            <!-- Bảng tổng kết -->
+            <div class="result-summary-card" id="resultSummaryBox">
+                <h2 style="color:#0284c7; font-size:17px; margin-bottom:3px;">🎉 HOÀN THÀNH BÀI TẬP!</h2>
+                <p style="font-size:12px; color:#64748b; font-weight:700;">Kết quả trả lời câu hỏi Hình 7.5:</p>
+                
+                <div class="score-circle" id="scoreDisplay">10/10</div>
+                
+                <div style="font-size:12.5px; font-weight:800; margin:8px 0;" id="scoreComment">
+                    Xuất sắc! Em đã nắm rất vững hiện tượng tán sắc ánh sáng! 🏆
+                </div>
+                
+                <div style="background:#ffffff; border-radius:10px; padding:10px; font-size:12px; font-weight:700; color:#334155; margin-bottom:10px; text-align:left; line-height:1.6;">
+                    • Số câu trả lời đúng: <b style="color:#16a34a;" id="correctCountTxt">10</b> câu<br>
+                    • Số câu chưa chính xác: <b style="color:#dc2626;" id="wrongCountTxt">0</b> câu<br>
+                    • Điểm số quy đổi: <b style="color:#0284c7;" id="finalScore10Txt">10.0</b> điểm
+                </div>
+
+                <button class="btn-cute" onclick="restartQuiz()">🔄 Làm lại bài tập</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /* =========================================================================
+           1. THIẾT LẬP ĐỒ HỌA 3D VỚI THREE.JS (TƯƠNG THÍCH 100%)
+           ========================================================================= */
+        const container = document.getElementById('viewport-container');
+        const canvas = document.getElementById('webgl-canvas');
+
+        const initialW = container.clientWidth || (window.innerWidth - 430);
+        const initialH = container.clientHeight || window.innerHeight;
+
+        const scene = new THREE.Scene();
+
+        const camera = new THREE.PerspectiveCamera(40, initialW / initialH, 0.1, 1000);
+        // Đặt góc nhìn nghiêng từ trước giống góc nhìn trong Hình 7.5
+        camera.position.set(-2, 1, 46);
+
+        const renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
+        renderer.setSize(initialW, initialH);
+        renderer.setPixelRatio(window.devicePixelRatio);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.minDistance = 20;
+        controls.maxDistance = 90;
+
+        // Ánh sáng nổi bật
+        scene.add(new THREE.AmbientLight(0xffffff, 0.9));
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1.1);
+        dirLight.position.set(15, 30, 25);
+        scene.add(dirLight);
+
+        const mainGroup = new THREE.Group();
+        scene.add(mainGroup);
+
+        /* =========================================================================
+           2. VẬT THỂ: LĂNG KÍNH THỦY TINH TAM GIÁC (CHUẨN HÌNH 7.5)
+           ========================================================================= */
+        // Tạo mặt cắt tam giác đều: Đỉnh ở trên, đáy nằm ngang ở dưới
+        const prismShape = new THREE.Shape();
+        prismShape.moveTo(0, 5.5);        // Đỉnh A
+        prismShape.lineTo(-5.5, -4.0);    // Đáy trái
+        prismShape.lineTo(5.5, -4.0);     // Đáy phải
+        prismShape.closePath();
+
+        const extrudeSettings = {
+            depth: 8,
+            bevelEnabled: true,
+            bevelSegments: 2,
+            steps: 1,
+            bevelSize: 0.15,
+            bevelThickness: 0.15
+        };
+
+        const prismGeo = new THREE.ExtrudeGeometry(prismShape, extrudeSettings);
+        prismGeo.center();
+
+        // Vật liệu thủy tinh pha lê ngọc lam (SÁNG RÕ 100%, KHÔNG BỊ TÀNG HÌNH)
+        const prismMat = new THREE.MeshPhongMaterial({
+            color: 0x93c5fd,
+            emissive: 0x0284c7,
+            emissiveIntensity: 0.25,
+            specular: 0xffffff,
+            shininess: 90,
+            transparent: true,
+            opacity: 0.65,
+            depthWrite: false,
+            side: THREE.DoubleSide
+        });
+
+        const prismMesh = new THREE.Mesh(prismGeo, prismMat);
+        prismMesh.position.set(-2, 0, 0);
+        mainGroup.add(prismMesh);
+
+        // Khung viền xanh dương đậm nổi bật bao quanh các mép lăng kính
+        const prismEdges = new THREE.LineSegments(
+            new THREE.EdgesGeometry(prismGeo),
+            new THREE.LineBasicMaterial({ color: 0x0284c7, linewidth: 2.5 })
+        );
+        prismEdges.position.copy(prismMesh.position);
+        mainGroup.add(prismEdges);
+
+        // MÀN HỨNG (Màu đen/xám đậm có viền, y hệt chữ "Màn" trong Hình 7.5)
+        const screenGeo = new THREE.BoxGeometry(0.4, 16, 10);
+        const screenMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.8 });
+        const screenMesh = new THREE.Mesh(screenGeo, screenMat);
+        screenMesh.position.set(16, -1.5, 0);
+        mainGroup.add(screenMesh);
+
+        // ĐÈN PIN / NGUỒN PHÁT ÁNH SÁNG TRẮNG (Ống tròn màu xanh lơ như trong hình)
+        const torchGeo = new THREE.CylinderGeometry(0.9, 0.9, 6, 24);
+        const torchMat = new THREE.MeshStandardMaterial({ color: 0xbae6fd, metalness: 0.3, roughness: 0.4 });
+        const torchMesh = new THREE.Mesh(torchGeo, torchMat);
+        torchMesh.rotation.z = Math.PI / 2;
+        mainGroup.add(torchMesh);
+
+        /* =========================================================================
+           3. CÁC TIA SÁNG: TIA TỚI TRẮNG & DẢI 7 MÀU TÁN SẮC LIÊN TỤC
+           ========================================================================= */
+        function createSolidRay(colorHex, radius = 0.16) {
+            const geo = new THREE.CylinderGeometry(radius, radius, 1, 16);
+            const mat = new THREE.MeshBasicMaterial({ color: colorHex, transparent: true, opacity: 0.95 });
+            const mesh = new THREE.Mesh(geo, mat);
+            mainGroup.add(mesh);
+            return mesh;
+        }
+
+        function setRayEndpoints(mesh, p1, p2) {
+            const dist = p1.distanceTo(p2);
+            if (dist < 0.01) {
+                mesh.visible = false;
+                return;
+            }
+            mesh.visible = true;
+            mesh.scale.set(1, dist, 1);
+            mesh.position.copy(p1).add(p2).multiplyScalar(0.5);
+
+            const dir = new THREE.Vector3().subVectors(p2, p1).normalize();
+            mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+        }
+
+        // Tia tới SI màu trắng
+        const incidentRay = createSolidRay(0xffffff, 0.25);
+
+        // Mũi tên chỉ chiều truyền trên tia tới (như trong hình)
+        const arrowIncident = new THREE.Mesh(
+            new THREE.ConeGeometry(0.5, 1.2, 16),
+            new THREE.MeshBasicMaterial({ color: 0xffffff })
+        );
+        mainGroup.add(arrowIncident);
+
+        // Dải 7 màu chuẩn quang phổ Newton
+        const colors7 = [
+            { name: "Đỏ", hex: 0xef4444, n: 1.512 },
+            { name: "Da cam", hex: 0xf97316, n: 1.518 },
+            { name: "Vàng", hex: 0xfacc15, n: 1.524 },
+            { name: "Lục", hex: 0x22c55e, n: 1.530 },
+            { name: "Lam", hex: 0x06b6d4, n: 1.536 },
+            { name: "Chàm", hex: 0x3b82f6, n: 1.543 },
+            { name: "Tím", hex: 0x8b5cf6, n: 1.551 }
+        ];
+
+        // 7 tia khúc xạ bên trong và 7 tia ló xòe quạt ra ngoài
+        const rayBands = colors7.map(c => ({
+            data: c,
+            insideRay: createSolidRay(c.hex, 0.12),
+            emergentRay: createSolidRay(c.hex, 0.18),
+            screenPatch: null
+        }));
+
+        // 7 dải màu vệt sáng trên màn hứng
+        rayBands.forEach((rb, i) => {
+            const patch = new THREE.Mesh(
+                new THREE.BoxGeometry(0.45, 0.7, 3.5),
+                new THREE.MeshBasicMaterial({ color: rb.data.hex })
+            );
+            patch.position.set(15.75, 0, 0);
+            mainGroup.add(patch);
+            rb.screenPatch = patch;
+        });
+
+        // Quả cầu cảm biến cho Mini-Game
+        const gameSensorOrb = new THREE.Mesh(
+            new THREE.SphereGeometry(0.8, 20, 20),
+            new THREE.MeshStandardMaterial({ color: 0xef4444, emissive: 0xef4444, roughness: 0.2 })
+        );
+        gameSensorOrb.position.set(15.7, 1.8, 0);
+        gameSensorOrb.visible = false;
+        mainGroup.add(gameSensorOrb);
+
+        /* =========================================================================
+           4. TÍNH TOÁN QUANG HỌC THEO ĐÚNG HÌNH 7.5
+           ========================================================================= */
+        let currentMode = 'white'; // 'white' hoặc 'laser'
+        let beamAngleDeg = 18;     // Góc nghiêng đèn chiếu
+        let screenX = 16;          // Vị trí màn hứng
+
+        // Điểm tới I trên mặt bên trái của lăng kính (gần đỉnh A như hình 7.5)
+        const hitPointI = new THREE.Vector3(-4.2, 1.8, 0);
+
+        function updateOpticsSimulation() {
+            const angleRad = (beamAngleDeg * Math.PI) / 180;
+
+            // 1. Vị trí Đèn pin bên trái chiếu xiên lên điểm I
+            const torchDist = 16;
+            const torchPos = new THREE.Vector3(
+                hitPointI.x - torchDist * Math.cos(angleRad),
+                hitPointI.y - torchDist * Math.sin(angleRad),
+                0
+            );
+
+            torchMesh.position.copy(torchPos);
+            torchMesh.lookAt(hitPointI);
+            torchMesh.rotateX(Math.PI / 2);
+
+            // Vẽ tia tới
+            if (currentMode === 'white') {
+                incidentRay.material.color.setHex(0xffffff);
+                arrowIncident.material.color.setHex(0xffffff);
+            } else {
+                incidentRay.material.color.setHex(0xef4444);
+                arrowIncident.material.color.setHex(0xef4444);
+            }
+            setRayEndpoints(incidentRay, torchPos, hitPointI);
+
+            // Đặt mũi tên chỉ chiều tia tới
+            const midP = new THREE.Vector3().copy(torchPos).add(hitPointI).multiplyScalar(0.5);
+            arrowIncident.position.copy(midP);
+            arrowIncident.quaternion.copy(incidentRay.quaternion);
+
+            // 2. Cập nhật vị trí màn hứng
+            screenMesh.position.x = screenX;
+
+            // 3. Tính toán chùm 7 tia tán sắc
+            rayBands.forEach((rb, idx) => {
+                let n = (currentMode === 'white') ? rb.data.n : 1.512;
+
+                // Góc khúc xạ tại mặt bên 1 & mặt bên 2
+                // Tia đỏ lệch ít nhất (ở trên), tia tím lệch nhiều nhất (ở dưới)
+                const insideSpread = (idx - 3) * 0.025;
+                const hitPointJ = new THREE.Vector3(0.2, 1.4 + insideSpread, 0);
+
+                setRayEndpoints(rb.insideRay, hitPointI, hitPointJ);
+
+                // Độ dốc tia ló ra màn hứng
+                const outSlope = -0.15 - (idx * 0.045) - ((beamAngleDeg - 18) * 0.012);
+                const hitY = hitPointJ.y + (screenX - hitPointJ.x) * outSlope;
+                const screenPoint = new THREE.Vector3(screenX - 0.25, hitY, 0);
+
+                setRayEndpoints(rb.emergentRay, hitPointJ, screenPoint);
+
+                // Cập nhật dải màu rọi trên màn
+                rb.screenPatch.position.copy(screenPoint);
+                rb.screenPatch.position.x = screenX - 0.25;
+
+                // Ẩn hiện theo chế độ
+                const isVisible = (currentMode === 'white') || (currentMode === 'laser' && idx === 0);
+                rb.insideRay.visible = isVisible;
+                rb.emergentRay.visible = isVisible;
+                rb.screenPatch.visible = isVisible;
+
+                if (currentMode === 'laser') {
+                    rb.insideRay.material.color.setHex(0xef4444);
+                    rb.emergentRay.material.color.setHex(0xef4444);
+                    rb.screenPatch.material.color.setHex(0xef4444);
+                } else {
+                    rb.insideRay.material.color.setHex(rb.data.hex);
+                    rb.emergentRay.material.color.setHex(rb.data.hex);
+                    rb.screenPatch.material.color.setHex(rb.data.hex);
+                }
+            });
+
+            document.getElementById('angleVal').innerText = `${beamAngleDeg}°`;
+            updateFactBox();
+        }
+
+        function updateFactBox() {
+            const box = document.getElementById('factText');
+            if (currentMode === 'white') {
+                box.innerHTML = `
+                    ☀️ <b>Hiện tượng mô tả trong Hình 7.5:</b><br>
+                    • <b>Nguồn phát ánh sáng trắng</b> chiếu qua lăng kính bị phân tách thành dải màu biến thiên liên tục từ <b>Đỏ đến Tím</b>.<br>
+                    • <b>Tia Đỏ:</b> Bị lệch ít nhất về phía đáy (nằm ở trên cùng).<br>
+                    • <b>Tia Tím:</b> Bị lệch nhiều nhất về phía đáy (nằm ở dưới cùng).<br>
+                    • <i>Kết luận:</i> Ánh sáng trắng là hỗn hợp của nhiều ánh sáng đơn sắc khác nhau!
+                `;
+            } else {
+                box.innerHTML = `
+                    🔴 <b>Đối chứng với Tia Laser Đỏ đơn sắc:</b><br>
+                    • Tia laser đỏ đi qua lăng kính chỉ bị bẻ cong lệch về phía đáy mà <b>không hề bị phân tách màu</b>.<br>
+                    • Trên màn hứng chỉ thu được <b>một vệt sáng đỏ duy nhất</b>.<br>
+                    • <i>Kết luận:</i> Ánh sáng đơn sắc không bị tán sắc khi qua lăng kính!
+                `;
+            }
+        }
+
+        /* =========================================================================
+           5. ĐIỀU KHIỂN & TƯƠNG TÁC
+           ========================================================================= */
+        function changeMode() {
+            currentMode = document.getElementById('modeSelect').value;
+            updateOpticsSimulation();
+        }
+
+        function changeAngle(val) {
+            beamAngleDeg = parseFloat(val);
+            updateOpticsSimulation();
+        }
+
+        function changeScreenDist(val) {
+            screenX = parseFloat(val);
+            const lbl = (screenX < 16) ? "Gần" : (screenX > 20 ? "Rất xa" : "Xa vừa");
+            document.getElementById('screenDistVal').innerText = `${lbl} (${val}m)`;
+            updateOpticsSimulation();
+        }
+
+        /* =========================================================================
+           6. MINI-GAME: BẮT MÀU QUANG PHỔ HÌNH 7.5
+           ========================================================================= */
+        let gameScore = 0;
+        let gameShots = 5;
+        let targetColorIdx = 0; // 0: Đỏ, 3: Lục, 6: Tím
+
+        const targetColorsList = [
+            { name: "TIA MÀU ĐỎ", idx: 0, hex: "#ef4444", targetAngle: 18 },
+            { name: "TIA MÀU LỤC", idx: 3, hex: "#22c55e", targetAngle: 24 },
+            { name: "TIA MÀU TÍM", idx: 6, hex: "#8b5cf6", targetAngle: 30 }
+        ];
+
+        function initColorTarget(idx) {
+            targetColorIdx = idx;
+            const t = targetColorsList[idx];
+
+            document.getElementById('targetColorTitle').innerText = `🎯 Cần bắt: ${t.name}`;
+            document.getElementById('targetColorTitle').style.color = t.hex;
+
+            // Đặt quả cầu cảm biến trên màn hứng
+            gameSensorOrb.position.set(screenX - 0.3, 0.5 - (t.idx * 0.5), 0);
+            gameSensorOrb.material.color.setHex(parseInt(t.hex.replace("#", "0x")));
+            gameSensorOrb.material.emissive.setHex(parseInt(t.hex.replace("#", "0x")));
+
+            const fb = document.getElementById('gameFeedback');
+            fb.style.display = 'block';
+            fb.style.background = '#f1f5f9';
+            fb.style.color = '#475569';
+            fb.innerHTML = `Hãy chỉnh góc đèn chiếu để <b>${t.name}</b> rọi đúng vào cảm biến tròn trên màn!`;
+        }
+
+        function onGameAngle(val) {
+            document.getElementById('gameAngleLabel').innerText = `${val}°`;
+            beamAngleDeg = parseFloat(val);
+            document.getElementById('angleSlider').value = val;
+            updateOpticsSimulation();
+        }
+
+        function checkColorHit() {
+            const fb = document.getElementById('gameFeedback');
+            fb.style.display = 'block';
+
+            if (gameShots <= 0) {
+                fb.style.background = '#fee2e2';
+                fb.style.color = '#b91c1c';
+                fb.innerHTML = 'Hết lượt phát tia rồi! Hãy ấn "Đổi màu mục tiêu" để chơi lại nhé! 🔄';
+                return;
+            }
+
+            gameShots--;
+            document.getElementById('gameShots').innerText = gameShots;
+
+            const t = targetColorsList[targetColorIdx];
+            const rayHitPos = rayBands[t.idx].screenPatch.position;
+            const diff = Math.abs(rayHitPos.y - gameSensorOrb.position.y);
+
+            if (diff < 0.6) {
+                // TRÚNG ĐÍCH
+                gameScore += 100;
+                document.getElementById('gameScore').innerText = gameScore;
+                fb.style.background = '#dcfce7';
+                fb.style.color = '#15803d';
+                fb.innerHTML = `🎉 <b>CHÍNH XÁC 100%!</b> Em đã bắt trúng <b>${t.name}</b> thành công! (+100⭐)`;
+                setTimeout(nextColorTarget, 1600);
+            } else {
+                fb.style.background = '#fef3c7';
+                fb.style.color = '#b45309';
+                fb.innerHTML = `Chưa trúng rồi! ${t.name} bị lệch cảm biến ${diff.toFixed(1)}m. Hãy thử đổi góc chiếu nha! 💪`;
+            }
+        }
+
+        function nextColorTarget() {
+            let next = (targetColorIdx + 1) % targetColorsList.length;
+            initColorTarget(next);
+        }
+
+        /* =========================================================================
+           7. HỆ THỐNG BÀI TẬP TRẮC NGHIỆM 10 CÂU BÁM SÁT HÌNH 7.5
+           ========================================================================= */
+        const quizList = [
+            {
+                q: "1. Thí nghiệm trong Hình 7.5 mô tả hiện tượng quang học nào sau đây?",
+                opts: [
+                    "Hiện tượng tán sắc ánh sáng",
+                    "Hiện tượng phản xạ toàn phần",
+                    "Hiện tượng tạo ảnh qua thấu kính phân kỳ",
+                    "Hiện tượng bóng tối và bóng nửa tối"
+                ],
+                correct: 0,
+                explain: "Đúng rồi! Hình 7.5 mô tả thí nghiệm lịch sử của Newton về hiện tượng tán sắc ánh sáng trắng qua lăng kính."
+            },
+            {
+                q: "2. Chùm tia sáng đi vào lăng kính trong Hình 7.5 là loại ánh sáng gì?",
+                opts: [
+                    "Ánh sáng trắng",
+                    "Ánh sáng laser đỏ",
+                    "Tia hồng ngoại",
+                    "Tia tử ngoại"
+                ],
+                correct: 0,
+                explain: "Chính xác! Nguồn phát trong hình là chùm ánh sáng trắng (ví dụ ánh sáng mặt trời hoặc đèn dây tóc)."
+            },
+            {
+                q: "3. Dải màu quang phổ thu được trên Màn hứng trong Hình 7.5 gồm bao nhiêu màu chính?",
+                opts: [
+                    "7 màu chính (Đỏ, Da cam, Vàng, Lục, Lam, Chàm, Tím)",
+                    "3 màu (Đỏ, Lục, Lam)",
+                    "Chỉ duy nhất 1 màu trắng",
+                    "Vô số dải màu đen trắng xen kẽ"
+                ],
+                correct: 0,
+                explain: "Tuyệt vời! Dải quang phổ gồm 7 màu chính theo thứ tự liên tục từ Đỏ đến Tím."
+            },
+            {
+                q: "4. Quan sát Hình 7.5, tia sáng đơn sắc nào bị lệch ÍT NHẤT về phía đáy lăng kính?",
+                opts: [
+                    "Tia Đỏ (nằm ở trên cùng của dải màu)",
+                    "Tia Tím",
+                    "Tia Vàng",
+                    "Tia Lục"
+                ],
+                correct: 0,
+                explain: "Rất chuẩn! Tia Đỏ có góc lệch nhỏ nhất nên nằm ở vị trí cao nhất trên màn hứng."
+            },
+            {
+                q: "5. Quan sát Hình 7.5, tia sáng đơn sắc nào bị lệch NHIỀU NHẤT về phía đáy lăng kính?",
+                opts: [
+                    "Tia Tím (nằm ở dưới cùng của dải màu)",
+                    "Tia Đỏ",
+                    "Tia Da cam",
+                    "Tia Lam"
+                ],
+                correct: 0,
+                explain: "Chính xác! Tia Tím có chiết suất lớn nhất nên bị bẻ cong lệch nhiều nhất về phía đáy lăng kính."
+            },
+            {
+                q: "6. Chiết suất của thủy tinh lăng kính đối với các ánh sáng đơn sắc tuân theo thứ tự nào?",
+                opts: [
+                    "n_đỏ < n_cam < n_vàng < n_lục < n_lam < n_chàm < n_tím",
+                    "n_tím < n_chàm < n_lam < n_lục < n_vàng < n_cam < n_đỏ",
+                    "Chiết suất bằng nhau đối với mọi ánh sáng",
+                    "Chiết suất của tia Lục luôn lớn nhất"
+                ],
+                correct: 0,
+                explain: "Đúng rồi! Chiết suất nhỏ nhất đối với tia đỏ và tăng dần đến lớn nhất đối với tia tím."
+            },
+            {
+                q: "7. Nếu trong Hình 7.5, ta thay nguồn sáng trắng bằng một bút Laser ĐỎ, trên màn chắn sẽ thu được:",
+                opts: [
+                    "Một vệt sáng màu đỏ duy nhất (không bị tán sắc)",
+                    "Dải 7 màu cầu vồng",
+                    "Một vệt sáng màu tím",
+                    "Một vệt sáng màu trắng"
+                ],
+                correct: 0,
+                explain: "Chính xác! Ánh sáng laser đỏ là ánh sáng đơn sắc, khi qua lăng kính chỉ bị lệch hướng chứ không bị tán sắc."
+            },
+            {
+                q: "8. Khi kéo Màn hứng ra xa lăng kính hơn, bề rộng của dải màu cầu vồng thu được sẽ:",
+                opts: [
+                    "Càng mở rộng (xòe rộng hơn)",
+                    "Càng thu hẹp lại thành một điểm",
+                    "Không hề thay đổi kích thước",
+                    "Biến mất hoàn toàn"
+                ],
+                correct: 0,
+                explain: "Tuyệt vời! Vì các tia sáng ló ra theo dạng chùm xòe quạt (phân kỳ), nên màn càng ở xa thì bề rộng dải màu càng lớn."
+            },
+            {
+                q: "9. Hiện tượng tự nhiên nào sau đây có cùng bản chất vật lý với thí nghiệm trong Hình 7.5?",
+                opts: [
+                    "Cầu vồng xuất hiện sau cơn mưa",
+                    "Sấm sét trên bầu trời",
+                    "Thủy triều lên xuống",
+                    "Nhật thực toàn phần"
+                ],
+                correct: 0,
+                explain: "Xuất sắc! Các hạt mưa li ti đóng vai trò như những lăng kính tự nhiên làm tán sắc ánh sáng mặt trời tạo thành cầu vồng."
+            },
+            {
+                q: "10. [Tính toán đơn giản] Chiếu một tia sáng vào lăng kính có góc chiết quang A = 60°. Biết góc tới i₁ = 45° và góc ló đo được i₂ = 45°. Góc lệch D của tia sáng bằng:",
+                opts: [
+                    "D = 30°",
+                    "D = 45°",
+                    "D = 60°",
+                    "D = 90°"
+                ],
+                correct: 0,
+                explain: "Quá giỏi! Công thức góc lệch lăng kính: D = i₁ + i₂ - A = 45° + 45° - 60° = 30°."
+            }
+        ];
+
+        let quizIdx = 0;
+        let userCorrectCount = 0;
+
+        function loadQuizUI() {
+            const q = quizList[quizIdx];
+            document.getElementById('quizIndexBadge').innerText = `Câu ${quizIdx + 1}/${quizList.length}`;
+            document.getElementById('quizQuestionText').innerText = q.q;
+            document.getElementById('quizFeedbackBox').style.display = 'none';
+            document.getElementById('btnNextQuiz').style.display = 'none';
+
+            const box = document.getElementById('quizOptionsContainer');
+            box.innerHTML = '';
+            q.opts.forEach((text, i) => {
+                const btn = document.createElement('button');
+                btn.className = 'quiz-opt-btn';
+                btn.id = `optBtn_${i}`;
+                btn.innerText = `${String.fromCharCode(65 + i)}. ${text}`;
+                btn.onclick = () => selectQuizOption(i);
+                box.appendChild(btn);
+            });
+        }
+
+        function selectQuizOption(idx) {
+            const q = quizList[quizIdx];
+            const fb = document.getElementById('quizFeedbackBox');
+            const btns = document.querySelectorAll('.quiz-opt-btn');
+            btns.forEach(b => b.disabled = true);
+
+            if (idx === q.correct) {
+                userCorrectCount++;
+                document.getElementById(`optBtn_${idx}`).classList.add('opt-correct');
+                fb.className = 'quiz-feedback pass';
+                fb.innerHTML = `🎯 <b>CHÍNH XÁC!</b><br>${q.explain}`;
+            } else {
+                document.getElementById(`optBtn_${idx}`).classList.add('opt-wrong');
+                document.getElementById(`optBtn_${q.correct}`).classList.add('opt-correct');
+                fb.className = 'quiz-feedback fail';
+                fb.innerHTML = `Tiếc quá chưa đúng! Đáp án đúng là <b>${String.fromCharCode(65 + q.correct)}</b>.<br>${q.explain}`;
+            }
+
+            const nextBtn = document.getElementById('btnNextQuiz');
+            if (quizIdx === quizList.length - 1) {
+                nextBtn.innerText = "Xem Bảng Tổng Kết Kết Quả 🏆";
+            } else {
+                nextBtn.innerText = "Câu tiếp theo ➔";
+            }
+            nextBtn.style.display = 'block';
+        }
+
+        function nextQuizQuestion() {
+            quizIdx++;
+            if (quizIdx >= quizList.length) {
+                showFinalSummary();
+            } else {
+                loadQuizUI();
+            }
+        }
+
+        function showFinalSummary() {
+            document.getElementById('quizCard').style.display = 'none';
+            const sumBox = document.getElementById('resultSummaryBox');
+            sumBox.style.display = 'block';
+
+            const total = quizList.length;
+            const wrong = total - userCorrectCount;
+            const score10 = (userCorrectCount / total) * 10;
+
+            document.getElementById('scoreDisplay').innerText = `${userCorrectCount}/${total}`;
+            document.getElementById('correctCountTxt').innerText = userCorrectCount;
+            document.getElementById('wrongCountTxt').innerText = wrong;
+            document.getElementById('finalScore10Txt').innerText = score10.toFixed(1);
+
+            const comment = document.getElementById('scoreComment');
+            if (score10 === 10) {
+                comment.innerHTML = "🏆 <b>XUẤT SẮC TUYỆT ĐỐI!</b> Em đã hiểu tường tận bài học Hình 7.5!";
+                comment.style.color = "#16a34a";
+            } else if (score10 >= 8) {
+                comment.innerHTML = "🌟 <b>RẤT TỐT!</b> Em nắm rất vững thứ tự màu và tính chất lăng kính!";
+                comment.style.color = "#0284c7";
+            } else {
+                comment.innerHTML = "💪 <b>HÃY CỐ GẮNG HƠN!</b> Quan sát kỹ lại dải màu Đỏ - Tím trong 3D và thử làm lại nhé!";
+                comment.style.color = "#d97706";
+            }
+        }
+
+        function restartQuiz() {
+            quizIdx = 0;
+            userCorrectCount = 0;
+            document.getElementById('quizCard').style.display = 'block';
+            document.getElementById('resultSummaryBox').style.display = 'none';
+            loadQuizUI();
+        }
+
+        /* =========================================================================
+           8. ĐIỀU HƯỚNG TAB & VÒNG LẶP RENDER
+           ========================================================================= */
+        function setTab(tabId) {
+            document.querySelectorAll('.tab-btn').forEach((b, i) => {
+                b.classList.toggle('active', 
+                    (i === 0 && tabId === 'sim') ||
+                    (i === 1 && tabId === 'game') ||
+                    (i === 2 && tabId === 'quiz')
+                );
+            });
+
+            document.getElementById('tab-sim').classList.toggle('active', tabId === 'sim');
+            document.getElementById('tab-game').classList.toggle('active', tabId === 'game');
+            document.getElementById('tab-quiz').classList.toggle('active', tabId === 'quiz');
+
+            if (tabId === 'game') {
+                gameSensorOrb.visible = true;
+                currentMode = 'white';
+                document.getElementById('modeSelect').value = 'white';
+                initColorTarget(0);
+            } else {
+                gameSensorOrb.visible = false;
+            }
+
+            if (tabId === 'quiz') {
+                if (quizIdx >= quizList.length) {
+                    showFinalSummary();
+                } else {
+                    document.getElementById('quizCard').style.display = 'block';
+                    document.getElementById('resultSummaryBox').style.display = 'none';
+                    loadQuizUI();
+                }
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (gameSensorOrb.visible) {
+                gameSensorOrb.rotation.y += 0.02;
+            }
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            const w = container.clientWidth;
+            const h = container.clientHeight;
+            camera.aspect = w / h;
+            camera.updateProjectionMatrix();
+            renderer.setSize(w, h);
+        });
+
+        // Khởi động chạy lần đầu
+        updateOpticsSimulation();
+        animate();
+    </script>
+</body>
+</html>

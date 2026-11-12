@@ -1,0 +1,1465 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mô Hình Thấu Kính 3D Rõ Nét Chuẩn SGK - KHTN 9</title>
+    <!-- Three.js & OrbitControls -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <!-- Font chữ Nunito -->
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --bg-page: #f8fafc;
+            --primary: #0284c7;
+            --primary-light: #38bdf8;
+            --accent-pink: #e11d48;
+            --accent-yellow: #f59e0b;
+            --accent-green: #10b981;
+            --text-dark: #0f172a;
+            --card-bg: #ffffff;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Nunito', 'Segoe UI', sans-serif;
+            user-select: none;
+        }
+
+        body {
+            background-color: var(--bg-page);
+            color: var(--text-dark);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* KHUNG HIỂN THỊ 3D */
+        #viewport-container {
+            flex: 1;
+            position: relative;
+            height: 100%;
+            background: radial-gradient(circle at 50% 25%, #ffffff 0%, #e2e8f0 70%, #cbd5e1 100%);
+        }
+
+        #webgl-canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /* BẢNG THÔNG SỐ QUANG HỌC */
+        .hud-banner {
+            position: absolute;
+            top: 16px;
+            left: 18px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(8px);
+            padding: 10px 16px;
+            border-radius: 16px;
+            border: 2px solid #38bdf8;
+            box-shadow: 0 6px 20px rgba(2, 132, 199, 0.15);
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .hud-title {
+            color: var(--primary);
+            font-size: 13.5px;
+            font-weight: 900;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .hud-tags {
+            display: flex;
+            gap: 8px;
+        }
+
+        .hud-tag {
+            background: #f0f9ff;
+            padding: 4px 10px;
+            border-radius: 10px;
+            font-size: 12px;
+            font-weight: 800;
+            color: #0369a1;
+            border: 1px solid #bae6fd;
+        }
+
+        .hud-tag span {
+            color: var(--accent-pink);
+            font-size: 13.5px;
+        }
+
+        /* BẢNG NHẬN DẠNG HÌNH DẠNG THẤU KÍNH */
+        .lens-shape-card {
+            position: absolute;
+            bottom: 16px;
+            right: 16px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(6px);
+            border-radius: 14px;
+            padding: 8px 14px;
+            border: 2px solid #0284c7;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.08);
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            font-size: 12px;
+            font-weight: 800;
+            pointer-events: none;
+        }
+
+        .lens-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            color: #0369a1;
+        }
+
+        .hint-bar {
+            position: absolute;
+            bottom: 16px;
+            left: 18px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 6px 14px;
+            border-radius: 18px;
+            font-size: 12px;
+            font-weight: 700;
+            color: #64748b;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            pointer-events: none;
+        }
+
+        /* SIDEBAR ĐIỀU KHIỂN */
+        #sidebar {
+            width: clamp(320px, 36vw, 410px);
+            background: var(--card-bg);
+            border-left: 2px solid #e2e8f0;
+            display: flex;
+            flex-direction: column;
+            box-shadow: -6px 0 20px rgba(0, 0, 0, 0.05);
+            z-index: 10;
+        }
+
+        @media (max-width: 960px) {
+            .hint-bar { display: none; }
+            .hud-banner { top: 10px; left: 10px; right: 10px; padding: 8px 12px; }
+            .hud-tags { flex-wrap: wrap; gap: 4px; }
+            .hud-tag { font-size: 11px; padding: 3px 8px; }
+            .lens-shape-card { bottom: 10px; left: 10px; right: auto; font-size: 11px; padding: 6px 10px; }
+        }
+
+        .header {
+            padding: 14px 18px;
+            background: linear-gradient(135deg, #e0f2fe 0%, #fef3c7 100%);
+            border-bottom: 2px solid #bae6fd;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 17px;
+            font-weight: 900;
+            color: #0284c7;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .header p {
+            font-size: 12px;
+            color: #64748b;
+            font-weight: 700;
+            margin-top: 2px;
+        }
+
+        /* TAB BAR */
+        .tab-bar {
+            display: flex;
+            padding: 8px 10px;
+            background: #f8fafc;
+            gap: 6px;
+            border-bottom: 2px solid #f1f5f9;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 9px 4px;
+            background: #ffffff;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            color: #64748b;
+            font-size: 12px;
+            font-weight: 800;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .tab-btn.active {
+            background: #0284c7;
+            color: #ffffff;
+            border-color: #0369a1;
+            box-shadow: 0 4px 10px rgba(2, 132, 199, 0.25);
+            transform: translateY(-1px);
+        }
+
+        .tab-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* CARD TRANG TRÍ */
+        .card {
+            background: #ffffff;
+            border-radius: 14px;
+            padding: 13px;
+            margin-bottom: 12px;
+            border: 2px solid #f1f5f9;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.03);
+        }
+
+        .card h3 {
+            font-size: 13px;
+            font-weight: 900;
+            color: #0369a1;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .control-group {
+            margin-bottom: 10px;
+        }
+
+        .control-group label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            font-weight: 800;
+            color: #475569;
+            margin-bottom: 4px;
+        }
+
+        select, input[type="range"] {
+            font-family: 'Nunito', sans-serif;
+        }
+
+        select {
+            width: 100%;
+            padding: 8px 10px;
+            border-radius: 10px;
+            border: 2px solid #cbd5e1;
+            background: #f8fafc;
+            color: #1e293b;
+            font-size: 12.5px;
+            font-weight: 700;
+            outline: none;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            height: 8px;
+            border-radius: 5px;
+            background: #e2e8f0;
+            outline: none;
+            accent-color: var(--accent-pink);
+            cursor: pointer;
+        }
+
+        .btn-cute {
+            width: 100%;
+            padding: 10px;
+            border-radius: 12px;
+            border: none;
+            background: linear-gradient(135deg, #e11d48 0%, #f43f5e 100%);
+            color: #ffffff;
+            font-size: 13.5px;
+            font-weight: 900;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(225, 29, 72, 0.25);
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .btn-cute:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(225, 29, 72, 0.35);
+        }
+
+        .btn-sub {
+            background: #f1f5f9;
+            color: #475569;
+            font-size: 12px;
+            font-weight: 800;
+            border: 2px solid #e2e8f0;
+            box-shadow: none;
+            margin-top: 6px;
+        }
+
+        .fact-box {
+            background: #eff6ff;
+            border: 1.5px dashed #93c5fd;
+            border-radius: 12px;
+            padding: 10px;
+            font-size: 12px;
+            line-height: 1.6;
+            color: #1e3a8a;
+            font-weight: 700;
+        }
+
+        /* GIAO DIỆN GAME */
+        .game-board {
+            background: #fdf4ff;
+            border: 2px solid #e9d5ff;
+            border-radius: 14px;
+            padding: 12px;
+            margin-bottom: 12px;
+        }
+
+        .game-msg {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 10px;
+            font-size: 12.5px;
+            font-weight: 800;
+            text-align: center;
+            display: none;
+            line-height: 1.4;
+        }
+
+        /* BÀI TẬP */
+        .quiz-opt-btn {
+            width: 100%;
+            text-align: left;
+            padding: 9px 11px;
+            border-radius: 10px;
+            border: 2px solid #e2e8f0;
+            background: #f8fafc;
+            color: #334155;
+            font-size: 12px;
+            font-weight: 700;
+            margin-bottom: 6px;
+            cursor: pointer;
+            transition: 0.2s;
+            line-height: 1.4;
+        }
+
+        .quiz-opt-btn:hover {
+            border-color: #38bdf8;
+            background: #f0f9ff;
+        }
+
+        .quiz-opt-btn.opt-correct {
+            background: #dcfce7 !important;
+            border-color: #22c55e !important;
+            color: #15803d !important;
+        }
+
+        .quiz-opt-btn.opt-wrong {
+            background: #fee2e2 !important;
+            border-color: #ef4444 !important;
+            color: #b91c1c !important;
+        }
+
+        .quiz-feedback {
+            padding: 9px 11px;
+            border-radius: 10px;
+            font-size: 12px;
+            font-weight: 800;
+            line-height: 1.5;
+            margin-top: 8px;
+            display: none;
+        }
+
+        .quiz-feedback.pass {
+            background: #dcfce7;
+            color: #15803d;
+            border: 1.5px solid #86efac;
+            display: block;
+        }
+
+        .quiz-feedback.fail {
+            background: #fee2e2;
+            color: #b91c1c;
+            border: 1.5px solid #fca5a5;
+            display: block;
+        }
+
+        .result-summary-card {
+            display: none;
+            text-align: center;
+            padding: 16px;
+            border-radius: 14px;
+            background: #f0f9ff;
+            border: 2px solid #bae6fd;
+        }
+
+        .score-circle {
+            width: 75px;
+            height: 75px;
+            border-radius: 50%;
+            background: #0284c7;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: 900;
+            margin: 10px auto;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- KHU VỰC HIỂN THỊ 3D VIEWPORT -->
+    <div id="viewport-container">
+        <canvas id="webgl-canvas"></canvas>
+
+        <!-- BẢNG THÔNG SỐ HUD NỔI BẬT -->
+        <div class="hud-banner">
+            <div class="hud-title" id="hudTitle">🔍 THẤU KÍNH HỘI TỤ (TKHT)</div>
+            <div class="hud-tags">
+                <div class="hud-tag">Tiêu cự (f): <span id="hud-f">12 cm</span></div>
+                <div class="hud-tag">Vật cách TK (d): <span id="hud-d">24 cm</span></div>
+                <div class="hud-tag">Ảnh cách TK (d'): <span id="hud-dp">24 cm</span></div>
+            </div>
+            <div id="hud-image-type" style="font-size: 11.5px; font-weight: 800; color: #15803d; margin-top: 2px;">
+                ✨ Tính chất ảnh: Ảnh Thật, Ngược chiều, Bằng vật (d = 2f)
+            </div>
+        </div>
+
+        <!-- BẢNG NHẬN BIẾT HÌNH DẠNG VÀ KÝ HIỆU CHUẨN SGK -->
+        <div class="lens-shape-card">
+            <div class="lens-badge">
+                <span id="badgeIcon" style="font-size:18px;">↕️</span>
+                <span id="badgeText">THẤU KÍNH HỘI TỤ (Rìa mỏng)</span>
+            </div>
+            <div style="font-size:11px; color:#64748b; font-weight:700;" id="badgeShapeDesc">
+                • Tiết diện: Phần giữa dày (3 cm), rìa chuốt mỏng (0.3 cm)
+            </div>
+        </div>
+
+        <div class="hint-bar">
+            🐬 <b>Thao tác:</b> Kéo chuột xoay 360° | Cuộn chuột phóng to/thu nhỏ | Chuột phải di chuyển
+        </div>
+    </div>
+
+    <!-- SIDEBAR ĐIỀU KHIỂN BÊN PHẢI -->
+    <div id="sidebar">
+        <div class="header">
+            <h1>🔬 QUANG HỌC THẤU KÍNH 3D</h1>
+            <p>Hình dạng thấu kính rõ nét & Viền nổi bật chuẩn SGK</p>
+        </div>
+
+        <div class="tab-bar">
+            <button class="tab-btn active" onclick="setTab('sim')">🧪 Thí Nghiệm</button>
+            <button class="tab-btn" onclick="setTab('game')">🎬 Lấy Nét Ảnh</button>
+            <button class="tab-btn" onclick="setTab('quiz')">📝 Bài Tập (10 Câu)</button>
+        </div>
+
+        <!-- TAB 1: THÍ NGHIỆM -->
+        <div id="tab-sim" class="tab-content active">
+            <div class="card">
+                <h3>🔍 Lựa Chọn Thấu Kính & Chế Độ</h3>
+                <div class="control-group">
+                    <label>Loại thấu kính quang học:</label>
+                    <select id="lensSelect" onchange="changeLensType()">
+                        <option value="convex" selected>🔴 Thấu kính Hội tụ (Hai mặt lồi - Rìa mỏng)</option>
+                        <option value="concave">🔵 Thấu kính Phân kì (Hai mặt lõm - Rìa dày)</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label>Phương thức quan sát:</label>
+                    <select id="rayModeSelect" onchange="changeRayMode()">
+                        <option value="object" selected>🕯️ Vật sáng AB & Tạo ảnh A'B' (3 tia đặc biệt)</option>
+                        <option value="parallel">⚡ Chùm tia sáng song song trục chính</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>📏 Điều Chỉnh Vị Trí & Tiêu Cự</h3>
+                <div class="control-group">
+                    <label><span>Tiêu cự thấu kính (f):</span> <b id="val-f" style="color:#0284c7;">12 cm</b></label>
+                    <input type="range" id="sliderF" min="8" max="18" value="12" oninput="updateSliders()">
+                </div>
+                <div class="control-group" id="groupDist">
+                    <label><span>Khoảng cách từ vật đến TK (d):</span> <b id="val-d" style="color:#e11d48;">24 cm</b></label>
+                    <input type="range" id="sliderD" min="6" max="42" value="24" oninput="updateSliders()">
+                </div>
+                <div class="control-group" id="groupHeight">
+                    <label><span>Chiều cao vật sáng (h):</span> <b id="val-h" style="color:#f59e0b;">5.0 cm</b></label>
+                    <input type="range" id="sliderH" min="3" max="8" value="5" oninput="updateSliders()">
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>📖 Quy Luật Tạo Ảnh KHTN 9</h3>
+                <div class="fact-box" id="factText">
+                    <!-- Tự động cập nhật nhận xét -->
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 2: MINI-GAME LẤY NÉT MÁY CHIẾU -->
+        <div id="tab-game" class="tab-content">
+            <div class="card">
+                <h3>🎬 Thử Thách: Lấy Nét Ảnh Máy Chiếu</h3>
+                <p style="font-size:12px; color:#64748b; line-height:1.5; margin-bottom:10px; font-weight:700;">
+                    Màn chiếu đã được cố định sẵn vị trí! Hãy điều chỉnh <b>Khoảng cách vật d</b> để bắt được ảnh thật rõ nét trên màn theo đúng kịch bản!
+                </p>
+
+                <div class="game-board">
+                    <div style="display:flex; justify-content:space-between; font-weight:900; margin-bottom:8px;">
+                        <span id="gameQuestTitle" style="color:#7e22ce;">🎯 MÀN 1: Ảnh bằng vật (d = 2f)</span>
+                        <span>Điểm: <b id="gameScore" style="color:#0284c7;">0</b> ⭐</span>
+                    </div>
+                    <div style="font-size:11.5px; font-weight:800; color:#475569;">
+                        Số lượt điều chỉnh còn lại: <b id="gameShots" style="color:#e11d48;">5</b> 🎯
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label>Chỉnh khoảng cách d: <b id="gameDistLabel" style="color:#e11d48;">20 cm</b></label>
+                    <input type="range" id="gameSliderD" min="8" max="40" value="20" oninput="onGameSlider(this.value)">
+                </div>
+
+                <button class="btn-cute" onclick="checkFocusSharpness()">📸 CHỤP & KIỂM TRA ĐỘ NÉT</button>
+                <button class="btn-cute btn-sub" onclick="nextGameLevel()">⏭️ Chuyển Kịch Bản Thử Thách Mới</button>
+
+                <div class="game-msg" id="gameFeedback"></div>
+            </div>
+        </div>
+
+        <!-- TAB 3: BÀI TẬP TRẮC NGHIỆM 10 CÂU -->
+        <div id="tab-quiz" class="tab-content">
+            <div class="card" id="quizCard">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                    <h3>📝 Đố Vui Thấu Kính KHTN 9</h3>
+                    <span id="quizIndexBadge" style="font-size:11.5px; font-weight:800; color:var(--primary); background:#e0f2fe; padding:3px 9px; border-radius:10px;">Câu 1/10</span>
+                </div>
+                <p id="quizQuestionText" style="font-size:12.5px; font-weight:800; color:#1e293b; line-height:1.5; margin-bottom:10px;">
+                    Nội dung câu hỏi...
+                </p>
+                <div id="quizOptionsContainer"></div>
+                <div class="quiz-feedback" id="quizFeedbackBox"></div>
+                <button class="btn-cute btn-sub" id="btnNextQuiz" onclick="nextQuizQuestion()" style="display:none; margin-top:10px;">
+                    Câu tiếp theo ➔
+                </button>
+            </div>
+
+            <!-- Bảng tổng kết -->
+            <div class="result-summary-card" id="resultSummaryBox">
+                <h2 style="color:#0284c7; font-size:17px; margin-bottom:3px;">🎉 HOÀN THÀNH BÀI TẬP!</h2>
+                <p style="font-size:12px; color:#64748b; font-weight:700;">Kết quả bài tập Thấu Kính KHTN 9:</p>
+                
+                <div class="score-circle" id="scoreDisplay">10/10</div>
+                
+                <div style="font-size:12.5px; font-weight:800; margin:8px 0;" id="scoreComment">
+                    Xuất sắc! Em là một bậc thầy quang học tí hon! 🏆
+                </div>
+                
+                <div style="background:#ffffff; border-radius:10px; padding:10px; font-size:12px; font-weight:700; color:#334155; margin-bottom:10px; text-align:left; line-height:1.6;">
+                    • Số câu trả lời đúng: <b style="color:#16a34a;" id="correctCountTxt">10</b> câu<br>
+                    • Số câu chưa chính xác: <b style="color:#dc2626;" id="wrongCountTxt">0</b> câu<br>
+                    • Điểm số quy đổi: <b style="color:#0284c7;" id="finalScore10Txt">10.0</b> điểm
+                </div>
+
+                <button class="btn-cute" onclick="restartQuiz()">🔄 Làm lại bài tập</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /* =========================================================================
+           1. THIẾT LẬP ĐỒ HỌA 3D VỚI THREE.JS (TƯƠNG THÍCH 100%)
+           ========================================================================= */
+        const container = document.getElementById('viewport-container');
+        const canvas = document.getElementById('webgl-canvas');
+
+        const initialW = container.clientWidth || (window.innerWidth - 440);
+        const initialH = container.clientHeight || window.innerHeight;
+
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0xf1f5f9, 0.005);
+
+        const camera = new THREE.PerspectiveCamera(40, initialW / initialH, 0.1, 1000);
+        camera.position.set(0, 14, 62);
+
+        const renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
+        renderer.setSize(initialW, initialH);
+        renderer.setPixelRatio(window.devicePixelRatio);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.minDistance = 20;
+        controls.maxDistance = 110;
+
+        // Ánh sáng ban ngày
+        scene.add(new THREE.AmbientLight(0xffffff, 0.85));
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+        dirLight.position.set(20, 45, 30);
+        scene.add(dirLight);
+
+        const backLight = new THREE.DirectionalLight(0xbae6fd, 0.7);
+        backLight.position.set(-20, -10, -20);
+        scene.add(backLight);
+
+        const mainGroup = new THREE.Group();
+        scene.add(mainGroup);
+
+        /* =========================================================================
+           2. TẠO HÌNH THẬT 3D THẤU KÍNH HỘI TỤ & PHÂN KÌ CỰC RÕ NÉT
+           ========================================================================= */
+        // Vật liệu thủy tinh pha lê ngọc lam (SÁNG RÕ, BẮT SÁNG MẠNH, KHÔNG BỊ TÀNG HÌNH)
+        const glassMat = new THREE.MeshPhongMaterial({
+            color: 0x38bdf8,
+            emissive: 0x0284c7,
+            emissiveIntensity: 0.25,
+            specular: 0xffffff,
+            shininess: 100,
+            transparent: true,
+            opacity: 0.72,
+            depthWrite: false,
+            side: THREE.DoubleSide
+        });
+
+        // Vật liệu viền phát sáng màu xanh dương đậm bao quanh mép kính
+        const outlineMat = new THREE.LineBasicMaterial({ color: 0x0369a1, linewidth: 3 });
+
+        // --- A. THẤU KÍNH HỘI TỤ (TKHT - HAI MẶT LỒI, RÌA MỎNG CHUẨN XÁC) ---
+        const convexPoints = [];
+        const R_lens = 7.5;
+        // Đường cong mặt trước: giữa phồng ra x = 1.5, rìa vát mỏng về x = 0.15
+        for (let r = 0; r <= R_lens; r += 0.3) {
+            const t = 1.5 * Math.sqrt(Math.max(0, 1 - (r / (R_lens * 1.05)) ** 2)) + 0.15;
+            convexPoints.push(new THREE.Vector2(r, t));
+        }
+        // Mép vành ngoài
+        convexPoints.push(new THREE.Vector2(R_lens, -0.15));
+        // Đường cong mặt sau đối xứng
+        for (let r = R_lens; r >= 0; r -= 0.3) {
+            const t = 1.5 * Math.sqrt(Math.max(0, 1 - (r / (R_lens * 1.05)) ** 2)) + 0.15;
+            convexPoints.push(new THREE.Vector2(r, -t));
+        }
+
+        const convexGeo = new THREE.LatheGeometry(convexPoints, 48);
+        const convexLensMesh = new THREE.Mesh(convexGeo, glassMat);
+        // Xoay để trục quang học trùng với trục X nằm ngang
+        convexLensMesh.rotation.z = Math.PI / 2;
+
+        // Vành viền nổi bật bọc mép ngoài thấu kính hội tụ
+        const convexRim1 = new THREE.Line(
+            new THREE.BufferGeometry().setFromPoints(new THREE.Path().absarc(0, 0, R_lens, 0, Math.PI * 2).getPoints(64).map(p => new THREE.Vector3(0.15, p.x, p.y))),
+            outlineMat
+        );
+        const convexRim2 = new THREE.Line(
+            new THREE.BufferGeometry().setFromPoints(new THREE.Path().absarc(0, 0, R_lens, 0, Math.PI * 2).getPoints(64).map(p => new THREE.Vector3(-0.15, p.x, p.y))),
+            outlineMat
+        );
+
+        // Ký hiệu 2 đầu mũi tên nhọn (↕️) chuẩn SGK ở đỉnh và đáy thấu kính
+        const arrowTopConvex = new THREE.Mesh(new THREE.ConeGeometry(0.5, 1.2, 16), new THREE.MeshBasicMaterial({ color: 0x0284c7 }));
+        arrowTopConvex.position.set(0, R_lens + 0.6, 0);
+        const arrowBottomConvex = new THREE.Mesh(new THREE.ConeGeometry(0.5, 1.2, 16), new THREE.MeshBasicMaterial({ color: 0x0284c7 }));
+        arrowBottomConvex.position.set(0, -R_lens - 0.6, 0);
+        arrowBottomConvex.rotation.z = Math.PI;
+
+        const convexGroup = new THREE.Group();
+        convexGroup.add(convexLensMesh);
+        convexGroup.add(convexRim1);
+        convexGroup.add(convexRim2);
+        convexGroup.add(arrowTopConvex);
+        convexGroup.add(arrowBottomConvex);
+        mainGroup.add(convexGroup);
+
+        // --- B. THẤU KÍNH PHÂN KÌ (TKPK - HAI MẶT LÕM, RÌA DÀY TO RÕ RỆT) ---
+        const concavePoints = [];
+        // Đường cong mặt trước lõm: giữa thắt lại x = 0.2, rìa dày to lên x = 1.5
+        for (let r = 0; r <= R_lens; r += 0.3) {
+            const t = 0.2 + 1.3 * (r / R_lens) ** 2;
+            concavePoints.push(new THREE.Vector2(r, t));
+        }
+        // Mép ngoài dày
+        concavePoints.push(new THREE.Vector2(R_lens, -1.5));
+        // Đường cong mặt sau đối xứng
+        for (let r = R_lens; r >= 0; r -= 0.3) {
+            const t = 0.2 + 1.3 * (r / R_lens) ** 2;
+            concavePoints.push(new THREE.Vector2(r, -t));
+        }
+
+        const concaveGeo = new THREE.LatheGeometry(concavePoints, 48);
+        const concaveLensMesh = new THREE.Mesh(concaveGeo, glassMat);
+        concaveLensMesh.rotation.z = Math.PI / 2;
+
+        // Vành viền mép dày cho thấu kính phân kì
+        const concaveRim1 = new THREE.Line(
+            new THREE.BufferGeometry().setFromPoints(new THREE.Path().absarc(0, 0, R_lens, 0, Math.PI * 2).getPoints(64).map(p => new THREE.Vector3(1.5, p.x, p.y))),
+            outlineMat
+        );
+        const concaveRim2 = new THREE.Line(
+            new THREE.BufferGeometry().setFromPoints(new THREE.Path().absarc(0, 0, R_lens, 0, Math.PI * 2).getPoints(64).map(p => new THREE.Vector3(-1.5, p.x, p.y))),
+            outlineMat
+        );
+
+        // Vành kim loại dày bao quanh mép rìa phân kì
+        const concaveOuterBand = new THREE.Mesh(
+            new THREE.CylinderGeometry(R_lens + 0.05, R_lens + 0.05, 3.0, 48, 1, true),
+            new THREE.MeshStandardMaterial({ color: 0x0284c7, metalness: 0.6, roughness: 0.3, side: THREE.DoubleSide })
+        );
+        concaveOuterBand.rotation.z = Math.PI / 2;
+
+        // Ký hiệu 2 đầu loe hình chữ Y chuẩn SGK
+        const arrowTopConcave = new THREE.Mesh(new THREE.ConeGeometry(0.5, 1.2, 16), new THREE.MeshBasicMaterial({ color: 0x0284c7 }));
+        arrowTopConcave.position.set(0, R_lens + 0.6, 0);
+        arrowTopConcave.rotation.z = Math.PI; // Loe ngược vào
+        const arrowBottomConcave = new THREE.Mesh(new THREE.ConeGeometry(0.5, 1.2, 16), new THREE.MeshBasicMaterial({ color: 0x0284c7 }));
+        arrowBottomConcave.position.set(0, -R_lens - 0.6, 0);
+
+        const concaveGroup = new THREE.Group();
+        concaveGroup.add(concaveLensMesh);
+        concaveGroup.add(concaveRim1);
+        concaveGroup.add(concaveRim2);
+        concaveGroup.add(concaveOuterBand);
+        concaveGroup.add(arrowTopConcave);
+        concaveGroup.add(arrowBottomConcave);
+        concaveGroup.visible = false; // Mặc định hiển thị TKHT
+        mainGroup.add(concaveGroup);
+
+        /* =========================================================================
+           3. CÁC THÀNH PHẦN QUANG HỌC PHÒNG THÍ NGHIỆM
+           ========================================================================= */
+        // Trục chính Delta
+        const axisMat = new THREE.LineDashedMaterial({ color: 0x475569, dashSize: 0.8, gapSize: 0.5, linewidth: 2 });
+        const opticalAxis = new THREE.Line(
+            new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-45, 0, 0), new THREE.Vector3(45, 0, 0)]),
+            axisMat
+        );
+        opticalAxis.computeLineDistances();
+        mainGroup.add(opticalAxis);
+
+        // Giá đỡ kim loại dưới chân thấu kính
+        const standBase = new THREE.Mesh(
+            new THREE.CylinderGeometry(5.5, 6, 1.2, 32),
+            new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.7, roughness: 0.3 })
+        );
+        standBase.position.set(0, -9.5, 0);
+        mainGroup.add(standBase);
+
+        const standRod = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.5, 0.5, 6, 16),
+            new THREE.MeshStandardMaterial({ color: 0x64748b, metalness: 0.8 })
+        );
+        standRod.position.set(0, -6, 0);
+        mainGroup.add(standRod);
+
+        // Quang tâm O và các tiêu điểm
+        function createFocalPoint(colorHex) {
+            return new THREE.Mesh(new THREE.SphereGeometry(0.45, 16, 16), new THREE.MeshBasicMaterial({ color: colorHex }));
+        }
+
+        const pointO = createFocalPoint(0x0f172a);  // Quang tâm O
+        const pointF = createFocalPoint(0xe11d48);  // Tiêu điểm F
+        const pointFp = createFocalPoint(0xe11d48); // Tiêu điểm F'
+        const point2F = createFocalPoint(0x0284c7); // 2F
+        const point2Fp = createFocalPoint(0x0284c7);// 2F'
+
+        mainGroup.add(pointO);
+        mainGroup.add(pointF);
+        mainGroup.add(pointFp);
+        mainGroup.add(point2F);
+        mainGroup.add(point2Fp);
+
+        // MÀN HỨNG ẢNH
+        const screenGroup = new THREE.Group();
+        const screenPlate = new THREE.Mesh(
+            new THREE.BoxGeometry(0.5, 17, 13),
+            new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9 })
+        );
+        screenGroup.add(screenPlate);
+
+        const screenRod = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.35, 0.35, 5, 12),
+            new THREE.MeshStandardMaterial({ color: 0x475569 })
+        );
+        screenRod.position.set(0, -9.5, 0);
+        screenGroup.add(screenRod);
+        mainGroup.add(screenGroup);
+
+        // VẬT SÁNG CÂY NẾN AB
+        const candleGroup = new THREE.Group();
+        const candleBody = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.6, 0.6, 4, 16),
+            new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.3 })
+        );
+        candleBody.position.y = 2;
+        candleGroup.add(candleBody);
+
+        const flameMesh = new THREE.Mesh(
+            new THREE.ConeGeometry(0.5, 1.3, 16),
+            new THREE.MeshBasicMaterial({ color: 0xef4444 })
+        );
+        flameMesh.position.y = 4.6;
+        candleGroup.add(flameMesh);
+        mainGroup.add(candleGroup);
+
+        // ẢNH A'B'
+        const imageGroup = new THREE.Group();
+        const imageBody = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.5, 0.5, 4, 16),
+            new THREE.MeshStandardMaterial({ color: 0x10b981, transparent: true, opacity: 0.85 })
+        );
+        imageGroup.add(imageBody);
+
+        const imageFlame = new THREE.Mesh(
+            new THREE.ConeGeometry(0.45, 1.2, 16),
+            new THREE.MeshBasicMaterial({ color: 0x10b981, transparent: true, opacity: 0.85 })
+        );
+        imageGroup.add(imageFlame);
+        mainGroup.add(imageGroup);
+
+        /* =========================================================================
+           4. HỆ THỐNG TIA SÁNG ĐẶC BIỆT
+           ========================================================================= */
+        function createSolidBeam(colorHex, radius = 0.16) {
+            const geo = new THREE.CylinderGeometry(radius, radius, 1, 16);
+            const mat = new THREE.MeshBasicMaterial({ color: colorHex, transparent: true, opacity: 0.95 });
+            const mesh = new THREE.Mesh(geo, mat);
+            mainGroup.add(mesh);
+            return mesh;
+        }
+
+        function setBeamTransform(mesh, p1, p2) {
+            const dist = p1.distanceTo(p2);
+            if (dist < 0.01) {
+                mesh.visible = false;
+                return;
+            }
+            mesh.visible = true;
+            mesh.scale.set(1, dist, 1);
+            mesh.position.copy(p1).add(p2).multiplyScalar(0.5);
+
+            const dir = new THREE.Vector3().subVectors(p2, p1).normalize();
+            mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+        }
+
+        // 3 tia đặc biệt: Tia 1 (Đỏ), Tia 2 (Xanh lục), Tia 3 (Vàng)
+        const ray1_in = createSolidBeam(0xe11d48, 0.22);
+        const ray1_out = createSolidBeam(0xe11d48, 0.22);
+        const ray2_in = createSolidBeam(0x10b981, 0.22);
+        const ray2_out = createSolidBeam(0x10b981, 0.22);
+        const ray3_in = createSolidBeam(0xf59e0b, 0.22);
+        const ray3_out = createSolidBeam(0xf59e0b, 0.22);
+
+        // Chùm tia song song
+        const parallelRays = [];
+        for (let i = 0; i < 5; i++) {
+            parallelRays.push({
+                inBeam: createSolidBeam(0xe11d48, 0.18),
+                outBeam: createSolidBeam(0xe11d48, 0.18)
+            });
+        }
+
+        /* =========================================================================
+           5. TÍNH TOÁN QUANG HỌC KHTN 9
+           ========================================================================= */
+        let lensType = 'convex'; // 'convex' (TKHT) hoặc 'concave' (TKPK)
+        let rayMode = 'object';   // 'object' hoặc 'parallel'
+        let focalLength = 12;     // f (cm)
+        let distObject = 24;      // d (cm)
+        let objectHeight = 5.0;   // h (cm)
+
+        function updateOpticsSimulation() {
+            const f = (lensType === 'convex') ? focalLength : -focalLength;
+            const d = distObject;
+            const h = objectHeight;
+
+            // 1. Cập nhật vị trí các tiêu điểm
+            pointF.position.set(-focalLength, 0, 0);
+            pointFp.position.set(focalLength, 0, 0);
+            point2F.position.set(-2 * focalLength, 0, 0);
+            point2Fp.position.set(2 * focalLength, 0, 0);
+
+            // 2. Định vị Cây nến AB
+            candleGroup.position.set(-d, 0, 0);
+            candleBody.scale.set(1, h / 5.0, 1);
+            candleBody.position.y = h / 2;
+            flameMesh.position.y = h + 0.65;
+
+            const tipB = new THREE.Vector3(-d, h + 0.65, 0);
+
+            // 3. Tính toán vị trí ảnh d' và chiều cao h'
+            let dp = 0;
+            let hp = 0;
+            let isInfinity = false;
+
+            if (lensType === 'convex') {
+                if (Math.abs(d - focalLength) < 0.2) {
+                    isInfinity = true;
+                } else {
+                    dp = (d * focalLength) / (d - focalLength);
+                    hp = -(dp / d) * (h + 0.65);
+                }
+            } else {
+                dp = (d * (-focalLength)) / (d - (-focalLength));
+                hp = -(dp / d) * (h + 0.65);
+            }
+
+            // 4. Ẩn/Hiện thành phần
+            const isObjectMode = (rayMode === 'object');
+            candleGroup.visible = isObjectMode;
+            imageGroup.visible = isObjectMode && !isInfinity;
+            screenGroup.visible = isObjectMode && (dp > 0) && !isInfinity;
+
+            // 5. Vẽ 3 tia sáng đặc biệt
+            if (isObjectMode && !isInfinity) {
+                const tipBp = new THREE.Vector3(dp, hp, 0);
+
+                // Tia 1: Song song trục chính tới thấu kính
+                const pLens1 = new THREE.Vector3(0, tipB.y, 0);
+                setBeamTransform(ray1_in, tipB, pLens1);
+
+                if (lensType === 'convex') {
+                    const pFar1 = new THREE.Vector3(35, pLens1.y + (35 - pLens1.x) * ((tipBp.y - pLens1.y) / (tipBp.x - pLens1.x)), 0);
+                    setBeamTransform(ray1_out, pLens1, (dp > 0) ? tipBp : pFar1);
+                } else {
+                    const slopeOut1 = (tipB.y - 0) / (0 - (-focalLength));
+                    const pFarConcave1 = new THREE.Vector3(35, tipB.y + 35 * slopeOut1, 0);
+                    setBeamTransform(ray1_out, pLens1, pFarConcave1);
+                }
+
+                // Tia 2: Qua quang tâm O
+                setBeamTransform(ray2_in, tipB, pointO.position);
+                const pFar2 = new THREE.Vector3(35, (35 / -d) * tipB.y, 0);
+                setBeamTransform(ray2_out, pointO.position, (dp > 0) ? tipBp : pFar2);
+
+                // Tia 3: (TKHT)
+                if (lensType === 'convex' && d > focalLength) {
+                    const pLens3 = new THREE.Vector3(0, hp, 0);
+                    setBeamTransform(ray3_in, tipB, pLens3);
+                    setBeamTransform(ray3_out, pLens3, tipBp);
+                    ray3_in.visible = true;
+                    ray3_out.visible = true;
+                } else {
+                    ray3_in.visible = false;
+                    ray3_out.visible = false;
+                }
+
+                // Cập nhật mô hình Ảnh
+                imageGroup.position.set(dp, 0, 0);
+                const absHp = Math.abs(hp);
+                imageBody.scale.set(1, absHp / 5.0, 1);
+                imageBody.position.y = hp / 2;
+                imageFlame.position.y = hp;
+                imageFlame.rotation.z = (hp < 0) ? Math.PI : 0;
+
+                const isReal = (dp > 0);
+                imageBody.material.color.setHex(isReal ? 0x10b981 : 0xa855f7);
+                imageFlame.material.color.setHex(isReal ? 0x10b981 : 0xa855f7);
+
+                if (isReal) {
+                    screenGroup.position.set(dp, 0, 0);
+                }
+
+                ray1_in.visible = true;
+                ray1_out.visible = true;
+                ray2_in.visible = true;
+                ray2_out.visible = true;
+            } else {
+                ray1_in.visible = false;
+                ray1_out.visible = false;
+                ray2_in.visible = false;
+                ray2_out.visible = false;
+                ray3_in.visible = false;
+                ray3_out.visible = false;
+            }
+
+            // 6. Chế độ Chùm tia song song
+            parallelRays.forEach((pr, i) => {
+                if (rayMode === 'parallel') {
+                    const y = (i - 2) * 2.6;
+                    const pStart = new THREE.Vector3(-30, y, 0);
+                    const pLens = new THREE.Vector3(0, y, 0);
+                    setBeamTransform(pr.inBeam, pStart, pLens);
+
+                    if (lensType === 'convex') {
+                        const pFar = new THREE.Vector3(30, (30 - focalLength) * (-y / focalLength), 0);
+                        setBeamTransform(pr.outBeam, pLens, pFar);
+                    } else {
+                        const pFar = new THREE.Vector3(30, y + (30 / focalLength) * y, 0);
+                        setBeamTransform(pr.outBeam, pLens, pFar);
+                    }
+                    pr.inBeam.visible = true;
+                    pr.outBeam.visible = true;
+                } else {
+                    pr.inBeam.visible = false;
+                    pr.outBeam.visible = false;
+                }
+            });
+
+            // 7. Cập nhật HUD & Thuyết minh
+            document.getElementById('hud-f').innerText = `${focalLength} cm`;
+            document.getElementById('hud-d').innerText = `${d} cm`;
+            document.getElementById('hud-dp').innerText = isInfinity ? "Ở vô cực" : `${Math.abs(dp).toFixed(1)} cm`;
+
+            updateExplanationBox(d, dp, hp, isInfinity);
+        }
+
+        function updateExplanationBox(d, dp, hp, isInfinity) {
+            const factBox = document.getElementById('factText');
+            const typeLabel = document.getElementById('hud-image-type');
+
+            if (lensType === 'convex') {
+                if (isInfinity) {
+                    typeLabel.innerHTML = `⚠️ Vật đặt tại Tiêu điểm (d = f): Chùm tia ló song song, ảnh ở vô cực!`;
+                    factBox.innerHTML = `
+                        <b>Vật đặt ngay tại Tiêu điểm F (d = f = ${focalLength} cm):</b><br>
+                        • Các tia ló song song với nhau nên không cắt nhau.<br>
+                        • Ảnh tạo thành ở vô cực, không hứng được trên màn!
+                    `;
+                } else if (dp > 0) {
+                    const ratio = (Math.abs(hp) / (objectHeight + 0.65)).toFixed(1);
+                    let desc = (d > 2 * focalLength) ? "nhỏ hơn vật" : ((d === 2 * focalLength) ? "bằng vật" : "lớn hơn vật");
+                    typeLabel.innerHTML = `✨ Tính chất: Ảnh Thật, Ngược chiều, ${desc} (k = ${ratio}x)`;
+                    factBox.innerHTML = `
+                        <b>Vật ngoài khoảng tiêu cự (d = ${d} cm > f):</b><br>
+                        • Cho <b>ẢNH THẬT</b>, ngược chiều với vật và hứng được trên <b>Màn hứng</b>.<br>
+                        • Khi d > 2f: Ảnh nhỏ hơn vật.<br>
+                        • Khi d = 2f: Ảnh <b>ngược chiều và bằng đúng vật</b> (d' = 2f = ${(2 * focalLength)} cm).<br>
+                        • Khi f < d < 2f: Ảnh lớn hơn vật (nguyên lý máy chiếu).
+                    `;
+                } else {
+                    typeLabel.innerHTML = `🔍 Tính chất: Ảnh Ảo, Cùng chiều, Lớn hơn vật (Kính lúp)`;
+                    factBox.innerHTML = `
+                        <b>Vật trong khoảng tiêu cự (d = ${d} cm < f):</b><br>
+                        • Cho <b>ẢNH ẢO</b>, cùng chiều và <b>lớn hơn vật</b>.<br>
+                        • Không hứng được trên màn, chỉ quan sát được bằng mắt.<br>
+                        • <i>Ứng dụng:</i> Đây chính là nguyên lý của chiếc <b>Kính lúp</b> cầm tay!
+                    `;
+                }
+            } else {
+                typeLabel.innerHTML = `🔹 TKPK: Luôn cho Ảnh Ảo, Cùng chiều, Nhỏ hơn vật`;
+                factBox.innerHTML = `
+                    <b>Đặc điểm tạo ảnh của Thấu kính Phân kì:</b><br>
+                    • Với mọi vị trí đặt vật trước TKPK, thấu kính <b>LUÔN LUÔN cho Ảnh Ảo</b>, cùng chiều, <b>nhỏ hơn vật</b>.<br>
+                    • Ảnh luôn nằm gọn trong <b>khoảng tiêu cự</b> (d' < |f|).<br>
+                    • <i>Ứng dụng:</i> Làm kính đeo chữa tật <b>cận thị</b> cho học sinh!
+                `;
+            }
+        }
+
+        /* =========================================================================
+           6. ĐIỀU CHỈNH GIAO DIỆN
+           ========================================================================= */
+        function changeLensType() {
+            lensType = document.getElementById('lensSelect').value;
+            const isConvex = (lensType === 'convex');
+
+            convexGroup.visible = isConvex;
+            concaveGroup.visible = !isConvex;
+
+            document.getElementById('hudTitle').innerText = isConvex ? "🔍 THẤU KÍNH HỘI TỤ (TKHT)" : "🔵 THẤU KÍNH PHÂN KÌ (TKPK)";
+            document.getElementById('badgeIcon').innerText = isConvex ? "↕️" : "><";
+            document.getElementById('badgeText').innerText = isConvex ? "THẤU KÍNH HỘI TỤ (Rìa mỏng)" : "THẤU KÍNH PHÂN KÌ (Rìa dày)";
+            document.getElementById('badgeShapeDesc').innerText = isConvex ? 
+                "• Tiết diện: Phần giữa dày (3 cm), rìa chuốt mỏng (0.3 cm)" : 
+                "• Tiết diện: Phần giữa thắt mỏng (0.4 cm), hai rìa dày to (3 cm)";
+
+            updateOpticsSimulation();
+        }
+
+        function changeRayMode() {
+            rayMode = document.getElementById('rayModeSelect').value;
+            const isObj = (rayMode === 'object');
+            document.getElementById('groupDist').style.display = isObj ? 'block' : 'none';
+            document.getElementById('groupHeight').style.display = isObj ? 'block' : 'none';
+            updateOpticsSimulation();
+        }
+
+        function updateSliders() {
+            focalLength = parseFloat(document.getElementById('sliderF').value);
+            distObject = parseFloat(document.getElementById('sliderD').value);
+            objectHeight = parseFloat(document.getElementById('sliderH').value);
+
+            document.getElementById('val-f').innerText = `${focalLength} cm`;
+            document.getElementById('val-d').innerText = `${distObject} cm`;
+            document.getElementById('val-h').innerText = `${objectHeight.toFixed(1)} cm`;
+
+            updateOpticsSimulation();
+        }
+
+        /* =========================================================================
+           7. MINI-GAME: LẤY NÉT MÁY CHIẾU
+           ========================================================================= */
+        let gameScore = 0;
+        let gameShots = 5;
+        let gameLevel = 1;
+
+        const gameQuests = [
+            { title: "🎯 MÀN 1: Ảnh thật BẰNG VẬT (d = 2f)", targetD: 24, targetF: 12, screenPos: 24, desc: "Chỉnh sao cho d = 2f để ảnh thật ngược chiều và bằng vật!" },
+            { title: "🎯 MÀN 2: Ảnh thật LỚN HƠN VẬT (Máy chiếu)", targetD: 18, targetF: 12, screenPos: 36, desc: "Chỉnh f < d < 2f để tạo ảnh thật phóng to trên màn!" },
+            { title: "🎯 MÀN 3: Ảnh thật NHỎ HƠN VẬT (Máy ảnh)", targetD: 36, targetF: 12, screenPos: 18, desc: "Chỉnh d > 2f để thu ảnh thật thu nhỏ trên màn cảm biến!" }
+        ];
+
+        function initGameQuest(lvl) {
+            gameLevel = lvl;
+            const q = gameQuests[lvl - 1];
+
+            document.getElementById('gameQuestTitle').innerText = q.title;
+            lensType = 'convex';
+            document.getElementById('lensSelect').value = 'convex';
+            changeLensType();
+
+            rayMode = 'object';
+            document.getElementById('rayModeSelect').value = 'object';
+            changeRayMode();
+
+            focalLength = q.targetF;
+            document.getElementById('sliderF').value = focalLength;
+            document.getElementById('val-f').innerText = `${focalLength} cm`;
+
+            screenGroup.position.set(q.screenPos, 0, 0);
+
+            const fb = document.getElementById('gameFeedback');
+            fb.style.display = 'block';
+            fb.style.background = '#f1f5f9';
+            fb.style.color = '#475569';
+            fb.innerHTML = `🎬 <b>Nhiệm vụ:</b> Màn chiếu đang đặt ở X = ${q.screenPos} cm! Hãy chỉnh khoảng cách d sao cho ảnh thật xuất hiện sắc nét đúng trên màn!<br><small>${q.desc}</small>`;
+        }
+
+        function onGameSlider(val) {
+            document.getElementById('gameDistLabel').innerText = `${val} cm`;
+            distObject = parseFloat(val);
+            document.getElementById('sliderD').value = val;
+            document.getElementById('val-d').innerText = `${val} cm`;
+            updateOpticsSimulation();
+        }
+
+        function checkFocusSharpness() {
+            const fb = document.getElementById('gameFeedback');
+            fb.style.display = 'block';
+
+            if (gameShots <= 0) {
+                fb.style.background = '#fee2e2';
+                fb.style.color = '#b91c1c';
+                fb.innerHTML = 'Hết lượt lấy nét rồi! Hãy ấn "Chuyển Kịch Bản Mới" để chơi lại nhé! 🔄';
+                return;
+            }
+
+            gameShots--;
+            document.getElementById('gameShots').innerText = gameShots;
+
+            const q = gameQuests[gameLevel - 1];
+            const currentDp = (distObject * focalLength) / (distObject - focalLength);
+            const diff = Math.abs(currentDp - q.screenPos);
+
+            if (diff < 1.2) {
+                gameScore += 100;
+                document.getElementById('gameScore').innerText = gameScore;
+                fb.style.background = '#dcfce7';
+                fb.style.color = '#15803d';
+                fb.innerHTML = `🎉 <b>HÔ BIẾN! ẢNH NÉT CĂNG TRÊN MÀN!</b> (+100⭐) Em đã lấy nét thành công!`;
+
+                setTimeout(nextGameLevel, 1600);
+            } else {
+                fb.style.background = '#fef3c7';
+                fb.style.color = '#b45309';
+                fb.innerHTML = `Ảnh đang hội tụ ở X = ${currentDp.toFixed(1)} cm (lệch màn chiếu ${diff.toFixed(1)} cm)! Hãy di chuyển d để lấy nét lại nào! 💪`;
+            }
+        }
+
+        function nextGameLevel() {
+            let next = gameLevel + 1;
+            if (next > gameQuests.length) next = 1;
+            gameShots = 5;
+            document.getElementById('gameShots').innerText = gameShots;
+            initGameQuest(next);
+        }
+
+        /* =========================================================================
+           8. BÀI TẬP TRẮC NGHIỆM 10 CÂU KHTN 9
+           ========================================================================= */
+        const quizList = [
+            {
+                q: "1. Về mặt hình học, Thấu kính Hội tụ (TKHT) có đặc điểm nhận dạng nào sau đây?",
+                opts: [
+                    "Phần rìa mỏng hơn phần giữa",
+                    "Phần rìa dày hơn phần giữa",
+                    "Độ dày bằng nhau ở mọi vị trí",
+                    "Có dạng hình lăng trụ tam giác"
+                ],
+                correct: 0,
+                explain: "Đúng rồi! Thấu kính hội tụ có phần rìa mỏng hơn phần giữa."
+            },
+            {
+                q: "2. Về mặt hình học, Thấu kính Phân kì (TKPK) có đặc điểm nhận dạng nào sau đây?",
+                opts: [
+                    "Phần rìa dày hơn phần giữa",
+                    "Phần rìa mỏng hơn phần giữa",
+                    "Có hai mặt luôn lồi ra ngoài",
+                    "Không thể làm bằng thủy tinh trong suốt"
+                ],
+                correct: 0,
+                explain: "Chính xác! Thấu kính phân kì có phần rìa dày hơn phần giữa."
+            },
+            {
+                q: "3. Chiếu một chùm sáng song song với trục chính qua Thấu kính Hội tụ, chùm tia ló sẽ:",
+                opts: [
+                    "Hội tụ tại Tiêu điểm ảnh F' của thấu kính",
+                    "Phân kì loe rộng ra xa",
+                    "Tiếp tục truyền thẳng song song",
+                    "Bị phản xạ ngược trở lại 180°"
+                ],
+                correct: 0,
+                explain: "Chính xác! Chùm tia tới song song trục chính qua TKHT cho chùm tia ló hội tụ tại tiêu điểm ảnh F'."
+            },
+            {
+                q: "4. Một tia sáng bất kì truyền qua Quang tâm O của thấu kính sẽ có đường truyền như thế nào?",
+                opts: [
+                    "Tiếp tục truyền thẳng theo phương của tia tới",
+                    "Bị bẻ cong vuông góc 90°",
+                    "Bị phản xạ toàn phần",
+                    "Bị gãy khúc lệch về phía rìa"
+                ],
+                correct: 0,
+                explain: "Rất chuẩn! Mọi tia sáng đi qua quang tâm O của thấu kính đều truyền thẳng không đổi hướng."
+            },
+            {
+                q: "5. Đặt một vật sáng vuông góc với trục chính của Thấu kính Phân kì, ảnh thu được luôn có tính chất:",
+                opts: [
+                    "Luôn là Ảnh Ảo, cùng chiều, nhỏ hơn vật và nằm trong khoảng tiêu cự",
+                    "Luôn là Ảnh Thật, ngược chiều, lớn hơn vật",
+                    "Là ảnh thật khi vật ở xa, ảnh ảo khi vật ở gần",
+                    "Không bao giờ tạo được ảnh"
+                ],
+                correct: 0,
+                explain: "Tuyệt vời! Với mọi vị trí của vật, TKPK LUÔN LUÔN cho ảnh ảo, cùng chiều, nhỏ hơn vật và nằm trong khoảng tiêu cự."
+            },
+            {
+                q: "6. Dùng thấu kính hội tụ làm Kính Lúp để quan sát một vật nhỏ, ta phải đặt vật ở vị trí nào?",
+                opts: [
+                    "Trong khoảng tiêu cự (d < f) để cho ảnh ảo lớn hơn vật",
+                    "Ngoài khoảng tiêu cự rất xa (d > 2f)",
+                    "Ngay tại điểm 2f",
+                    "Tại vô cực"
+                ],
+                correct: 0,
+                explain: "Quá giỏi! Muốn làm kính lúp quan sát vật lớn hơn, ta phải đặt vật trong khoảng tiêu cự (d < f) để cho ảnh ảo cùng chiều lớn hơn vật."
+            },
+            {
+                q: "7. [Tính toán đơn giản] Đặt một vật trước Thấu kính Hội tụ có tiêu cự f = 12 cm. Để thu được ảnh thật có kích thước BẰNG ĐÚNG VẬT, khoảng cách d từ vật đến thấu kính phải bằng:",
+                opts: [
+                    "d = 2f = 24 cm",
+                    "d = f = 12 cm",
+                    "d = 6 cm",
+                    "d = 48 cm"
+                ],
+                correct: 0,
+                explain: "Chính xác! Khi vật đặt tại vị trí d = 2f = 24 cm thì ảnh thật thu được sẽ cách thấu kính d' = 2f = 24 cm và có chiều cao bằng đúng vật!"
+            },
+            {
+                q: "8. [Tính toán đơn giản] Một thấu kính hội tụ có tiêu cự f = 10 cm. Đặt vật cách thấu kính d = 30 cm (d > 2f). Khoảng cách từ ảnh thật đến thấu kính d' là:",
+                opts: [
+                    "d' = 15 cm",
+                    "d' = 20 cm",
+                    "d' = 30 cm",
+                    "d' = 10 cm"
+                ],
+                correct: 0,
+                explain: "Xuất sắc! Áp dụng công thức thấu kính: d' = (d × f) / (d - f) = (30 × 10) / (30 - 10) = 300 / 20 = 15 cm."
+            },
+            {
+                q: "9. Ảnh của một vật tạo bởi máy ảnh gia đình hoặc camera điện thoại có tính chất gì?",
+                opts: [
+                    "Ảnh thật, ngược chiều và nhỏ hơn vật",
+                    "Ảnh ảo, cùng chiều và lớn hơn vật",
+                    "Ảnh thật, cùng chiều và bằng vật",
+                    "Ảnh ảo, ngược chiều và nhỏ hơn vật"
+                ],
+                correct: 0,
+                explain: "Đúng rồi! Vật ở rất xa máy ảnh (d > 2f) nên qua thấu kính hội tụ của máy ảnh sẽ cho ảnh thật, ngược chiều và nhỏ hơn vật trên màn cảm biến."
+            },
+            {
+                q: "10. Thấu kính Phân kì được ứng dụng phổ biến và quan trọng nhất trong đời sống học sinh để làm:",
+                opts: [
+                    "Kính đeo mắt chữa tật Cận thị",
+                    "Kính lúp phóng to đồ vật",
+                    "Ống kính máy chiếu rạp phim",
+                    "Gương soi trang điểm"
+                ],
+                correct: 0,
+                explain: "Tuyệt vời! Kính cận là thấu kính phân kì, giúp dời ảnh của các vật ở xa về điểm cực viễn của mắt cận thị để mắt nhìn rõ!"
+            }
+        ];
+
+        let quizIdx = 0;
+        let userCorrectCount = 0;
+
+        function loadQuizUI() {
+            const q = quizList[quizIdx];
+            document.getElementById('quizIndexBadge').innerText = `Câu ${quizIdx + 1}/${quizList.length}`;
+            document.getElementById('quizQuestionText').innerText = q.q;
+            document.getElementById('quizFeedbackBox').style.display = 'none';
+            document.getElementById('btnNextQuiz').style.display = 'none';
+
+            const box = document.getElementById('quizOptionsContainer');
+            box.innerHTML = '';
+            q.opts.forEach((text, i) => {
+                const btn = document.createElement('button');
+                btn.className = 'quiz-opt-btn';
+                btn.id = `optBtn_${i}`;
+                btn.innerText = `${String.fromCharCode(65 + i)}. ${text}`;
+                btn.onclick = () => selectQuizOption(i);
+                box.appendChild(btn);
+            });
+        }
+
+        function selectQuizOption(idx) {
+            const q = quizList[quizIdx];
+            const fb = document.getElementById('quizFeedbackBox');
+            const btns = document.querySelectorAll('.quiz-opt-btn');
+            btns.forEach(b => b.disabled = true);
+
+            if (idx === q.correct) {
+                userCorrectCount++;
+                document.getElementById(`optBtn_${idx}`).classList.add('opt-correct');
+                fb.className = 'quiz-feedback pass';
+                fb.innerHTML = `🎯 <b>CHÍNH XÁC!</b><br>${q.explain}`;
+            } else {
+                document.getElementById(`optBtn_${idx}`).classList.add('opt-wrong');
+                document.getElementById(`optBtn_${q.correct}`).classList.add('opt-correct');
+                fb.className = 'quiz-feedback fail';
+                fb.innerHTML = `Tiếc quá chưa đúng rồi! Đáp án đúng là <b>${String.fromCharCode(65 + q.correct)}</b>.<br>${q.explain}`;
+            }
+
+            const nextBtn = document.getElementById('btnNextQuiz');
+            if (quizIdx === quizList.length - 1) {
+                nextBtn.innerText = "Xem Bảng Tổng Kết Kết Quả 🏆";
+            } else {
+                nextBtn.innerText = "Câu tiếp theo ➔";
+            }
+            nextBtn.style.display = 'block';
+        }
+
+        function nextQuizQuestion() {
+            quizIdx++;
+            if (quizIdx >= quizList.length) {
+                showFinalSummary();
+            } else {
+                loadQuizUI();
+            }
+        }
+
+        function showFinalSummary() {
+            document.getElementById('quizCard').style.display = 'none';
+            const sumBox = document.getElementById('resultSummaryBox');
+            sumBox.style.display = 'block';
+
+            const total = quizList.length;
+            const wrong = total - userCorrectCount;
+            const score10 = (userCorrectCount / total) * 10;
+
+            document.getElementById('scoreDisplay').innerText = `${userCorrectCount}/${total}`;
+            document.getElementById('correctCountTxt').innerText = userCorrectCount;
+            document.getElementById('wrongCountTxt').innerText = wrong;
+            document.getElementById('finalScore10Txt').innerText = score10.toFixed(1);
+
+            const comment = document.getElementById('scoreComment');
+            if (score10 === 10) {
+                comment.innerHTML = "🏆 <b>XUẤT SẮC TUYỆT ĐỐI!</b> Em là một chuyên gia Quang học tí hon! Đạt trọn vẹn điểm 10!";
+                comment.style.color = "#16a34a";
+            } else if (score10 >= 8) {
+                comment.innerHTML = "🌟 <b>RẤT TỐT!</b> Em đã nắm rất vững bản chất của thấu kính!";
+                comment.style.color = "#0284c7";
+            } else if (score10 >= 5) {
+                comment.innerHTML = "💪 <b>ĐẠT YÊU CẦU!</b> Hãy xem lại vị trí ảnh thật và ảnh ảo trong 3D và thử làm lại nhé!";
+                comment.style.color = "#d97706";
+            } else {
+                comment.innerHTML = "💖 <b>CẦN CỐ GẮNG HƠN!</b> Hãy quan sát lại 3 tia sáng đặc biệt và làm lại bài kiểm tra nhé!";
+                comment.style.color = "#dc2626";
+            }
+        }
+
+        function restartQuiz() {
+            quizIdx = 0;
+            userCorrectCount = 0;
+            document.getElementById('quizCard').style.display = 'block';
+            document.getElementById('resultSummaryBox').style.display = 'none';
+            loadQuizUI();
+        }
+
+        /* =========================================================================
+           9. ĐIỀU HƯỚNG TAB & VÒNG LẶP RENDER
+           ========================================================================= */
+        function setTab(tabId) {
+            document.querySelectorAll('.tab-btn').forEach((b, i) => {
+                b.classList.toggle('active', 
+                    (i === 0 && tabId === 'sim') ||
+                    (i === 1 && tabId === 'game') ||
+                    (i === 2 && tabId === 'quiz')
+                );
+            });
+
+            document.getElementById('tab-sim').classList.toggle('active', tabId === 'sim');
+            document.getElementById('tab-game').classList.toggle('active', tabId === 'game');
+            document.getElementById('tab-quiz').classList.toggle('active', tabId === 'quiz');
+
+            if (tabId === 'game') {
+                initGameQuest(1);
+            }
+
+            if (tabId === 'quiz') {
+                if (quizIdx >= quizList.length) {
+                    showFinalSummary();
+                } else {
+                    document.getElementById('quizCard').style.display = 'block';
+                    document.getElementById('resultSummaryBox').style.display = 'none';
+                    loadQuizUI();
+                }
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            flameMesh.scale.y = 1.0 + Math.sin(Date.now() * 0.01) * 0.1;
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            const w = container.clientWidth;
+            const h = container.clientHeight;
+            camera.aspect = w / h;
+            camera.updateProjectionMatrix();
+            renderer.setSize(w, h);
+        });
+
+        // Khởi động chạy lần đầu
+        updateOpticsSimulation();
+        animate();
+    </script>
+</body>
+</html>
