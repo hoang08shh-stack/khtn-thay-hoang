@@ -329,7 +329,7 @@ export const SEED_SIMULATIONS: SimulationManifest[] = [
         explanation: 'Chính xác! Với hệ số (2, 1, 2), cả hai vế đều có 4 nguyên tử Hydrogen (H) và 2 nguyên tử Oxygen (O).',
       },
     ],
-    relatedLessonIds: ['khtn-8-bai-5'],
+    relatedLessonIds: ['khtn-8-bai-5-btkl', 'khtn-8-bai-5'],
     createdAt: '2025-02-22T08:00:00.000Z',
     updatedAt: '2025-02-22T08:00:00.000Z',
     author: 'KHOA HỌC SỐ KHTN',

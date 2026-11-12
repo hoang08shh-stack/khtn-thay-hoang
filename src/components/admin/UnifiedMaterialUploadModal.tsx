@@ -235,7 +235,12 @@ export const UnifiedMaterialUploadModal: React.FC<UnifiedMaterialUploadModalProp
 
   const handleCreateNewLessonInline = () => {
     if (!newLessonInput.trim() || !step1.topicId) return;
-    const created = createInlineLessonForTopic(step1.topicId, step1.grade, newLessonInput);
+    const created = createInlineLessonForTopic(
+      step1.topicId,
+      step1.grade,
+      newLessonInput,
+      step1.subject
+    );
     setStep1((prev) => ({
       ...prev,
       lessonId: created.id,
@@ -359,7 +364,61 @@ export const UnifiedMaterialUploadModal: React.FC<UnifiedMaterialUploadModalProp
   const handleNextStep = () => {
     setWizardError(null);
     if (currentStep === 1) {
-      if (!step1.topicId || !step1.lessonId) {
+      let activeTopicId = step1.topicId;
+      let activeTopicTitle = step1.topicTitle;
+      let activeLessonId = step1.lessonId;
+      let activeLessonTitle = step1.lessonTitle;
+
+      if (isCreatingNewTopic && newTopicInput.trim()) {
+        const createdTopic = createInlineTopicForGrade(
+          step1.subject,
+          step1.grade,
+          newTopicInput
+        );
+        const lessons = getLessonsForTopic(createdTopic.id, step1.grade, step1.subject);
+        activeTopicId = createdTopic.id;
+        activeTopicTitle = createdTopic.title;
+        activeLessonId = lessons[0]?.id || activeLessonId;
+        activeLessonTitle = lessons[0]?.title || activeLessonTitle;
+        setNewTopicInput('');
+        setIsCreatingNewTopic(false);
+      }
+
+      if (isCreatingNewLesson && newLessonInput.trim() && activeTopicId) {
+        const createdLesson = createInlineLessonForTopic(
+          activeTopicId,
+          step1.grade,
+          newLessonInput,
+          step1.subject
+        );
+        activeLessonId = createdLesson.id;
+        activeLessonTitle = createdLesson.title;
+        setNewLessonInput('');
+        setIsCreatingNewLesson(false);
+      } else if (isRenamingLesson && renameLessonInput.trim() && activeLessonId) {
+        const renamed = renameInlineLesson(activeLessonId, renameLessonInput);
+        if (renamed) {
+          activeLessonTitle = renamed.title;
+        }
+        setRenameLessonInput('');
+        setIsRenamingLesson(false);
+      }
+
+      if (
+        activeTopicId !== step1.topicId ||
+        activeLessonId !== step1.lessonId ||
+        activeLessonTitle !== step1.lessonTitle
+      ) {
+        setStep1((prev) => ({
+          ...prev,
+          topicId: activeTopicId,
+          topicTitle: activeTopicTitle,
+          lessonId: activeLessonId,
+          lessonTitle: activeLessonTitle,
+        }));
+      }
+
+      if (!activeTopicId || !activeLessonId) {
         setWizardError('Vui lòng chọn đầy đủ Chương/chủ đề và Tên bài học trước khi tiếp tục.');
         return;
       }

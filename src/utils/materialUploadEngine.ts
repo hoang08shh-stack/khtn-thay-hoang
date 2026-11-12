@@ -340,15 +340,21 @@ export function getLessonsForTopic(
   const adminLessons = getAdminLessonsSync();
   const customLessons = readJson<LessonOptionItem[]>(CUSTOM_LESSONS_KEY, []);
 
-  const mappedAdmin: LessonOptionItem[] = adminLessons.map((l) => ({
-    id: l.id,
-    topicId: l.topicId,
-    grade: l.grade as MaterialGrade,
-    domain: l.domain,
-    title: l.title,
-  }));
+  const customMap = new Map(customLessons.map((c) => [c.id, c]));
+  const mappedAdmin: LessonOptionItem[] = adminLessons.map((l) => {
+    const customOverride = customMap.get(l.id);
+    return {
+      id: l.id,
+      topicId: customOverride?.topicId || l.topicId,
+      grade: l.grade as MaterialGrade,
+      domain: l.domain,
+      title: customOverride?.title || l.title,
+    };
+  });
 
-  const all = [...customLessons, ...mappedAdmin, ...HIGH_SCHOOL_DEFAULT_LESSONS];
+  const adminIds = new Set(mappedAdmin.map((l) => l.id));
+  const uniqueCustom = customLessons.filter((c) => !adminIds.has(c.id));
+  const all = [...uniqueCustom, ...mappedAdmin, ...HIGH_SCHOOL_DEFAULT_LESSONS];
   let byTopic = all.filter((l) => l.topicId === topicId);
 
   if (byTopic.length === 0) {
@@ -467,14 +473,39 @@ export function renameInlineLesson(
 
   const customLessons = readJson<LessonOptionItem[]>(CUSTOM_LESSONS_KEY, []);
   const customIdx = customLessons.findIndex((l) => l.id === lessonId);
+  const adminLessons = getInitialLocalLessons();
+  const foundAdmin = adminLessons.find((l) => l.id === lessonId);
+
+  if (foundAdmin) {
+    saveAdminLesson(
+      {
+        id: foundAdmin.id,
+        topicId: foundAdmin.topicId,
+        grade: foundAdmin.grade,
+        domain: foundAdmin.domain,
+        code: foundAdmin.code,
+        slug: generateSlug(cleanTitle),
+        title: cleanTitle,
+        summary: foundAdmin.summary,
+        content: foundAdmin.content,
+        durationMinutes: foundAdmin.durationMinutes,
+        orderIndex: foundAdmin.orderIndex,
+        isPublished: foundAdmin.isPublished,
+        thumbnailUrl: foundAdmin.thumbnailUrl,
+        videoUrl: foundAdmin.videoUrl,
+        miniQuiz: foundAdmin.miniQuiz,
+      },
+      foundAdmin.assets || [],
+      foundAdmin.simulationIds || []
+    ).catch(() => {});
+  }
+
   if (customIdx >= 0) {
     customLessons[customIdx] = { ...customLessons[customIdx], title: cleanTitle };
     writeJson(CUSTOM_LESSONS_KEY, customLessons);
     return customLessons[customIdx];
   }
 
-  const adminLessons = getAdminLessonsSync();
-  const foundAdmin = adminLessons.find((l) => l.id === lessonId);
   if (foundAdmin) {
     const updatedItem: LessonOptionItem = {
       id: foundAdmin.id,
@@ -723,6 +754,40 @@ export function saveUnifiedLearningResource(
       ? inferDocumentSubCategory(step2.title, step2.fileName, step2.docSubType)
       : undefined;
 
+  // Smartly resolve target lesson if step2.title explicitly specifies a different "Bài <N>" than the preselected step1 lesson
+  const safeGrade = (step1.grade <= 9 ? step1.grade : 9) as Grade;
+  const adminLessons = getInitialLocalLessons();
+  const extractBaiNum = (text?: string): number | null => {
+    const m = (text || '').trim().match(/^bài\s*0?(\d+)\b/i);
+    return m ? parseInt(m[1], 10) : null;
+  };
+  const step1BaiNum = extractBaiNum(step1.lessonTitle);
+  const step2BaiNum = extractBaiNum(step2.title);
+
+  let resolvedLessonId = step1.lessonId;
+  let resolvedLessonTitle = step1.lessonTitle;
+
+  if (step2BaiNum !== null && step1BaiNum !== step2BaiNum) {
+    const matchByBaiNum = adminLessons.find(
+      (l) => l.grade === safeGrade && extractBaiNum(l.title) === step2BaiNum
+    );
+    if (matchByBaiNum) {
+      resolvedLessonId = matchByBaiNum.id;
+      resolvedLessonTitle = matchByBaiNum.title;
+    } else {
+      resolvedLessonId = `lesson-upload-g${safeGrade}-b${step2BaiNum}-${Date.now()}`;
+      resolvedLessonTitle = step2.title.trim();
+    }
+  } else if (/bảo toàn khối lượng/i.test(step2.title) && !/bảo toàn khối lượng/i.test(step1.lessonTitle)) {
+    const btkl = adminLessons.find(
+      (l) => l.id === 'khtn-8-bai-5-btkl' || /bảo toàn khối lượng/i.test(l.title)
+    );
+    if (btkl) {
+      resolvedLessonId = btkl.id;
+      resolvedLessonTitle = btkl.title;
+    }
+  }
+
   const newRes: UnifiedLearningResource = {
     id: `res-${step2.category}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     subject: step1.subject,
@@ -731,8 +796,8 @@ export function saveUnifiedLearningResource(
     textbook: step1.textbook,
     topicId: step1.topicId,
     topicTitle: step1.topicTitle,
-    lessonId: step1.lessonId,
-    lessonTitle: step1.lessonTitle,
+    lessonId: resolvedLessonId,
+    lessonTitle: resolvedLessonTitle,
     category: step2.category,
     docSubType: resolvedDocSubType,
     title: step2.title.trim(),
@@ -753,15 +818,13 @@ export function saveUnifiedLearningResource(
   const next = [newRes, ...list];
   writeJson(UNIFIED_RESOURCES_KEY, next);
 
-  // Sync directly into the target lesson in khtn_admin_lessons_v2 so LessonDetailPage displays it immediately
-  const safeGrade = (step1.grade <= 9 ? step1.grade : 9) as Grade;
+  // Sync directly into the target lesson in khtn_admin_lessons_v2 so LessonDetailPage and Grade pages display it immediately
   try {
-    const adminLessons = getInitialLocalLessons();
     const matchedLesson = adminLessons.find(
       (l) =>
-        l.id === step1.lessonId ||
-        (step1.lessonTitle &&
-          l.title?.trim().toLowerCase() === step1.lessonTitle.trim().toLowerCase())
+        l.id === resolvedLessonId ||
+        (resolvedLessonTitle &&
+          l.title?.trim().toLowerCase() === resolvedLessonTitle.trim().toLowerCase())
     );
 
     const existingAssets = (matchedLesson?.assets ? [...matchedLesson.assets] : []).filter(
@@ -788,20 +851,24 @@ export function saveUnifiedLearningResource(
       const resolvedUrl = step2.fileDataUrl || step2.externalUrl || '#';
       const assetObj = {
         id: `asset-${newRes.id}`,
-        lessonId: matchedLesson?.id || step1.lessonId,
+        lessonId: matchedLesson?.id || resolvedLessonId,
         title: newRes.title,
         format: fmt,
         type: resolvedDocSubType || CATEGORY_LABELS[step2.category],
         fileSize: formatFileSize(step2.fileSize || 1048576),
         fileUrl: resolvedUrl,
         fileName: step2.fileName,
-        lessonTitle: matchedLesson?.title || step1.lessonTitle,
+        lessonTitle: resolvedLessonTitle || matchedLesson?.title,
       };
       existingAssets.unshift(assetObj);
       saveUploadedAssetToRepository(assetObj).catch(() => {});
     }
 
     if (matchedLesson) {
+      const finalLessonTitle =
+        step1.lessonId === matchedLesson.id && step1.lessonTitle?.trim()
+          ? step1.lessonTitle.trim()
+          : matchedLesson.title;
       saveAdminLesson(
         {
           id: matchedLesson.id,
@@ -809,13 +876,13 @@ export function saveUnifiedLearningResource(
           grade: matchedLesson.grade || safeGrade,
           domain: matchedLesson.domain || domain,
           code: matchedLesson.code || `B${safeGrade}-01`,
-          slug: matchedLesson.slug || generateSlug(matchedLesson.title),
-          title: matchedLesson.title,
-          summary: matchedLesson.summary || step2.description || matchedLesson.title,
-          content: matchedLesson.content || `### ${matchedLesson.title}`,
+          slug: matchedLesson.slug || generateSlug(finalLessonTitle),
+          title: finalLessonTitle,
+          summary: matchedLesson.summary || step2.description || finalLessonTitle,
+          content: matchedLesson.content || `### ${finalLessonTitle}`,
           durationMinutes: matchedLesson.durationMinutes || 45,
           orderIndex: matchedLesson.orderIndex || 1,
-          isPublished: status === 'published' ? true : Boolean(matchedLesson.isPublished),
+          isPublished: true,
           thumbnailUrl: matchedLesson.thumbnailUrl,
           videoUrl: updatedVideoUrl,
           miniQuiz: matchedLesson.miniQuiz,
@@ -823,23 +890,23 @@ export function saveUnifiedLearningResource(
         existingAssets,
         matchedLesson.simulationIds || []
       ).catch(() => {});
-    } else if (step1.lessonId && step1.lessonTitle) {
+    } else if (resolvedLessonId && resolvedLessonTitle) {
       saveAdminLesson(
         {
-          id: step1.lessonId,
+          id: resolvedLessonId,
           topicId: step1.topicId,
           grade: safeGrade,
           domain,
-          code: `B${safeGrade}-${Date.now().toString().slice(-3)}`,
-          slug: generateSlug(step1.lessonTitle),
-          title: step1.lessonTitle,
+          code: `KHTN${safeGrade}-B${step2BaiNum ? String(step2BaiNum).padStart(2, '0') : Date.now().toString().slice(-2)}`,
+          slug: generateSlug(resolvedLessonTitle),
+          title: resolvedLessonTitle,
           summary:
             step2.description ||
-            `${step1.lessonTitle} – Chương trình ${SUBJECT_LABELS[step1.subject]} Lớp ${step1.grade}.`,
-          content: `### ${step1.lessonTitle}\n${step2.description || newRes.title}`,
+            `${resolvedLessonTitle} – Chương trình ${SUBJECT_LABELS[step1.subject]} Lớp ${step1.grade}.`,
+          content: `### ${resolvedLessonTitle}\n${step2.description || newRes.title}`,
           durationMinutes: 45,
-          orderIndex: 1,
-          isPublished: status === 'published',
+          orderIndex: step2BaiNum || 1,
+          isPublished: true,
           videoUrl: updatedVideoUrl,
         },
         existingAssets,
@@ -857,7 +924,7 @@ export function saveUnifiedLearningResource(
       const resolvedUrl = step2.fileDataUrl || step2.externalUrl || '#';
       saveAdminCatalogDoc({
         id: `cat-${newRes.id}`,
-        lessonId: step1.lessonId,
+        lessonId: resolvedLessonId,
         title: newRes.title,
         grade: safeGrade,
         domain,
@@ -867,7 +934,7 @@ export function saveUnifiedLearningResource(
         downloadUrl: resolvedUrl,
         fileUrl: resolvedUrl !== '#' ? resolvedUrl : undefined,
         fileName: step2.fileName,
-        description: `${step1.topicTitle} – ${step1.lessonTitle} (${TEXTBOOK_LABELS[step1.textbook]})`,
+        description: `${step1.topicTitle} – ${resolvedLessonTitle} (${TEXTBOOK_LABELS[step1.textbook]})`,
       }).catch(() => {});
     } else if (step2.category === 'video' && step2.externalUrl) {
       const ytId = extractYouTubeId(step2.externalUrl) || 'dQw4w9WgXcQ';
@@ -876,7 +943,7 @@ export function saveUnifiedLearningResource(
         grade: safeGrade,
         domain,
         youtubeId: ytId,
-        description: `${step1.topicTitle} – ${step1.lessonTitle}`,
+        description: `${step1.topicTitle} – ${resolvedLessonTitle}`,
       }).catch(() => {});
     }
   }

@@ -10,13 +10,13 @@ import {
 import {
   getLessonsByGrade,
   getPublishedLessonsSync,
+  getAllDocumentsSync,
   getDocumentsByGrade,
   getVideosByGrade,
 } from '../services/contentService.ts';
 import {
   getAdminTopicsSync,
   getAdminVideosSync,
-  getAdminCatalogDocsSync,
   getAdminQuestionsSync,
 } from '../services/adminService.ts';
 import { Breadcrumbs } from '../components/common/Breadcrumbs.tsx';
@@ -128,7 +128,7 @@ export const GradeTemplatePage: React.FC<GradeTemplatePageProps> = ({ grade }) =
     getPublishedLessonsSync(grade)
   );
   const [gradeDocuments, setGradeDocuments] = useState<DocumentResource[]>(() =>
-    getAdminCatalogDocsSync().filter((d) => d.grade === grade)
+    getAllDocumentsSync(grade)
   );
   const [gradeVideos, setGradeVideos] = useState<VideoResource[]>(() =>
     getAdminVideosSync().filter((v) => v.grade === grade)
@@ -137,7 +137,7 @@ export const GradeTemplatePage: React.FC<GradeTemplatePageProps> = ({ grade }) =
   useEffect(() => {
     let mounted = true;
     setGradeLessons(getPublishedLessonsSync(grade));
-    setGradeDocuments(getAdminCatalogDocsSync().filter((d) => d.grade === grade));
+    setGradeDocuments(getAllDocumentsSync(grade));
     setGradeVideos(getAdminVideosSync().filter((v) => v.grade === grade));
 
     Promise.all([

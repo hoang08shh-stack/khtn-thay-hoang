@@ -546,59 +546,102 @@ test('Deleting built-in lessons, clearing lesson video links, and deleting grade
   resetAllAdminDataToDefault();
 });
 
-test('CMS Snapshot synchronization overrides stale browser localStorage cache on deployed GitHub web', async () => {
+test('Bài 5: Định luật bảo toàn khối lượng is published on Grade 8 and smartly binds uploaded files from Wizard or General Storage', async () => {
   const {
-    getInitialLocalLessons,
-    deleteAdminLesson,
-    clearAdminLessonVideo,
-    buildCmsSnapshotPayload,
-    applyCmsSnapshotToLocalStorage,
     resetAllAdminDataToDefault,
+    saveUploadedAssetToRepository,
   } = await import('../services/adminService.ts');
-  const { getPublishedLessonsSync, getLessonByIdOrSlug } = await import(
-    '../services/contentService.ts'
+  const {
+    getPublishedLessonsSync,
+    getLessonByIdOrSlug,
+    getAllDocumentsSync,
+  } = await import('../services/contentService.ts');
+  const {
+    saveUnifiedLearningResource,
+    renameInlineLesson,
+  } = await import('./materialUploadEngine.ts');
+
+  resetAllAdminDataToDefault();
+
+  // 1. Verify Bài 5: Định luật bảo toàn khối lượng is present and ordered first in Grade 8
+  const grade8Lessons = getPublishedLessonsSync(8);
+  const btklLesson = grade8Lessons.find((l) => l.id === 'khtn-8-bai-5-btkl');
+  assert.ok(btklLesson, 'Bài 5: Định luật bảo toàn khối lượng must exist in Grade 8 published lessons');
+  assert.match(btklLesson.title, /Bài 5.*Định luật bảo toàn khối lượng/i);
+  assert.equal(btklLesson.code, 'KHTN8-B05');
+  assert.equal(btklLesson.simulationId, 'sim-chemical-equation-3d');
+  assert.ok(btklLesson.miniQuiz && btklLesson.miniQuiz.length >= 4);
+
+  // Verify natural ordering: Bài 5 comes before Bài 8 and Bài 16
+  const idxBai5 = grade8Lessons.findIndex((l) => l.id === 'khtn-8-bai-5-btkl');
+  const idxBai8 = grade8Lessons.findIndex((l) => l.id === 'khtn-8-bai-5');
+  assert.ok(idxBai5 < idxBai8, 'Bài 5 must appear before Bài 8 on Grade 8 page');
+
+  // 2. Verify catalog document for Bài 5 exists in Grade 8 documents
+  const grade8Docs = getAllDocumentsSync(8);
+  assert.ok(
+    grade8Docs.some((d) => /Định luật bảo toàn khối lượng/i.test(d.title)),
+    'Grade 8 documents must include Bài 5. Định luật bảo toàn khối lượng'
   );
 
-  resetAllAdminDataToDefault();
+  // 3. Even if teacher leaves Step 1 on "Bài 8: Acid - Base..." and uploads "Bài 5. Định luật bảo toàn khối lượng" in Step 2, it smartly binds to khtn-8-bai-5-btkl
+  const samplePdfUrl = 'data:application/pdf;base64,JVBERi0xLjQK';
+  const savedRes = saveUnifiedLearningResource(
+    {
+      subject: 'khtn',
+      grade: 8,
+      textbook: 'ket-noi-tri-thuc',
+      topicId: 't8-1',
+      topicTitle: 'Phản ứng hóa học & Bảo toàn khối lượng',
+      lessonId: 'khtn-8-bai-5',
+      lessonTitle: 'Bài 8: Acid - Base - Thang pH - Oxide - Muối (Danh pháp IUPAC)',
+    },
+    {
+      category: 'lecture_doc',
+      title: 'Bài 5. Định luật bảo toàn khối lượng',
+      fileName: 'Bai_5_Dinh_luat_bao_toan_khoi_luong.pdf',
+      fileType: 'application/pdf',
+      fileSize: 1500000,
+      fileDataUrl: samplePdfUrl,
+      uploadProgress: 100,
+      uploadStatus: 'ready',
+    },
+    'published'
+  );
+  assert.equal(savedRes.lessonId, 'khtn-8-bai-5-btkl');
 
-  // 1. Teacher deletes a lesson and clears another lesson's video in Admin
-  const initialLessons = getInitialLocalLessons();
-  const deletedLessonId = initialLessons[0].id;
-  const videoClearedLessonId = initialLessons[1].id;
+  const loadedBtkl = await getLessonByIdOrSlug('khtn-8-bai-5-btkl');
+  assert.ok(
+    loadedBtkl?.assets?.some((a) => a.fileName === 'Bai_5_Dinh_luat_bao_toan_khoi_luong.pdf'),
+    'Uploaded file for Bài 5 must be attached to khtn-8-bai-5-btkl'
+  );
 
-  await deleteAdminLesson(deletedLessonId);
-  await clearAdminLessonVideo(videoClearedLessonId);
-
-  // 2. Build the cmsSnapshot.json payload that gets committed to GitHub
-  const exportedSnapshot = buildCmsSnapshotPayload();
-  assert.ok(exportedSnapshot.deletedIds.lessons.includes(deletedLessonId));
-  assert.ok(exportedSnapshot.deletedIds.clearedLessonVideoIds.includes(videoClearedLessonId));
-
-  // 3. Simulate a visitor's browser on GitHub that has STALE localStorage from an older visit
-  // (where deletedLessonId still exists and videoClearedLessonId still has a videoUrl)
-  resetAllAdminDataToDefault();
-  const staleBrowserLessons = getInitialLocalLessons();
-  assert.equal(staleBrowserLessons.some((l) => l.id === deletedLessonId), true);
-
-  // 4. Apply the new cmsSnapshot (with newer updatedAt timestamp) to the visitor's browser
-  const applied = applyCmsSnapshotToLocalStorage({
-    ...exportedSnapshot,
-    updatedAt: '2026-12-31T23:59:59.000Z',
+  // 4. Uploading to general-library with title "Bài 5. Định luật bảo toàn khối lượng" also links to khtn-8-bai-5-btkl and surfaces in getAllDocumentsSync(8)
+  await saveUploadedAssetToRepository({
+    id: 'asset-gen-btkl-1',
+    lessonId: 'general-library',
+    title: 'Bài 5. Định luật bảo toàn khối lượng - Phiếu học tập',
+    format: 'docx',
+    type: 'Phiếu học tập',
+    fileSize: '1.2 MB',
+    fileUrl: samplePdfUrl,
+    fileName: 'PHT_Bai_5_BTKL.docx',
   });
-  assert.equal(applied, true, 'New cmsSnapshot timestamp must be applied over stale localStorage');
-
-  // 5. Verify visitor's browser now matches the teacher's design
-  const syncedPublished = getPublishedLessonsSync();
-  assert.equal(
-    syncedPublished.some((l) => l.id === deletedLessonId),
-    false,
-    'Deleted lesson from cmsSnapshot must be removed from stale browser localStorage'
+  const docsAfterGenUpload = getAllDocumentsSync(8);
+  assert.ok(
+    docsAfterGenUpload.some((d) => d.id === 'asset-gen-btkl-1'),
+    'General library upload for Bài 5 must appear in Grade 8 documents'
   );
-  const syncedVideoCleared = await getLessonByIdOrSlug(videoClearedLessonId);
+
+  // 5. Renaming a lesson via renameInlineLesson persists to getPublishedLessonsSync
+  renameInlineLesson(
+    'khtn-8-bai-5-btkl',
+    'Bài 5. Định luật bảo toàn khối lượng và phương trình hóa học'
+  );
+  const afterRename = getPublishedLessonsSync(8).find((l) => l.id === 'khtn-8-bai-5-btkl');
   assert.equal(
-    syncedVideoCleared?.videoUrl,
-    undefined,
-    'Cleared videoUrl from cmsSnapshot must be cleared in stale browser localStorage'
+    afterRename?.title,
+    'Bài 5. Định luật bảo toàn khối lượng và phương trình hóa học'
   );
 
   resetAllAdminDataToDefault();

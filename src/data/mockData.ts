@@ -846,11 +846,150 @@ export const LESSONS: Lesson[] = [
 
   // LỚP 8
   {
-    id: 'khtn-8-bai-5',
+    id: 'khtn-8-bai-5-btkl',
     topicId: 't8-1',
     grade: 8,
     domain: 'hoa-hoc',
     code: 'KHTN8-B05',
+    title: 'Bài 5: Định luật bảo toàn khối lượng và phương trình hóa học',
+    summary:
+      'Khám phá Định luật bảo toàn khối lượng của Lomonosov – Lavoisier (m_trước = m_sau), bản chất bảo toàn số nguyên tử của mỗi nguyên tố và quy tắc 3 bước lập phương trình hóa học chuẩn quốc tế IUPAC.',
+    objectives: [
+      'Phát biểu và giải thích được Định luật bảo toàn khối lượng dựa trên sự bảo toàn số nguyên tử của các nguyên tố hóa học.',
+      'Vận dụng biểu thức bảo toàn khối lượng (m_A + m_B = m_C + m_D) để tính khối lượng chất tham gia hoặc sản phẩm.',
+      'Trình bày được các bước lập phương trình hóa học và xác định tỉ lệ số nguyên tử, số phân tử (số mol) giữa các chất trong phản ứng.',
+    ],
+    durationMinutes: 45,
+    sections: [
+      {
+        title: '1. Định luật bảo toàn khối lượng (Lomonosov – Lavoisier)',
+        content: [
+          'a) Thí nghiệm kiểm chứng và nội dung định luật: Khi cho dung dịch Barium chloride (BaCl₂) tác dụng với dung dịch Sodium sulfate (Na₂SO₄) tạo thành kết tủa trắng Barium sulfate (BaSO₄) và Sodium chloride (NaCl), tổng khối lượng các chất trước và sau phản ứng trên cân điện tử luôn bằng nhau. Nội dung định luật: Trong một phản ứng hóa học, tổng khối lượng của các chất sản phẩm bằng tổng khối lượng của các chất tham gia phản ứng.',
+          'b) Giải thích bản chất của Định luật bảo toàn khối lượng: Trong các phản ứng hóa học, chỉ có liên kết giữa các nguyên tử thay đổi làm cho phân tử này biến đổi thành phân tử khác, còn số nguyên tử của mỗi nguyên tố hóa học trước và sau phản ứng luôn giữ nguyên, khối lượng của các nguyên tử không đổi nên tổng khối lượng các chất được bảo toàn.',
+          'c) Áp dụng tính toán theo Định luật bảo toàn khối lượng: Xét phản ứng tổng quát A + B → C + D, biểu thức bảo toàn khối lượng là m_A + m_B = m_C + m_D. Trong một phản ứng có n chất, nếu biết khối lượng của (n - 1) chất thì ta luôn tính được khối lượng của chất còn lại.',
+        ],
+        keyPoints: [
+          'Bản chất phản ứng hóa học: Liên kết giữa các nguyên tử thay đổi, nhưng số nguyên tử mỗi nguyên tố giữ nguyên ⇒ Tổng khối lượng được bảo toàn.',
+          'Lưu ý khi có chất khí thoát ra (↑) hoặc khí Oxygen (O₂) tham gia: Phải tính cả khối lượng chất khí vào biểu thức bảo toàn khối lượng.',
+        ],
+        formula: 'm_{\\text{tham gia}} = m_{\\text{sản phẩm}}   |   m_A + m_B = m_C + m_D   |   BaCl₂ + Na₂SO₄ → BaSO₄ ↓ + 2NaCl',
+        formulaMeaning: 'Biểu thức Định luật bảo toàn khối lượng và phương trình hóa học thí nghiệm giữa Barium chloride với Sodium sulfate.',
+        imageUrl: domainChemImg,
+        imageCaption: 'Thí nghiệm cân khối lượng trước và sau phản ứng BaCl₂ + Na₂SO₄ trong KHOA HỌC SỐ KHTN.',
+      },
+      {
+        title: '2. Phương trình hóa học & Các bước lập phương trình hóa học',
+        content: [
+          'a) Khái niệm Phương trình hóa học: Phương trình hóa học là cách biểu diễn ngắn gọn phản ứng hóa học bằng công thức hóa học của các chất tham gia và các chất sản phẩm cùng hệ số tỉ lượng thích hợp.',
+          'b) Ba bước lập phương trình hóa học: Bước 1: Viết sơ đồ phản ứng gồm công thức hóa học của các chất tham gia và chất sản phẩm. Bước 2: Cân bằng số nguyên tử của mỗi nguyên tố ở hai vế bằng cách đặt hệ số thích hợp trước công thức hóa học (tuyệt đối không thay đổi chỉ số nguyên tử trong công thức). Bước 3: Viết thành phương trình hóa học hoàn chỉnh với mũi tên (→) và ghi điều kiện phản ứng (nếu có).',
+          'c) Ý nghĩa của Phương trình hóa học: Phương trình hóa học cho biết tỉ lệ về số nguyên tử, số phân tử (cũng chính là tỉ lệ số mol) giữa các chất tham gia và các chất sản phẩm trong phản ứng.',
+        ],
+        formula: '2H₂ + O₂ → (t°) 2H₂O   |   2Mg + O₂ → (t°) 2MgO   |   4Al + 3O₂ → (t°) 2Al₂O₃',
+        formulaMeaning: 'Các phương trình hóa học đã cân bằng hệ số nguyên tử của từng nguyên tố ở hai vế.',
+        highlightBox: {
+          title: 'Quy tắc vàng khi cân bằng phương trình hóa học',
+          text: 'Khi cân bằng phương trình hóa học, chỉ được điền hệ số ở phía trước công thức hóa học của chất (ví dụ: 2H₂O), tuyệt đối không được tự ý thay đổi chỉ số chân (như sửa H₂O thành H₂O₂). Nếu có nhóm nguyên tử (như -OH, =SO₄, -NO₃, =CO₃) giữ nguyên ở cả hai vế thì coi cả nhóm như một đơn vị để cân bằng nhanh.',
+        },
+      },
+    ],
+    keyTakeaways: [
+      'Định luật bảo toàn khối lượng: m_tham_gia = m_sản_phẩm (do số nguyên tử của mỗi nguyên tố trước và sau phản ứng không đổi).',
+      'Khi lập phương trình hóa học: Đặt hệ số trước công thức hóa học sao cho số nguyên tử của mỗi nguyên tố ở hai vế bằng nhau.',
+      'Hệ số trong phương trình hóa học chính là tỉ lệ số nguyên tử, số phân tử và tỉ lệ số mol giữa các chất.',
+    ],
+    miniQuiz: [
+      {
+        id: 'mq-khtn8-btkl-1',
+        questionType: 'single_choice',
+        question:
+          'Khi đốt cháy hoàn toàn 12 gam Carbon (C) trong khí Oxygen (O₂) vừa đủ thì thu được 44 gam khí Carbon dioxide (CO₂). Theo Định luật bảo toàn khối lượng, khối lượng khí Oxygen (O₂) đã tham gia phản ứng là:',
+        options: ['32 gam', '56 gam', '22 gam', '16 gam'],
+        correctIndex: 0,
+        explanation:
+          'PTHH: C + O₂ → (t°) CO₂. Áp dụng Định luật bảo toàn khối lượng: m_C + m_O₂ = m_CO₂ ⇒ m_O₂ = 44 - 12 = 32 gam.',
+      },
+      {
+        id: 'mq-khtn8-btkl-2',
+        questionType: 'single_choice',
+        question:
+          'Cho sơ đồ phản ứng hóa học sau: Al + O₂ --(t°)--> Al₂O₃. Hệ số cân bằng tối giản của các chất trong phương trình hóa học lần lượt là:',
+        options: ['4, 3, 2', '2, 3, 2', '4, 2, 2', '2, 1, 1'],
+        correctIndex: 0,
+        explanation:
+          'Cân bằng số nguyên tử Oxygen (BCNN của 2 và 3 là 6): đặt 3 trước O₂ và 2 trước Al₂O₃, sau đó đặt 4 trước Al ⇒ 4Al + 3O₂ → (t°) 2Al₂O₃ (hệ số 4, 3, 2).',
+      },
+      {
+        id: 'mq-khtn8-btkl-3',
+        questionType: 'true_false',
+        question:
+          'Xét phản ứng hóa học giữa dung dịch Barium chloride (BaCl₂) và dung dịch Sodium sulfate (Na₂SO₄) tạo thành kết tủa Barium sulfate (BaSO₄) và Sodium chloride (NaCl). Xét tính Đúng/Sai của các phát biểu sau:',
+        options: [
+          'Phương trình hóa học đã cân bằng của phản ứng là: BaCl₂ + Na₂SO₄ → BaSO₄ ↓ + 2NaCl.',
+          'Trong phản ứng trên, số nguyên tử của mỗi nguyên tố Ba, Cl, Na, S, O trước và sau phản ứng đều được giữ nguyên.',
+          'Tổng khối lượng của các chất sản phẩm nhỏ hơn tổng khối lượng chất tham gia do tạo thành chất kết tủa.',
+          'Nếu dùng 20,8 gam BaCl₂ phản ứng vừa đủ với 14,2 gam Na₂SO₄ thu được 23,3 gam BaSO₄ thì khối lượng NaCl tạo thành là 11,7 gam.',
+        ],
+        correctIndex: 0,
+        trueFalseStatements: [
+          {
+            id: 'a',
+            label: 'a',
+            text: 'Phương trình hóa học đã cân bằng của phản ứng là: BaCl₂ + Na₂SO₄ → BaSO₄ ↓ + 2NaCl.',
+            isTrue: true,
+            explanation: 'Đúng, đặt hệ số 2 trước NaCl thì số nguyên tử của mọi nguyên tố hai vế bằng nhau.',
+          },
+          {
+            id: 'b',
+            label: 'b',
+            text: 'Trong phản ứng trên, số nguyên tử của mỗi nguyên tố Ba, Cl, Na, S, O trước và sau phản ứng đều được giữ nguyên.',
+            isTrue: true,
+            explanation: 'Đúng, chỉ có liên kết giữa các nguyên tử thay đổi còn số nguyên tử mỗi nguyên tố bảo toàn.',
+          },
+          {
+            id: 'c',
+            label: 'c',
+            text: 'Tổng khối lượng của các chất sản phẩm nhỏ hơn tổng khối lượng chất tham gia do tạo thành chất kết tủa.',
+            isTrue: false,
+            explanation: 'Sai, theo Định luật bảo toàn khối lượng thì tổng khối lượng sản phẩm luôn bằng tổng khối lượng chất tham gia.',
+          },
+          {
+            id: 'd',
+            label: 'd',
+            text: 'Nếu dùng 20,8 gam BaCl₂ phản ứng vừa đủ với 14,2 gam Na₂SO₄ thu được 23,3 gam BaSO₄ thì khối lượng NaCl tạo thành là 11,7 gam.',
+            isTrue: true,
+            explanation: 'Đúng, m_NaCl = (20,8 + 14,2) - 23,3 = 35,0 - 23,3 = 11,7 gam.',
+          },
+        ],
+        explanation: 'Đáp án Đúng/Sai: a) Đúng | b) Đúng | c) Sai | d) Đúng (m_NaCl = 20,8 + 14,2 - 23,3 = 11,7 g).',
+      },
+      {
+        id: 'mq-khtn8-btkl-4',
+        questionType: 'essay',
+        question:
+          'Nung nóng 10 gam đá vôi chứa Calcium carbonate (CaCO₃) thu được 5,6 gam vôi sống là Calcium oxide (CaO) và một lượng khí Carbon dioxide (CO₂) thoát ra ngoài. a) Lập phương trình hóa học của phản ứng; b) Viết công thức khối lượng của các chất trong phản ứng; c) Tính khối lượng khí Carbon dioxide (CO₂) thoát ra.',
+        options: [],
+        correctIndex: 0,
+        sampleAnswer:
+          'a) Phương trình hóa học: CaCO₃ → (t°) CaO + CO₂ ↑\nb) Theo Định luật bảo toàn khối lượng, ta có công thức khối lượng: m(CaCO₃) = m(CaO) + m(CO₂).\nc) Khối lượng khí Carbon dioxide thoát ra là: m(CO₂) = m(CaCO₃) - m(CaO) = 10 - 5,6 = 4,4 (gam).',
+        rubric:
+          'Viết đúng PTHH CaCO₃ → (t°) CaO + CO₂ ↑ và công thức bảo toàn khối lượng (0,5đ); Tính đúng m(CO₂) = 4,4 gam (0,5đ).',
+        explanation:
+          'a) CaCO₃ → (t°) CaO + CO₂ ↑. b) m(CaCO₃) = m(CaO) + m(CO₂). c) m(CO₂) = 10 - 5,6 = 4,4 gam.',
+      },
+    ],
+    thumbnailUrl: domainChemImg,
+    simulationId: 'sim-chemical-equation-3d',
+    documentId: 'doc-khtn-8-btkl',
+    quizCount: 4,
+    viewCount: 6180,
+    author: 'KHOA HỌC SỐ KHTN',
+  },
+  {
+    id: 'khtn-8-bai-5',
+    topicId: 't8-1',
+    grade: 8,
+    domain: 'hoa-hoc',
+    code: 'KHTN8-B08',
     title: 'Bài 8: Acid - Base - Thang pH - Oxide - Muối (Danh pháp IUPAC)',
     summary:
       'Nghiên cứu tính chất hóa học của Acid (Hydrochloric acid HCl, Sulfuric acid H₂SO₄, Acetic acid CH₃COOH), Base (Sodium hydroxide NaOH, Potassium hydroxide KOH, Calcium hydroxide Ca(OH)₂), thang đo pH, Oxide và Muối.',
@@ -1728,7 +1867,7 @@ export const SIMULATIONS_3D: Simulation3D[] = [
     type: 'external-embed',
     externalUrl: 'https://c-n-b-ng-ph-ng-tr-nh-h-a-h-c-3d.ai.studio',
     difficulty: 'Trung bình',
-    relatedLessonId: 'khtn-8-bai-5',
+    relatedLessonId: 'khtn-8-bai-5-btkl',
     controlsDescription: [
       { key: 'Tương tác 3D trực tiếp', action: 'Tăng/giảm hệ số phân tử ở hai vế phản ứng' },
       { key: 'Xoay 360°', action: 'Quan sát cấu trúc phân tử chất tham gia & sản phẩm' },
@@ -1915,6 +2054,27 @@ export const DOCUMENTS: DocumentItem[] = [
       'Phần 1: 20 nguyên tố đầu tiên trong Bảng tuần hoàn (Z = 1 Hydrogen đến Z = 20 Calcium).',
       'Phần 2: Danh pháp các kim loại chuyển tiếp thông dụng: Iron (Fe), Copper (Cu), Zinc (Zn), Silver (Ag), Gold (Au).',
       'Phần 3: Quy tắc gọi tên Oxide, Acid, Base và Muối theo chuẩn IUPAC.',
+    ],
+    downloadUrl: '#',
+  },
+  {
+    id: 'doc-khtn-8-btkl',
+    lessonId: 'khtn-8-bai-5-btkl',
+    title: 'Bài 5. Định luật bảo toàn khối lượng và phương trình hóa học (Bài giảng & Phiếu học tập KHTN 8)',
+    grade: 8,
+    domain: 'hoa-hoc',
+    format: 'pptx',
+    type: 'Giáo án điện tử',
+    pageCount: 26,
+    fileSize: '3.8 MB',
+    description:
+      'Bài giảng điện tử và phiếu học tập Bài 5: Định luật bảo toàn khối lượng (m_trước = m_sau) và các bước lập phương trình hóa học theo sách Kết nối tri thức với cuộc sống.',
+    author: 'KHOA HỌC SỐ KHTN',
+    downloadCount: 4820,
+    previewSlides: [
+      'Phần I: Thí nghiệm BaCl₂ + Na₂SO₄ → BaSO₄ ↓ + 2NaCl và nội dung Định luật bảo toàn khối lượng.',
+      'Phần II: Ba bước lập phương trình hóa học và ý nghĩa hệ số tỉ lượng trong phản ứng.',
+      'Phần III: Bài tập vận dụng tính khối lượng chất tham gia, chất sản phẩm và cân bằng PTHH.',
     ],
     downloadUrl: '#',
   },

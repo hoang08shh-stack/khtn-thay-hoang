@@ -204,3 +204,32 @@ export function guessMimeTypeFromFileName(fileName: string): string {
       return 'application/octet-stream';
   }
 }
+
+export async function getAllTeacherFilesFromRepo(): Promise<StoredTeacherFileRecord[]> {
+  const db = await openTeacherFilesDb();
+  if (!db) {
+    return Array.from(memoryFileCache.values());
+  }
+  return new Promise((resolve) => {
+    try {
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const store = tx.objectStore(STORE_NAME);
+      const req = store.getAll();
+      req.onsuccess = () => {
+        const list = Array.isArray(req.result)
+          ? (req.result as StoredTeacherFileRecord[])
+          : [];
+        list.forEach((item) => {
+          if (item && item.id) {
+            memoryFileCache.set(item.id, item);
+          }
+        });
+        resolve(list);
+      };
+      req.onerror = () => resolve(Array.from(memoryFileCache.values()));
+    } catch {
+      resolve(Array.from(memoryFileCache.values()));
+    }
+  });
+}
+

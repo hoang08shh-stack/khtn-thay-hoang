@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { getAdminCatalogDocsSync } from '../services/adminService.ts';
 import { Grade, DocumentResource } from '../types/index.ts';
-import { getAllDocuments } from '../services/contentService.ts';
+import { getAllDocuments, getAllDocumentsSync } from '../services/contentService.ts';
 import { Breadcrumbs } from '../components/common/Breadcrumbs.tsx';
 import { DocumentViewerModal } from '../components/common/DocumentViewerModal.tsx';
 import {
@@ -23,7 +22,7 @@ export const DocumentsPage: React.FC = () => {
   const [selectedType, setSelectedType] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [downloadedId, setDownloadedId] = useState<string | null>(null);
-  const [docsList, setDocsList] = useState<DocumentResource[]>(() => getAdminCatalogDocsSync());
+  const [docsList, setDocsList] = useState<DocumentResource[]>(() => getAllDocumentsSync());
   const [previewDocData, setPreviewDocData] = useState<GeneratedDocumentData | null>(null);
 
   const refreshDocs = () => {

@@ -4,6 +4,7 @@ import {
   getAdminTopicsSync,
   getAdminVideosSync,
   getAdminCatalogDocsSync,
+  getGeneralUploadedAssetsSync,
   getInitialLocalLessons,
   getDeletedIdsRegistrySync,
   extractYouTubeId,
@@ -375,9 +376,10 @@ export async function getSimulations(
   });
 }
 
-export async function getAllDocuments(): Promise<DocumentItem[]> {
+export function getAllDocumentsSync(grade?: Grade): DocumentItem[] {
   const catalogDocs = getAdminCatalogDocsSync();
   const localLessons = getInitialLocalLessons();
+  const generalAssets = getGeneralUploadedAssetsSync();
   const unifiedDocs = getUnifiedResourcesSync().filter(
     (r) =>
       r.category === 'lecture_doc' &&
@@ -453,7 +455,57 @@ export async function getAllDocuments(): Promise<DocumentItem[]> {
     }
   });
 
-  // 3. Append catalog documents
+  // 3. Put teacher-uploaded files from General Storage (AssetUploader)
+  generalAssets.forEach((a) => {
+    if (a && a.fileUrl && a.fileUrl.trim() !== '' && a.fileUrl.trim() !== '#') {
+      const matchedLesson = localLessons.find(
+        (l) => l.id === a.lessonId || (a.lessonTitle && l.title === a.lessonTitle)
+      );
+      const combinedText = `${a.title || ''} ${a.fileName || ''} ${a.lessonTitle || ''}`;
+      let inferredGrade: Grade = matchedLesson?.grade || 8;
+      if (!matchedLesson) {
+        const gradeMatch = combinedText.match(/(?:lớp|khtn)\s*([6789])\b/i);
+        if (gradeMatch) {
+          inferredGrade = Number(gradeMatch[1]) as Grade;
+        }
+      }
+      const inferredDomain: SubjectDomain =
+        matchedLesson?.domain ||
+        (/điện|quang|áp suất|lực|khúc xạ|thấu kính/i.test(combinedText)
+          ? 'vat-li'
+          : /tế bào|sinh|quang hợp|di truyền|dna/i.test(combinedText)
+          ? 'sinh-hoc'
+          : 'hoa-hoc');
+      const key = `${a.title.trim().toLowerCase()}__${matchedLesson?.id || a.lessonId || inferredGrade}`;
+      if (!seenKeys.has(key)) {
+        seenKeys.add(key);
+        merged.push({
+          id: a.id,
+          lessonId: matchedLesson?.id || a.lessonId,
+          title: a.title,
+          grade: inferredGrade,
+          domain: inferredDomain,
+          format:
+            a.format === 'pptx' || a.format === 'docx' || a.format === 'pdf'
+              ? a.format
+              : 'pdf',
+          type: a.type || inferDocumentSubCategory(a.title, a.fileName),
+          pageCount: 10,
+          fileSize: a.fileSize || '1.8 MB',
+          description: matchedLesson
+            ? `Học liệu bài giảng: ${matchedLesson.title} (Khối lớp ${inferredGrade})`
+            : `Tài liệu kho lưu trữ chung (Khối lớp ${inferredGrade})`,
+          author: 'Giáo viên tải lên',
+          downloadCount: a.downloadsCount || 10,
+          downloadUrl: a.fileUrl,
+          fileUrl: a.fileUrl,
+          fileName: a.fileName,
+        });
+      }
+    }
+  });
+
+  // 4. Append catalog documents
   catalogDocs.forEach((d) => {
     const key = `${d.title.trim().toLowerCase()}__${d.lessonId || d.grade}`;
     if (!seenKeys.has(key)) {
@@ -462,12 +514,18 @@ export async function getAllDocuments(): Promise<DocumentItem[]> {
     }
   });
 
+  if (grade) {
+    return merged.filter((d) => d.grade === grade);
+  }
   return merged;
 }
 
+export async function getAllDocuments(): Promise<DocumentItem[]> {
+  return getAllDocumentsSync();
+}
+
 export async function getDocumentsByGrade(grade: Grade): Promise<DocumentItem[]> {
-  const all = await getAllDocuments();
-  return all.filter((d) => d.grade === grade);
+  return getAllDocumentsSync(grade);
 }
 
 export async function getAllVideos(): Promise<VideoLesson[]> {
