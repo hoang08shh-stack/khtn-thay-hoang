@@ -7,9 +7,10 @@ const REACTION_ARROW_CONDITION_REGEX =
 
 /**
  * Renders inline text with:
+ * - Bold markdown (**...**) with nested scientific formatting
  * - Stacked chemical reaction arrows with conditions above the arrow (e.g. → (t°), → (t°, xt), ⇄ (xt, t°))
  * - Stacked fractions (\frac{a}{b}), square roots (\sqrt{x})
- * - Subscripts (_{...} or _x), superscripts (^{...} or ^x)
+ * - Subscripts (_{...} or _x including Vietnamese subscripts like d_vật, d_lỏng, R_tđ), superscripts (^{...} or ^x)
  * - Automatic normalization of Vietnamese Unicode NFC, chemical formulas (H₂SO₄, Ca(OH)₂), and gas/precipitate arrows (↑, ↓)
  */
 export function renderFormattedMathAndChem(text: string): React.ReactNode {
@@ -17,11 +18,24 @@ export function renderFormattedMathAndChem(text: string): React.ReactNode {
   const cleanText = formatChemicalAndScientificText(text).text;
 
   const tokenRegex =
-    /((?:→|⇄)\s*\(\s*(?:t°|t\^?[0o°]|xt|xúc\s*tác|đpdd|đpnc|đp|as|ánh\s*sáng|diệp\s*lục|men\s*giấm|lên\s*men|enzim|enzyme|p|áp\s*suất|H[2₂]SO[4₄]\s*đặc|Ni|Pt|Fe|V[2₂]O[5₅]|MnO[2₂]|Al[2₂]O[3₃]|HgSO[4₄]|[0-9]+\s*°C)(?:\s*[,;/+]\s*[^)]+)?\s*\)|\\frac\{[^{}]+\}\{[^{}]+\}|\\sqrt\{[^{}]+\}|√\([^()]+\)|_\{[^{}]+\}|\^\{[^{}]+\}|_[A-Za-z0-9đĐ,+-]+|\^[0-9+-]+)/gi;
+    /(\*\*[^*\n]+\*\*|(?:→|⇄)\s*\(\s*(?:t°|t\^?[0o°]|xt|xúc\s*tác|đpdd|đpnc|đp|as|ánh\s*sáng|diệp\s*lục|men\s*giấm|lên\s*men|enzim|enzyme|p|áp\s*suất|H[2₂]SO[4₄]\s*đặc|Ni|Pt|Fe|V[2₂]O[5₅]|MnO[2₂]|Al[2₂]O[3₃]|HgSO[4₄]|[0-9]+\s*°C)(?:\s*[,;/+]\s*[^)]+)?\s*\)|\\frac\{[^{}]+\}\{[^{}]+\}|\\sqrt\{[^{}]+\}|√\([^()]+\)|_\{[^{}]+\}|\^\{[^{}]+\}|_[A-Za-z0-9\u00C0-\u1EF9,+-]+|\^[0-9+-]+)/gi;
   const parts = cleanText.split(tokenRegex);
 
   return parts.map((part, idx) => {
     if (!part) return null;
+
+    // Bold markdown **...**
+    if (part.startsWith('**') && part.endsWith('**') && part.length > 4) {
+      const innerBold = part.slice(2, -2);
+      return (
+        <strong
+          key={idx}
+          className="font-black text-slate-950 dark:text-white"
+        >
+          {renderFormattedMathAndChem(innerBold)}
+        </strong>
+      );
+    }
 
     // Stacked chemical reaction arrow with condition above arrow
     const arrowMatch = part.match(REACTION_ARROW_CONDITION_REGEX);
@@ -126,6 +140,247 @@ function isPureEquationLine(line: string): boolean {
     return true;
   }
   return false;
+}
+
+/**
+ * Automatically wraps inline key labels & subheadings (e.g. "a) Khái niệm...:", "Các Acid quan trọng theo danh pháp IUPAC:", "Ví dụ:")
+ * in **...** if not already bolded, so lesson paragraphs have clear textbook visual hierarchy.
+ */
+export function autoBoldInlineKeywords(line: string): string {
+  let result = line;
+
+  // 1. Leading subheading or label at start of line before colon (up to 85 chars, no '=' or '→' inside label)
+  result = result.replace(
+    /^((?:[a-fA-F][).]|[1-9]\.[1-9]\.?|[•\-+*])\s*)?([A-ZÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸĐ][^*:\n=→⇄]{1,80}:)(\s+)/u,
+    (full, prefix = '', label: string, space: string) => {
+      if (full.includes('**')) return full;
+      return `${prefix}**${label}**${space}`;
+    }
+  );
+
+  // 2. Mid-sentence sub-headings / transition labels after a period or semicolon (e.g. ". Các Acid quan trọng theo danh pháp IUPAC:", "; Môi trường trung tính:")
+  result = result.replace(
+    /([.;]\s+)([A-ZÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸĐ][^*:\n=→⇄\\]{2,72}:)(\s+)/gu,
+    (full, sep: string, label: string, space: string) => {
+      if (full.includes('**')) return full;
+      // Avoid matching URLs or ratios like "Tỉ lệ 1: 2"
+      if (/\d\s*:$/.test(label)) return full;
+      return `${sep}**${label}**${space}`;
+    }
+  );
+
+  return result;
+}
+
+/**
+ * Helper for the "B In đậm" button on textareas:
+ * Wraps or unwraps the selected text in **...**, or inserts **Chữ in đậm** if selection is empty.
+ */
+export function wrapSelectionWithBold(
+  text: string,
+  selectionStart: number,
+  selectionEnd: number
+): { nextText: string; nextCursorStart: number; nextCursorEnd: number } {
+  const safeStart = Math.max(0, Math.min(selectionStart, text.length));
+  const safeEnd = Math.max(safeStart, Math.min(selectionEnd, text.length));
+  const before = text.slice(0, safeStart);
+  const selected = text.slice(safeStart, safeEnd);
+  const after = text.slice(safeEnd);
+
+  if (selected.length > 0) {
+    // If already wrapped in **...**, unwrap it
+    if (selected.startsWith('**') && selected.endsWith('**') && selected.length > 4) {
+      const unwrapped = selected.slice(2, -2);
+      return {
+        nextText: `${before}${unwrapped}${after}`,
+        nextCursorStart: safeStart,
+        nextCursorEnd: safeStart + unwrapped.length,
+      };
+    }
+    if (before.endsWith('**') && after.startsWith('**')) {
+      return {
+        nextText: `${before.slice(0, -2)}${selected}${after.slice(2)}`,
+        nextCursorStart: safeStart - 2,
+        nextCursorEnd: safeEnd - 2,
+      };
+    }
+    const wrapped = `**${selected}**`;
+    return {
+      nextText: `${before}${wrapped}${after}`,
+      nextCursorStart: safeStart + 2,
+      nextCursorEnd: safeEnd + 2,
+    };
+  }
+
+  const placeholder = 'Đề mục in đậm';
+  const inserted = `**${placeholder}**`;
+  return {
+    nextText: `${before}${inserted}${after}`,
+    nextCursorStart: safeStart + 2,
+    nextCursorEnd: safeStart + 2 + placeholder.length,
+  };
+}
+
+/**
+ * Automatically bolds all subheadings (a), b), c), 1.1, •, -) and key labels in a multi-line lesson content string.
+ */
+export function autoBoldAllSubheadingsInText(rawText: string): string {
+  if (!rawText) return '';
+  return rawText
+    .split(/\r?\n/)
+    .map((line) => {
+      const trimmed = line.trim();
+      if (!trimmed || /^#{1,4}\s+/.test(trimmed)) return line;
+
+      // Clean existing duplicate ** around lettered subheadings before re-applying cleanly
+      const matchLetteredColon = trimmed.match(
+        /^(?:\*\*)?([a-fA-F][).]|[1-9]\.[1-9]\.?)\s+([^*:\n=→⇄]{2,80}:)(?:\*\*)?\s*([\s\S]*)$/u
+      );
+      if (matchLetteredColon) {
+        const [, marker, subTitle, rest] = matchLetteredColon;
+        const enhancedRest = autoBoldInlineKeywords(rest);
+        return `**${marker} ${subTitle.trim()}**${enhancedRest ? ` ${enhancedRest}` : ''}`;
+      }
+
+      // Standalone short subheading line without colon (e.g. "a) Tính chất vật lí của Oxygen")
+      if (
+        /^(?:\*\*)?(?:[a-fA-F][).]|[1-9]\.[1-9]\.?|I{1,3}V?\.)\s+[^:\n]{2,85}$/u.test(trimmed) &&
+        !trimmed.startsWith('**')
+      ) {
+        return `**${trimmed.replace(/\*\*/g, '')}**`;
+      }
+
+      return autoBoldInlineKeywords(trimmed);
+    })
+    .join('\n');
+}
+
+/**
+ * Renders a theory paragraph or block in "Nội Dung Kiến Thức Trọng Tâm" with:
+ * - Prominent bold subheadings (a), b), c), d), 1.1, •, -)
+ * - Highlighted formula/equation blocks
+ * - Proper chemical subscripts, stacked fractions (\frac{a}{b}), and reaction arrows
+ */
+export function renderStructuredTheoryParagraph(
+  rawParagraph: string,
+  keyPrefix: string | number = 0
+): React.ReactNode {
+  if (!rawParagraph || !rawParagraph.trim()) return null;
+
+  const subLines = rawParagraph
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  return (
+    <div key={keyPrefix} className="space-y-3">
+      {subLines.map((line, lIdx) => {
+        const cleanEq = line.replace(/^\[EQ\]\s*/i, '').trim();
+
+        // 1. Pure equation or formula line
+        if (isPureEquationLine(line) || /^(?:Công thức|PTHH|Phương trình hóa học)\s*:/i.test(line)) {
+          return (
+            <div
+              key={lIdx}
+              className="my-2 px-4 py-3 rounded-2xl bg-gradient-to-r from-teal-50/90 via-sky-50/70 to-transparent dark:from-teal-950/50 dark:via-slate-800/70 border-l-4 border-teal-600 dark:border-teal-400 font-semibold text-slate-900 dark:text-white text-sm sm:text-base shadow-2xs overflow-x-auto"
+            >
+              {renderFormattedMathAndChem(autoBoldInlineKeywords(cleanEq))}
+            </div>
+          );
+        }
+
+        // 2. Pure standalone subheading line (e.g. "a) Tính chất vật lí của Oxygen" or "#### a) ..." without body text)
+        const cleanSubLine = line.replace(/^#{4,6}\s+/, '').trim();
+        const standaloneSubMatch = cleanSubLine.match(
+          /^(?:\*\*)?((?:[a-fA-F][).]|[1-9]\.[1-9]\.?|I{1,3}V?\.)\s+.+?)(?:\*\*)?$/
+        );
+        if (standaloneSubMatch && !cleanSubLine.includes(':') && cleanSubLine.length <= 95) {
+          return (
+            <h4
+              key={lIdx}
+              className="pt-2 text-sm sm:text-base font-black text-teal-950 dark:text-teal-200 flex items-center gap-2"
+            >
+              <span className="w-2.5 h-2.5 rounded-full bg-teal-600 dark:bg-teal-400 shrink-0" />
+              <span>{renderFormattedMathAndChem(standaloneSubMatch[1].replace(/\*\*/g, ''))}</span>
+            </h4>
+          );
+        }
+
+        // 3. Lettered or numbered subheading with colon and body content
+        // Matches both "a) Khái niệm: Nội dung..." and "**a) Khái niệm:** Nội dung..."
+        const letteredSubheadingWithColon = cleanSubLine.match(
+          /^(?:\*\*)?([a-fA-F][).]|[1-9]\.[1-9]\.?)\s*(?:\*\*)?\s*(?:\*\*)?([^*:\n=→⇄]{2,82}:)(?:\*\*)?\s*([\s\S]*)$/u
+        );
+        if (letteredSubheadingWithColon) {
+          const [, marker, subheadingTitle, bodyRest] = letteredSubheadingWithColon;
+          const bodyWithBold = bodyRest ? autoBoldInlineKeywords(bodyRest.trim()) : '';
+
+          return (
+            <div
+              key={lIdx}
+              className="rounded-xl bg-white/80 dark:bg-slate-900/70 border border-slate-200/80 dark:border-slate-800 p-3.5 sm:p-4 space-y-1.5 shadow-2xs"
+            >
+              <h4 className="text-sm sm:text-[15.5px] font-black text-teal-950 dark:text-teal-200 flex items-center gap-2 leading-snug">
+                <span className="px-2 py-0.5 rounded-lg bg-teal-700 text-white font-mono font-black text-xs shrink-0 shadow-2xs">
+                  {marker}
+                </span>
+                <span className="font-black text-slate-950 dark:text-white">
+                  {renderFormattedMathAndChem(subheadingTitle.replace(/\*\*/g, ''))}
+                </span>
+              </h4>
+              {bodyWithBold && (
+                <div className="pl-1 sm:pl-2 text-slate-700 dark:text-slate-200 text-sm sm:text-[15px] leading-relaxed">
+                  {renderFormattedMathAndChem(bodyWithBold)}
+                </div>
+              )}
+            </div>
+          );
+        }
+
+        // 4. Lettered sub-item without a short colon title (e.g. "a) Một vật nhúng vào chất lỏng...")
+        const letteredPlainMatch = cleanSubLine.match(
+          /^(?:\*\*)?([a-fA-F][).]|[1-9]\.[1-9]\.?)(?:\*\*)?\s+([\s\S]+)$/
+        );
+        if (letteredPlainMatch) {
+          const bodyWithBold = autoBoldInlineKeywords(letteredPlainMatch[2]);
+          return (
+            <div
+              key={lIdx}
+              className="flex items-start gap-2.5 pl-1 sm:pl-2 text-slate-700 dark:text-slate-200 leading-relaxed"
+            >
+              <span className="px-2 py-0.5 rounded-lg bg-teal-700 text-white font-mono font-black text-xs shrink-0 mt-0.5">
+                {letteredPlainMatch[1]}
+              </span>
+              <div className="flex-1">{renderFormattedMathAndChem(bodyWithBold)}</div>
+            </div>
+          );
+        }
+
+        // 5. Bullet line starting with •, -, +
+        const bulletMatch = cleanSubLine.match(/^([•\-+])\s+([\s\S]+)$/);
+        if (bulletMatch) {
+          const bodyWithBold = autoBoldInlineKeywords(bulletMatch[2]);
+          return (
+            <div
+              key={lIdx}
+              className="flex items-start gap-2.5 pl-1 sm:pl-2 text-slate-700 dark:text-slate-200 leading-relaxed"
+            >
+              <span className="w-2 h-2 rounded-full bg-teal-600 dark:bg-teal-400 shrink-0 mt-2" />
+              <div className="flex-1">{renderFormattedMathAndChem(bodyWithBold)}</div>
+            </div>
+          );
+        }
+
+        // 6. Standard paragraph with automatic bolding of leading & mid-sentence key labels
+        const enhancedLine = autoBoldInlineKeywords(cleanSubLine);
+        return (
+          <p key={lIdx} className="text-slate-700 dark:text-slate-200 leading-relaxed">
+            {renderFormattedMathAndChem(enhancedLine)}
+          </p>
+        );
+      })}
+    </div>
+  );
 }
 
 export interface ScientificSolutionViewProps {

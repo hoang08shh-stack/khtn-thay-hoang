@@ -76,7 +76,7 @@ test('saveAdminLesson, updateLessonMiniQuizSync, and getLessonByIdOrSlug persist
       durationMinutes: 45,
       orderIndex: 9,
       isPublished: true,
-      videoUrl: 'https://youtu.be/dQw4w9WgXcQ',
+      videoUrl: 'https://youtu.be/p3St51F4kE8',
       miniQuiz: [
         {
           question: 'Dung dịch làm quỳ tím hóa đỏ là chất nào?',
@@ -90,12 +90,12 @@ test('saveAdminLesson, updateLessonMiniQuizSync, and getLessonByIdOrSlug persist
     []
   );
 
-  assert.equal(saved.videoUrl, 'https://www.youtube.com/watch?v=dQw4w9WgXcQ');
+  assert.equal(saved.videoUrl, 'https://www.youtube.com/watch?v=p3St51F4kE8');
   assert.equal(saved.miniQuiz?.length, 1);
 
   const loaded = await getLessonByIdOrSlug('lesson-test-youtube-quiz');
   assert.ok(loaded);
-  assert.equal(getYoutubeEmbedUrl(loaded.videoUrl), 'https://www.youtube.com/embed/dQw4w9WgXcQ');
+  assert.equal(getYoutubeEmbedUrl(loaded.videoUrl), 'https://www.youtube.com/embed/p3St51F4kE8');
   assert.equal(loaded.miniQuiz?.length, 1);
   assert.equal(loaded.miniQuiz?.[0].correctIndex, 1);
 
@@ -383,14 +383,166 @@ test('Question Converter normalizes broken Vietnamese fonts, detached accents, c
 
   // 5. parseWordContentToQuestions also auto-converts legacy TCVN3 strings directly
   const directWordParse = parseWordContentToQuestions(
-    `C©u 1: Hßa tan hoµn toµn 6,5 gam Zn vµo dung dÞch H 2 SO 4 lo·ng:\nA. *Zn + H 2 SO 4 \uF0AE ZnSO 4 + H 2^\nB. Zn + H 2 SO 4 -> ZnO + H 2\nC. Zn + 2HCl -> ZnCl 2 + H 2\nD. Cu + H 2 SO 4 -> CuSO 4 + H 2`
+    `C©u 1: Hßa tan hoµn toµn 6,5 gam Zn vµo dung dÞch H 2 SO 4 lo·ng:\nA. *Zn + H 2 SO 4 \uF0AE ZnSO 4 + H 2^\nB. Zn + H 2 SO 4 -> ZnO + H 2\nC. Zn + 2HCl -> ZnCl 2 + H 2\nC. Cu + H 2 SO 4 -> CuSO 4 + H 2`
   );
   assert.equal(directWordParse.questions.length, 1);
   assert.ok(directWordParse.questions[0].question.includes('Hòa tan hoàn toàn 6,5 gam Zn'));
   assert.ok(directWordParse.questions[0].options[0].includes('Zn + H₂SO₄ → ZnSO₄ + H₂↑'));
 });
 
+test('Every lesson in LESSONS and getInitialLocalLessons has 3-format end-of-lesson review questions (miniQuiz)', async () => {
+  const { LESSONS } = await import('../data/mockData.ts');
+  const { getInitialLocalLessons, saveAdminQuestionsBulk } = await import(
+    '../services/adminService.ts'
+  );
+  const { getLessonByIdOrSlug } = await import('../services/contentService.ts');
 
+  assert.ok(LESSONS.length >= 9);
+  for (const lesson of LESSONS) {
+    assert.ok(
+      lesson.miniQuiz && lesson.miniQuiz.length >= 4,
+      `Lesson ${lesson.id} must have at least 4 miniQuiz questions`
+    );
+    const hasSingleChoice = lesson.miniQuiz.some((q) => q.questionType === 'single_choice');
+    const hasTrueFalse = lesson.miniQuiz.some(
+      (q) => q.questionType === 'true_false' && q.trueFalseStatements?.length === 4
+    );
+    const hasEssay = lesson.miniQuiz.some((q) => q.questionType === 'essay' && q.sampleAnswer);
+    assert.equal(hasSingleChoice, true, `Lesson ${lesson.id} missing single_choice`);
+    assert.equal(hasTrueFalse, true, `Lesson ${lesson.id} missing true_false`);
+    assert.equal(hasEssay, true, `Lesson ${lesson.id} missing essay`);
+  }
 
+  // Verify getLessonByIdOrSlug returns non-empty miniQuiz for all lessons
+  const loadedLesson = await getLessonByIdOrSlug('khtn-8-bai-5');
+  assert.ok(loadedLesson?.miniQuiz && loadedLesson.miniQuiz.length >= 4);
 
+  // Verify saving bulk questions with lessonId automatically appends to that lesson's miniQuiz
+  const countBefore = (await getLessonByIdOrSlug('khtn-8-bai-5'))?.miniQuiz?.length || 0;
+  await saveAdminQuestionsBulk([
+    {
+      id: 'q-word-sync-test-1',
+      lessonId: 'khtn-8-bai-5',
+      grade: 8,
+      domain: 'hoa-hoc',
+      question: 'Câu hỏi kiểm tra đồng bộ tự động vào cuối bài học KHTN 8 Bài 5:',
+      questionType: 'single_choice',
+      options: ['pH < 7', 'pH = 7', 'pH > 7', 'pH = 14'],
+      correctAnswer: 0,
+      explanation: 'Dung dịch Acid có pH < 7.',
+    },
+  ]);
+  const localAfter = getInitialLocalLessons().find((l) => l.id === 'khtn-8-bai-5');
+  assert.ok((localAfter?.miniQuiz?.length || 0) >= countBefore + 1);
+});
+
+test('Core Knowledge Content (Nội dung kiến thức trọng tâm) sections have structured subheadings, formulas, and clean LaTeX/scientific normalization', async () => {
+  const { LESSONS } = await import('../data/mockData.ts');
+  const { getLessonByIdOrSlug } = await import('../services/contentService.ts');
+  const { formatChemicalAndScientificText } = await import('./wordQuestionParser.ts');
+
+  for (const lesson of LESSONS) {
+    assert.ok(lesson.sections.length >= 2, `Lesson ${lesson.id} should have at least 2 structured sections`);
+    const hasSubheadings = lesson.sections.some((sec) =>
+      sec.content.some((p) => /^[a-d]\)\s+/i.test(p.trim()))
+    );
+    const hasFormula = lesson.sections.some((sec) => Boolean(sec.formula && sec.formula.trim()));
+    assert.equal(hasSubheadings, true, `Lesson ${lesson.id} should have structured a), b) subheadings`);
+    assert.equal(hasFormula, true, `Lesson ${lesson.id} should have core formulas in sections`);
+  }
+
+  // Verify getLessonByIdOrSlug preserves formula, formulaMeaning, keyPoints, and subheadings
+  const loaded8 = await getLessonByIdOrSlug('khtn-8-bai-8');
+  assert.ok(loaded8);
+  assert.ok(loaded8.sections[0].formula?.includes('\\frac{F}{S}'));
+  assert.ok(loaded8.sections[1].formula?.includes('F_A = d_lỏng × V_chìm'));
+
+  // Verify LaTeX math & chemical formula normalization
+  const rawLatex =
+    'Công thức: $I = \\frac{U}{R} \\Rightarrow R = 12\\Omega$, $n_1 \\cdot \\sin(i) = n_2 \\cdot \\sin(r)$, H 2 SO 4 + BaCl 2 -> BaSO 4(r) + 2HCl';
+  const normalized = formatChemicalAndScientificText(rawLatex).text;
+  assert.ok(!normalized.includes('$'));
+  assert.ok(normalized.includes('\\frac{U}{R}'));
+  assert.ok(normalized.includes('⇒'));
+  assert.ok(normalized.includes('Ω'));
+  assert.ok(normalized.includes('H₂SO₄ + BaCl₂ → BaSO₄↓ + 2HCl'));
+
+  // Verify subheading auto-bolding and Bold button selection helper
+  const {
+    wrapSelectionWithBold,
+    autoBoldAllSubheadingsInText,
+    autoBoldInlineKeywords,
+  } = await import('../components/common/ScientificSolutionView.tsx');
+
+  const inlineSample =
+    'a) Khái niệm và tính chất hóa học của Acid: Acid phân li ra ion H+. Các Acid quan trọng theo danh pháp IUPAC: HCl, H2SO4.';
+  const boldedInline = autoBoldInlineKeywords(inlineSample);
+  assert.ok(boldedInline.includes('**Khái niệm và tính chất hóa học của Acid:**'));
+  assert.ok(boldedInline.includes('**Các Acid quan trọng theo danh pháp IUPAC:**'));
+
+  const multiLineSample =
+    '### 1. Mục lớn\na) Đề mục nhỏ thứ nhất: Nội dung 1.\nb) Đề mục nhỏ thứ hai';
+  const boldedMulti = autoBoldAllSubheadingsInText(multiLineSample);
+  assert.ok(boldedMulti.includes('**a) Đề mục nhỏ thứ nhất:**'));
+  assert.ok(boldedMulti.includes('**b) Đề mục nhỏ thứ hai**'));
+
+  // Test wrapSelectionWithBold wrapping and unwrapping
+  const wrapped = wrapSelectionWithBold(' Định luật Ohm ', 1, 14);
+  assert.equal(wrapped.nextText, ' **Định luật Ohm** ');
+  const unwrapped = wrapSelectionWithBold(wrapped.nextText, 1, 18);
+  assert.equal(unwrapped.nextText, ' Định luật Ohm ');
+});
+
+test('Deleting built-in lessons, clearing lesson video links, and deleting grade videos persist across Grade pages', async () => {
+  const {
+    deleteAdminLesson,
+    clearAdminLessonVideo,
+    deleteAdminVideo,
+    getAdminVideosSync,
+    resetAllAdminDataToDefault,
+  } = await import('../services/adminService.ts');
+  const {
+    getLessonsByGrade,
+    getVideosByGrade,
+    getPublishedLessonsSync,
+  } = await import('../services/contentService.ts');
+
+  resetAllAdminDataToDefault();
+
+  // 1. Verify built-in Grade 6 lesson exists initially
+  const initialGrade6 = await getLessonsByGrade(6);
+  const targetLesson = initialGrade6[0];
+  assert.ok(targetLesson, 'Grade 6 should have initial lessons');
+
+  // 2. Clear video link on targetLesson -> must not fall back to baseMatch.videoUrl
+  await clearAdminLessonVideo(targetLesson.id);
+  const afterVideoClear = await getLessonByIdOrSlug(targetLesson.id);
+  assert.equal(afterVideoClear?.videoUrl, undefined, 'Cleared videoUrl must stay undefined and not fall back to mockData');
+
+  // 3. Delete the built-in lesson -> must not resurrect in getLessonsByGrade or getPublishedLessonsSync
+  await deleteAdminLesson(targetLesson.id);
+  const afterDeleteGrade6 = await getLessonsByGrade(6);
+  assert.equal(
+    afterDeleteGrade6.some((l) => l.id === targetLesson.id),
+    false,
+    'Deleted built-in lesson must not reappear in getLessonsByGrade(6)'
+  );
+  assert.equal(
+    getPublishedLessonsSync(6).some((l) => l.id === targetLesson.id),
+    false,
+    'Deleted built-in lesson must not reappear in getPublishedLessonsSync(6)'
+  );
+
+  // 4. Delete all videos in Admin -> getVideosByGrade and getAdminVideosSync must return [] and not re-seed VIDEOS
+  const allVideos = getAdminVideosSync();
+  for (const vid of allVideos) {
+    await deleteAdminVideo(vid.id);
+  }
+  assert.equal(getAdminVideosSync().length, 0, 'Deleting all videos must persist empty array instead of re-seeding');
+  const grade6Videos = await getVideosByGrade(6);
+  assert.equal(grade6Videos.length, 0, 'Grade 6 videos must be empty after deletion');
+
+  // Restore clean state after test
+  resetAllAdminDataToDefault();
+});
 

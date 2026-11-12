@@ -268,34 +268,133 @@ export const LESSONS: Lesson[] = [
     durationMinutes: 45,
     sections: [
       {
-        title: '1. Tính chất và tầm quan trọng của Oxygen (O₂)',
+        title: '1. Tính chất vật lí và vai trò của khí Oxygen (O₂)',
         content: [
-          'Ở điều kiện thường, khí Oxygen (O₂) là chất khí không màu, không mùi, không vị, nặng hơn không khí và ít tan trong nước.',
-          'Oxygen là nguyên tố thiết yếu duy trì quá trình hô hấp tế bào của con người, động vật, thực vật và duy trì sự cháy của các nhiên liệu.',
+          'a) Tính chất vật lí của Oxygen: Ở điều kiện thường (25°C, 1 bar), khí Oxygen (O₂) là chất khí không màu, không mùi, không vị, nặng hơn không khí (tỉ khối d = \\frac{32}{29} ≈ 1,1) và ít tan trong nước (ở 20°C và 1 atm, 1 lít nước hòa tan khoảng 31 mL khí O₂). Oxygen hóa lỏng ở -183°C có màu xanh nhạt.',
+          'b) Vai trò duy trì sự hô hấp: Khí Oxygen (O₂) là nguyên tố thiết yếu cho quá trình hô hấp tế bào của con người, động vật và thực vật để giải phóng năng lượng duy trì hoạt động sống.',
+          'c) Vai trò duy trì sự cháy: Khí Oxygen tác dụng mãnh liệt với các nhiên liệu (gỗ, than, khí gas, xăng dầu) ở nhiệt độ cao tỏa nhiều nhiệt và ánh sáng. Que đóm còn tàn đỏ khi đưa vào bình chứa khí O₂ sẽ bùng cháy thành ngọn lửa sáng.',
         ],
         keyPoints: [
-          'Công thức phân tử khí Oxygen: O₂ (khối lượng phân tử 32 amu).',
-          'Không có Oxygen, sự sống và sự cháy không thể duy trì.',
+          'Công thức phân tử khí Oxygen: O₂ (khối lượng phân tử M = 32 amu).',
+          'Hai vai trò cốt lõi của Oxygen: Duy trì sự sống (hô hấp) và duy trì sự cháy.',
         ],
-        formula: 'O₂ (Oxygen)',
-        formulaMeaning: 'Hai nguyên tử Oxygen liên kết cộng hóa trị tạo thành phân tử khí Oxygen.',
+        formula: 'C₆H₁₂O₆ + 6O₂ → (Enzyme) 6CO₂ + 6H₂O + Năng lượng (ATP)   |   C + O₂ → (t°) CO₂',
+        formulaMeaning: 'Phương trình tổng quát quá trình hô hấp tế bào và phản ứng đốt cháy nhiên liệu Carbon trong khí Oxygen.',
+        highlightBox: {
+          title: 'Lưu ý an toàn phòng thí nghiệm & Đời sống',
+          text: 'Muốn dập tắt đám cháy, cần thực hiện đồng thời hai biện pháp: hạ nhiệt độ chất cháy xuống dưới nhiệt độ bắt lửa và cách li chất cháy khỏi nguồn khí Oxygen (O₂).',
+        },
         imageUrl: domainChemImg,
-        imageCaption: 'Thí nghiệm thu khí Oxygen bằng phương pháp đẩy nước trong KHOA HỌC SỐ KHTN.',
+        imageCaption: 'Thí nghiệm thu khí Oxygen (O₂) bằng phương pháp đẩy nước trong KHOA HỌC SỐ KHTN.',
       },
       {
-        title: '2. Thành phần của không khí quanh ta',
+        title: '2. Thành phần của không khí & Bảo vệ môi trường không khí',
         content: [
-          'Không khí là một hỗn hợp khí gồm khoảng 78% thể tích khí Nitrogen (N₂), 21% thể tích khí Oxygen (O₂), khoảng 1% gồm Carbon dioxide (CO₂), hơi nước và các khí hiếm như Argon (Ar), Helium (He).',
+          'a) Thành phần thể tích không khí khô và sạch: Không khí là một hỗn hợp nhiều chất khí, trong đó khí Nitrogen (N₂) chiếm khoảng 78% thể tích, khí Oxygen (O₂) chiếm khoảng 21% thể tích.',
+          'b) Các thành phần phụ (khoảng 1% thể tích): Gồm khí Carbon dioxide (CO₂), hơi nước (H₂O), các khí hiếm như Argon (Ar), Helium (He), Neon (Ne) và một lượng nhỏ bụi khí quyển.',
+          'c) Biện pháp bảo vệ môi trường không khí: Trồng nhiều cây xanh (quang hợp hấp thụ CO₂ và giải phóng O₂), sử dụng năng lượng tái tạo (điện mặt trời, điện gió) và xử lí khí thải công nghiệp (SO₂, NO₂, CO).',
         ],
+        formula: '%V(N₂) ≈ 78%   |   %V(O₂) ≈ 21%   |   %V(CO₂, Ar, H₂O) ≈ 1%',
+        formulaMeaning: 'Tỉ lệ phần trăm theo thể tích các chất khí trong không khí khô và sạch ở gần mặt đất.',
         keyPoints: [
-          'Nitrogen (N₂): ~78% thể tích không khí.',
-          'Oxygen (O₂): ~21% thể tích không khí.',
+          'Thể tích khí Oxygen chiếm xấp xỉ \\frac{1}{5} (≈ 21%) thể tích không khí.',
+          'Khí Nitrogen (N₂) chiếm tỉ lệ lớn nhất (~78%) giúp làm giảm tốc độ cháy và cung cấp nguồn đạm tự nhiên.',
         ],
       },
     ],
     keyTakeaways: [
-      'Oxygen (O₂) là chất khí không màu, không mùi, ít tan trong nước, duy trì sự hô hấp và sự cháy.',
-      'Không khí chứa khoảng 78% Nitrogen (N₂), 21% Oxygen (O₂) và 1% các khí khác.',
+      'Oxygen (O₂) là chất khí không màu, không mùi, ít tan trong nước, nặng hơn không khí (M = 32 amu), duy trì sự hô hấp và sự cháy.',
+      'Không khí khô và sạch chứa khoảng 78% Nitrogen (N₂), 21% Oxygen (O₂) và 1% các khí khác (CO₂, Argon, hơi nước).',
+    ],
+    miniQuiz: [
+      {
+        id: 'mq-khtn6-b9-1',
+        questionType: 'single_choice',
+        question:
+          'Theo sách Kết nối tri thức với cuộc sống, hai chất khí chiếm tỉ lệ thể tích lớn nhất trong không khí khô và sạch là:',
+        options: [
+          'Khoảng 78% khí Nitrogen (N₂) và 21% khí Oxygen (O₂)',
+          'Khoảng 78% khí Oxygen (O₂) và 21% khí Carbon dioxide (CO₂)',
+          'Khoảng 50% khí Hydrogen (H₂) và 50% khí Oxygen (O₂)',
+          'Khoảng 78% khí Carbon dioxide (CO₂) và 21% khí Nitrogen (N₂)',
+        ],
+        correctIndex: 0,
+        explanation:
+          'Trong không khí khô và sạch: Nitrogen (N₂) chiếm khoảng 78% thể tích, Oxygen (O₂) chiếm khoảng 21% thể tích, còn lại 1% là CO₂, Argon và hơi nước.',
+      },
+      {
+        id: 'mq-khtn6-b9-2',
+        questionType: 'single_choice',
+        question:
+          'Khi đưa que đóm còn tàn đỏ vào bình chứa khí Oxygen (O₂) nguyên chất, hiện tượng quan sát được là:',
+        options: [
+          'Que đóm bùng cháy mãnh liệt thành ngọn lửa sáng',
+          'Que đóm tắt ngay lập tức',
+          'Que đóm chuyển sang màu xanh lam',
+          'Không có hiện tượng gì xảy ra',
+        ],
+        correctIndex: 0,
+        explanation:
+          'Khí Oxygen (O₂) có tính chất duy trì sự cháy mãnh liệt, làm que đóm còn tàn đỏ bùng cháy thành ngọn lửa.',
+      },
+      {
+        id: 'mq-khtn6-b9-3',
+        questionType: 'true_false',
+        question:
+          'Xét các phát biểu sau về tính chất của khí Oxygen (O₂) và thành phần không khí:',
+        options: [
+          'Ở điều kiện thường, khí Oxygen (O₂) là chất khí không màu, không mùi, không vị và ít tan trong nước.',
+          'Khí Oxygen chiếm khoảng 78% thể tích không khí khô và sạch.',
+          'Khí Oxygen cần thiết cho sự hô hấp của con người, động vật, thực vật và duy trì sự cháy.',
+          'Trồng nhiều cây xanh giúp hấp thụ khí Carbon dioxide (CO₂) và giải phóng khí Oxygen (O₂) qua quang hợp.',
+        ],
+        correctIndex: 0,
+        trueFalseStatements: [
+          {
+            id: 'a',
+            label: 'a',
+            text: 'Ở điều kiện thường, khí Oxygen (O₂) là chất khí không màu, không mùi, không vị và ít tan trong nước.',
+            isTrue: true,
+            explanation: 'Đúng theo tính chất vật lí của khí Oxygen.',
+          },
+          {
+            id: 'b',
+            label: 'b',
+            text: 'Khí Oxygen chiếm khoảng 78% thể tích không khí khô và sạch.',
+            isTrue: false,
+            explanation: 'Sai vì Oxygen chỉ chiếm khoảng 21% thể tích không khí (Nitrogen mới chiếm 78%).',
+          },
+          {
+            id: 'c',
+            label: 'c',
+            text: 'Khí Oxygen cần thiết cho sự hô hấp của con người, động vật, thực vật và duy trì sự cháy.',
+            isTrue: true,
+            explanation: 'Đúng, Oxygen duy trì sự sống và sự cháy.',
+          },
+          {
+            id: 'd',
+            label: 'd',
+            text: 'Trồng nhiều cây xanh giúp hấp thụ khí Carbon dioxide (CO₂) và giải phóng khí Oxygen (O₂) qua quang hợp.',
+            isTrue: true,
+            explanation: 'Đúng, cây xanh quang hợp giải phóng O₂ giúp điều hòa không khí.',
+          },
+        ],
+        explanation: 'Đáp án Đúng/Sai: a) Đúng | b) Sai (O₂ chiếm 21%, N₂ chiếm 78%) | c) Đúng | d) Đúng.',
+      },
+      {
+        id: 'mq-khtn6-b9-4',
+        questionType: 'essay',
+        question:
+          'Úp một cốc thủy tinh trong suốt lên một ngọn nến đang cháy đặt trong đĩa nước màu. Sau một thời gian ngắn, ngọn nến tắt và mực nước trong cốc dâng lên chiếm khoảng 1/5 thể tích không khí trong cốc. Em hãy giải thích hiện tượng trên và nêu vai trò của khí Oxygen.',
+        options: [],
+        correctIndex: 0,
+        sampleAnswer:
+          '- Ngọn nến tắt vì quá trình cháy đã tiêu thụ hết lượng khí Oxygen (O₂) bên trong cốc thủy tinh.\n- Mực nước dâng lên khoảng 1/5 (≈ 20% - 21%) thể tích cốc vì khí Oxygen mất đi làm áp suất trong cốc giảm, áp suất khí quyển đẩy nước tràn vào thế chỗ phần thể tích Oxygen đã phản ứng.\n- Vai trò: Khí Oxygen duy trì sự cháy và duy trì sự hô hấp.',
+        rubric:
+          'Giải thích vì sao nến tắt (0,5đ); Giải thích vì sao nước dâng lên 1/5 cốc (0,5đ); Nêu đúng vai trò của Oxygen (0,5đ).',
+        explanation:
+          'Nến cháy tiêu thụ hết khí Oxygen (O₂) nên tắt; áp suất trong cốc giảm làm nước dâng lên chiếm 1/5 (≈ 21%) thể tích cốc, đúng bằng tỉ lệ Oxygen trong không khí.',
+      },
     ],
     thumbnailUrl: domainChemImg,
     simulationId: 'sim-atom-bohr',
@@ -322,21 +421,128 @@ export const LESSONS: Lesson[] = [
     durationMinutes: 45,
     sections: [
       {
-        title: '1. Cấu tạo chung của tế bào',
+        title: '1. Khái niệm và cấu tạo 3 thành phần chính của tế bào',
         content: [
-          'Mọi cơ thể sinh vật đều được cấu tạo từ tế bào. Mỗi tế bào đều có 3 thành phần chính: Màng tế bào, Chất tế bào (chứa các bào quan như ti thể, ribosome, lục lạp) và Nhân tế bào (chứa vật chất di truyền DNA) hoặc vùng nhân.',
+          'a) Khái niệm tế bào: Mọi cơ thể sinh vật (từ vi khuẩn đơn bào đến thực vật, động vật, con người) đều được cấu tạo từ tế bào. Tế bào là đơn vị cấu trúc và đơn vị chức năng cơ bản của mọi cơ thể sống.',
+          'b) Màng tế bào (Màng sinh chất): Lớp màng bao bọc bên ngoài tế bào, có chức năng bảo vệ và kiểm soát sự trao đổi chất có chọn lọc giữa tế bào với môi trường.',
+          'c) Chất tế bào (Tế bào chất): Chất keo lỏng nằm trong màng tế bào, chứa các bào quan (Ti thể, Ribosome, Lưới nội chất, Lục lạp) và là nơi diễn ra hầu hết các hoạt động sống của tế bào.',
+          'd) Nhân tế bào (hoặc Vùng nhân): Chứa vật chất di truyền DNA, đóng vai trò trung tâm điều khiển mọi hoạt động sống, sự lớn lên và sinh sản của tế bào.',
         ],
         keyPoints: [
-          'Tế bào thực vật có thành Cellulose vững chắc và bào quan Lục lạp thực hiện quang hợp.',
-          'Tế bào động vật không có thành Cellulose và không có lục lạp.',
+          'Tế bào nhân sơ (Vi khuẩn): Chưa có màng nhân chính thức (chỉ có vùng nhân), trong chất tế bào chỉ có bào quan Ribosome.',
+          'Tế bào nhân thực (Thực vật, Động vật, Nấm): Đã có nhân hoàn chỉnh được bao bọc bởi màng nhân và hệ thống các bào quan có màng.',
         ],
         imageUrl: grade6Img,
         imageCaption: 'Mô hình 3D cấu trúc hiển vi của tế bào thực vật và tế bào động vật.',
       },
+      {
+        title: '2. Phân biệt Tế bào thực vật – Tế bào động vật & Sự phân chia tế bào',
+        content: [
+          'a) Đặc điểm riêng của tế bào thực vật: Có thành tế bào bằng Cellulose vững chắc quy định hình dạng tế bào, có bào quan Lục lạp chứa diệp lục thực hiện quang hợp và có Không bào trung tâm lớn.',
+          'b) Đặc điểm của tế bào động vật: Không có thành Cellulose và không có Lục lạp, hình dạng linh hoạt phù hợp với chức năng chuyên hóa (tế bào cơ, tế bào thần kinh, tế bào hồng cầu).',
+          'c) Sự lớn lên và sinh sản (phân chia) của tế bào: Từ 1 tế bào mẹ ban đầu, sau mỗi lần phân chia tạo ra 2 tế bào con giống nhau. Đây là cơ sở giúp cơ thể đa bào lớn lên và thay thế các tế bào già, tổn thương.',
+        ],
+        formula: 'N_tb = N₀ × 2^k   |   6CO₂ + 6H₂O → (Ánh sáng, Diệp lục) C₆H₁₂O₆ + 6O₂ ↑',
+        formulaMeaning: 'N_tb: tổng số tế bào con tạo thành; N₀: số tế bào mẹ ban đầu; k: số lần phân chia liên tiếp; Phương trình quang hợp tại Lục lạp.',
+        highlightBox: {
+          title: 'Ghi nhớ nhanh công thức phân bào',
+          text: 'Nếu ban đầu có 1 tế bào mẹ (N₀ = 1) tiến hành phân chia liên tiếp k lần thì tổng số tế bào con tạo ra là 2^k tế bào (ví dụ: sau 3 lần phân chia tạo ra 2³ = 8 tế bào con).',
+        },
+      },
     ],
     keyTakeaways: [
-      'Tế bào là đơn vị cấu trúc và chức năng của mọi cơ thể sống.',
-      'Lục lạp là bào quan quang hợp đặc trưng của tế bào thực vật.',
+      'Tế bào là đơn vị cấu trúc và chức năng của mọi cơ thể sống, gồm 3 thành phần chính: Màng tế bào, Chất tế bào, Nhân (hoặc Vùng nhân).',
+      'Tế bào thực vật có thành Cellulose và bào quan Lục lạp quang hợp; công thức tính số tế bào con sau k lần phân chia là N_tb = N₀ × 2^k.',
+    ],
+    miniQuiz: [
+      {
+        id: 'mq-khtn6-b18-1',
+        questionType: 'single_choice',
+        question:
+          'Thành phần cấu trúc nào sau đây chỉ có ở tế bào thực vật mà không có ở tế bào động vật?',
+        options: [
+          'Thành tế bào bằng Cellulose và bào quan Lục lạp',
+          'Màng sinh chất và chất tế bào',
+          'Nhân tế bào chứa DNA và Ti thể',
+          'Ribosome và màng nhân',
+        ],
+        correctIndex: 0,
+        explanation:
+          'Tế bào thực vật có Thành tế bào bằng Cellulose giúp quy định hình dạng và bào quan Lục lạp (chứa diệp lục để quang hợp), còn tế bào động vật không có hai thành phần này.',
+      },
+      {
+        id: 'mq-khtn6-b18-2',
+        questionType: 'single_choice',
+        question:
+          'Ba thành phần cấu tạo chính có ở hầu hết mọi tế bào (nhân sơ và nhân thực) là:',
+        options: [
+          'Màng tế bào, chất tế bào và nhân (hoặc vùng nhân)',
+          'Thành tế bào, lục lạp và không bào trung tâm',
+          'Màng nhân, ti thể và trung thể',
+          'Vỏ nhầy, lông roi và thành Cellulose',
+        ],
+        correctIndex: 0,
+        explanation:
+          'Mọi tế bào đều có 3 thành phần cơ bản: Màng tế bào (bảo vệ, trao đổi chất), Chất tế bào (diễn ra hoạt động sống) và Nhân hoặc vùng nhân (điều khiển hoạt động sống).',
+      },
+      {
+        id: 'mq-khtn6-b18-3',
+        questionType: 'true_false',
+        question:
+          'Khi quan sát tiêu bản tế bào biểu bì vảy hành và tế bào niêm mạc miệng người dưới kính hiển vi, xét tính Đúng/Sai của các nhận định sau:',
+        options: [
+          'Tế bào biểu bì vảy hành là tế bào thực vật nên có thành tế bào vững chắc tạo hình đa giác.',
+          'Tế bào vi khuẩn E. coli là tế bào nhân thực đã có màng nhân bao bọc vật chất di truyền.',
+          'Lục lạp là bào quan thực hiện chức năng quang hợp chuyển hóa năng lượng ánh sáng thành hóa năng.',
+          'Sự lớn lên và sinh sản (phân chia) của tế bào là cơ sở cho sự lớn lên của cơ thể sinh vật.',
+        ],
+        correctIndex: 0,
+        trueFalseStatements: [
+          {
+            id: 'a',
+            label: 'a',
+            text: 'Tế bào biểu bì vảy hành là tế bào thực vật nên có thành tế bào vững chắc tạo hình đa giác.',
+            isTrue: true,
+            explanation: 'Đúng, thành Cellulose giúp tế bào thực vật có hình dạng cố định.',
+          },
+          {
+            id: 'b',
+            label: 'b',
+            text: 'Tế bào vi khuẩn E. coli là tế bào nhân thực đã có màng nhân bao bọc vật chất di truyền.',
+            isTrue: false,
+            explanation: 'Sai, vi khuẩn là tế bào nhân sơ (chỉ có vùng nhân, chưa có màng nhân).',
+          },
+          {
+            id: 'c',
+            label: 'c',
+            text: 'Lục lạp là bào quan thực hiện chức năng quang hợp chuyển hóa năng lượng ánh sáng thành hóa năng.',
+            isTrue: true,
+            explanation: 'Đúng, lục lạp chứa chất diệp lục thực hiện quang hợp ở thực vật.',
+          },
+          {
+            id: 'd',
+            label: 'd',
+            text: 'Sự lớn lên và sinh sản (phân chia) của tế bào là cơ sở cho sự lớn lên của cơ thể sinh vật.',
+            isTrue: true,
+            explanation: 'Đúng, nhờ tế bào lớn lên và phân chia mà cơ thể đa bào lớn lên.',
+          },
+        ],
+        explanation: 'Đáp án Đúng/Sai: a) Đúng | b) Sai (vi khuẩn là tế bào nhân sơ) | c) Đúng | d) Đúng.',
+      },
+      {
+        id: 'mq-khtn6-b18-4',
+        questionType: 'essay',
+        question:
+          'Từ 1 tế bào mẹ ban đầu, sau 4 lần phân chia liên tiếp sẽ tạo ra bao nhiêu tế bào con? Em hãy lập luận công thức tính và nêu ý nghĩa của sự lớn lên, phân chia tế bào đối với sinh vật.',
+        options: [],
+        correctIndex: 0,
+        sampleAnswer:
+          '- Cứ sau 1 lần phân chia, từ 1 tế bào mẹ tạo ra 2 tế bào con.\n- Sau k = 4 lần phân chia liên tiếp, số tế bào con tạo thành là: 2⁴ = 16 (tế bào con).\n- Ý nghĩa: Giúp cơ thể sinh vật lớn lên, tăng kích thước và thay thế các tế bào già, tế bào bị tổn thương.',
+        rubric:
+          'Viết đúng công thức 2^k và tính ra 2⁴ = 16 tế bào con (0,5đ); Nêu được ý nghĩa giúp cơ thể lớn lên và hàn gắn vết thương (0,5đ).',
+        explanation:
+          'Áp dụng công thức N = 2^k: sau k = 4 lần phân chia tạo ra 2⁴ = 16 tế bào con.',
+      },
     ],
     thumbnailUrl: grade6Img,
     simulationId: 'sim-microscope-cell',
@@ -365,38 +571,138 @@ export const LESSONS: Lesson[] = [
     durationMinutes: 45,
     sections: [
       {
-        title: '1. Mô hình nguyên tử Rutherford - Bohr',
+        title: '1. Mô hình nguyên tử Rutherford – Bohr và Cấu tạo hạt nhân',
         content: [
-          'Nguyên tử là hạt vô cùng nhỏ và trung hòa về điện. Nguyên tử gồm hạt nhân mang điện tích dương nằm ở tâm và lớp vỏ gồm một hay nhiều Electron mang điện tích âm chuyển động xung quanh hạt nhân.',
-          'Hạt nhân nguyên tử được tạo thành bởi các hạt Proton (p, mang điện tích +1) và Neutron (n, không mang điện). Trong mỗi nguyên tử: Số Proton = Số Electron = Số đơn vị điện tích hạt nhân (Z).',
+          'a) Cấu trúc nguyên tử Rutherford – Bohr: Nguyên tử là hạt vô cùng nhỏ và trung hòa về điện. Nguyên tử gồm hạt nhân mang điện tích dương nằm ở tâm và lớp vỏ gồm một hay nhiều hạt Electron mang điện tích âm chuyển động xung quanh hạt nhân theo từng lớp.',
+          'b) Các hạt cấu tạo nên nguyên tử: Hạt nhân được tạo bởi hạt Proton (kí hiệu p, mang điện tích +1, khối lượng ≈ 1 amu) và hạt Neutron (kí hiệu n, không mang điện, khối lượng ≈ 1 amu). Lớp vỏ tạo bởi các hạt Electron (kí hiệu e, mang điện tích -1, khối lượng rất nhỏ ≈ 0,00055 amu).',
+          'c) Quy tắc trung hòa điện và Khối lượng nguyên tử: Trong mọi nguyên tử trung hòa về điện, số hạt Proton luôn bằng số hạt Electron và bằng số đơn vị điện tích hạt nhân Z. Do khối lượng Electron rất nhỏ nên khối lượng nguyên tử tập trung hầu hết ở hạt nhân.',
         ],
         keyPoints: [
-          'Proton (p): điện tích +1, khối lượng ≈ 1 amu.',
-          'Neutron (n): điện tích 0, khối lượng ≈ 1 amu.',
-          'Electron (e): điện tích -1, khối lượng rất nhỏ (≈ 0,00055 amu).',
+          'Proton (p): điện tích +1, khối lượng xấp xỉ 1 amu.',
+          'Neutron (n): điện tích 0 (không mang điện), khối lượng xấp xỉ 1 amu.',
+          'Electron (e): điện tích -1, khối lượng ≈ 0,00055 amu (không đáng kể so với p và n).',
         ],
-        formula: 'Z = p = e   |   Khối lượng nguyên tử A ≈ p + n (amu)',
-        formulaMeaning: 'Số đơn vị điện tích hạt nhân Z bằng số hạt Proton và bằng số hạt Electron.',
+        formula: 'Z = p = e   |   m_nt ≈ p + n (amu)   |   Số e tối đa lớp thứ nhất (lớp K) = 2e; lớp thứ hai (lớp L) = 8e',
+        formulaMeaning: 'Z: số đơn vị điện tích hạt nhân (số hiệu nguyên tử); p: số hạt Proton; e: số hạt Electron; n: số hạt Neutron; m_nt: khối lượng nguyên tử tính theo amu.',
         imageUrl: grade7Img,
         imageCaption: 'Mô phỏng 3D cấu tạo nguyên tử Rutherford - Bohr trong KHOA HỌC SỐ KHTN.',
       },
       {
-        title: '2. Tên gọi nguyên tố hóa học theo chuẩn quốc tế IUPAC',
+        title: '2. Bảng tuần hoàn & Danh pháp nguyên tố hóa học chuẩn quốc tế IUPAC',
         content: [
-          'Trong bộ sách Kết nối tri thức với cuộc sống, tên các nguyên tố hóa học được viết và đọc theo chuẩn quốc tế IUPAC: H (Hydrogen), He (Helium), Li (Lithium), Be (Beryllium), B (Boron), C (Carbon), N (Nitrogen), O (Oxygen), F (Fluorine), Ne (Neon).',
-          'Các nguyên tố chu kì 3, 4 và kim loại thông dụng: Na (Sodium), Mg (Magnesium), Al (Aluminium), Si (Silicon), P (Phosphorus), S (Sulfur), Cl (Chlorine), Ar (Argon), K (Potassium), Ca (Calcium), Fe (Iron), Cu (Copper), Zn (Zinc), Br (Bromine), Ag (Silver), Ba (Barium), Au (Gold).',
+          'a) Nguyên tắc sắp xếp và Cấu tạo ô nguyên tố: Các nguyên tố trong Bảng tuần hoàn được sắp xếp theo chiều tăng dần của điện tích hạt nhân nguyên tử (Z). Số thứ tự ô nguyên tố = Z = p = e; Số thứ tự chu kì = Số lớp Electron; Số thứ tự nhóm A = Số Electron lớp ngoài cùng.',
+          'b) Danh pháp 10 nguyên tố đầu tiên (Z = 1 → 10) theo chuẩn IUPAC: H (Hydrogen, Z = 1), He (Helium, Z = 2), Li (Lithium, Z = 3), Be (Beryllium, Z = 4), B (Boron, Z = 5), C (Carbon, Z = 6), N (Nitrogen, Z = 7), O (Oxygen, Z = 8), F (Fluorine, Z = 9), Ne (Neon, Z = 10).',
+          'c) Danh pháp các nguyên tố chu kì 3, 4 và kim loại quan trọng theo IUPAC: Na (Sodium, Z = 11), Mg (Magnesium, Z = 12), Al (Aluminium, Z = 13), Si (Silicon, Z = 14), P (Phosphorus, Z = 15), S (Sulfur, Z = 16), Cl (Chlorine, Z = 17), Ar (Argon, Z = 18), K (Potassium, Z = 19), Ca (Calcium, Z = 20), Fe (Iron, Z = 26), Cu (Copper, Z = 29), Zn (Zinc, Z = 30), Ag (Silver, Z = 47), Au (Gold, Z = 79).',
         ],
+        keyPoints: [
+          'Các nguyên tố có 1, 2, 3 electron lớp ngoài cùng thường là nguyên tố Kim loại (trừ H, He, B).',
+          'Các nguyên tố có 5, 6, 7 electron lớp ngoài cùng thường là nguyên tố Phi kim; có 8 electron lớp ngoài cùng (lớp K là 2e ở He) là Khí hiếm.',
+        ],
+        highlightBox: {
+          title: 'Quy tắc vàng tra cứu nhanh vị trí nguyên tố trong Bảng tuần hoàn',
+          text: 'Biết cấu hình phân bố electron theo lớp (ví dụ Aluminium Al có Z = 13 → phân bố 2 - 8 - 3), ta suy ra ngay: Ô số 13 (vì Z = 13), Chu kì 3 (vì có 3 lớp electron) và Nhóm IIIA (vì có 3 electron ở lớp ngoài cùng).',
+        },
       },
     ],
     keyTakeaways: [
-      'Nguyên tử trung hòa về điện: Số hạt Proton (+) luôn bằng số hạt Electron (-).',
-      'Sử dụng thống nhất danh pháp quốc tế IUPAC: Hydrogen, Oxygen, Carbon, Nitrogen, Sodium, Potassium, Calcium, Iron, Copper, Aluminium, Chlorine, Sulfur.',
+      'Nguyên tử trung hòa về điện: Số hạt Proton (+) luôn bằng số hạt Electron (-), khối lượng nguyên tử m_nt ≈ p + n (amu).',
+      'Sử dụng thống nhất danh pháp quốc tế IUPAC: Hydrogen (H), Oxygen (O), Carbon (C), Nitrogen (N), Sodium (Na), Potassium (K), Calcium (Ca), Magnesium (Mg), Aluminium (Al), Iron (Fe), Copper (Cu), Zinc (Zn), Chlorine (Cl), Sulfur (S).',
+    ],
+    miniQuiz: [
+      {
+        id: 'mq-khtn7-b2-1',
+        questionType: 'single_choice',
+        question:
+          'Theo danh pháp chuẩn quốc tế IUPAC trong bộ sách Kết nối tri thức với cuộc sống, các nguyên tố có kí hiệu hóa học Na, K, Ca, Fe, Cu lần lượt có tên gọi là:',
+        options: [
+          'Sodium, Potassium, Calcium, Iron, Copper',
+          'Sulfur, Phosphorus, Carbon, Fluorine, Chlorine',
+          'Sodium, Calcium, Potassium, Copper, Iron',
+          'Nitrogen, Potassium, Calcium, Zinc, Silver',
+        ],
+        correctIndex: 0,
+        explanation:
+          'Theo danh pháp quốc tế IUPAC: Na là Sodium, K là Potassium, Ca là Calcium, Fe là Iron, Cu là Copper.',
+      },
+      {
+        id: 'mq-khtn7-b2-2',
+        questionType: 'single_choice',
+        question:
+          'Nguyên tử của nguyên tố Chlorine (Cl) có số đơn vị điện tích hạt nhân Z = 17 và số hạt Neutron là 18. Phát biểu nào sau đây là ĐÚNG về nguyên tử Chlorine?',
+        options: [
+          'Có 17 hạt Proton trong hạt nhân, 17 hạt Electron ở vỏ (phân bố 2 - 8 - 7) và khối lượng nguyên tử xấp xỉ 35 amu',
+          'Có 18 hạt Proton, 17 hạt Electron và khối lượng nguyên tử xấp xỉ 35 amu',
+          'Có 17 hạt Proton, 18 hạt Electron và 2 lớp vỏ Electron',
+          'Có 35 hạt Electron ở lớp vỏ ngoài cùng',
+        ],
+        correctIndex: 0,
+        explanation:
+          'Vì nguyên tử trung hòa về điện nên p = e = Z = 17 (phân bố 3 lớp: 2 - 8 - 7); khối lượng nguyên tử A ≈ p + n = 17 + 18 = 35 amu.',
+      },
+      {
+        id: 'mq-khtn7-b2-3',
+        questionType: 'true_false',
+        question:
+          'Cho nguyên tử Magnesium (Mg) có số hiệu nguyên tử Z = 12 và số hạt Neutron n = 12. Xét tính Đúng/Sai của các phát biểu sau:',
+        options: [
+          'Hạt nhân nguyên tử Magnesium có 12 hạt Proton mang điện tích dương (+12).',
+          'Lớp vỏ nguyên tử Magnesium có 12 hạt Electron được sắp xếp vào 3 lớp (2 - 8 - 2), có 2 electron lớp ngoài cùng.',
+          'Khối lượng nguyên tử Magnesium xấp xỉ bằng 12 amu.',
+          'Trong Bảng tuần hoàn, Magnesium thuộc chu kì 3, nhóm IIA và là nguyên tố kim loại.',
+        ],
+        correctIndex: 0,
+        trueFalseStatements: [
+          {
+            id: 'a',
+            label: 'a',
+            text: 'Hạt nhân nguyên tử Magnesium có 12 hạt Proton mang điện tích dương (+12).',
+            isTrue: true,
+            explanation: 'Đúng vì Z = p = 12.',
+          },
+          {
+            id: 'b',
+            label: 'b',
+            text: 'Lớp vỏ nguyên tử Magnesium có 12 hạt Electron được sắp xếp vào 3 lớp (2 - 8 - 2), có 2 electron lớp ngoài cùng.',
+            isTrue: true,
+            explanation: 'Đúng, lớp 1 có 2e, lớp 2 có 8e, lớp 3 (ngoài cùng) có 2e.',
+          },
+          {
+            id: 'c',
+            label: 'c',
+            text: 'Khối lượng nguyên tử Magnesium xấp xỉ bằng 12 amu.',
+            isTrue: false,
+            explanation: 'Sai vì khối lượng nguyên tử A ≈ p + n = 12 + 12 = 24 amu.',
+          },
+          {
+            id: 'd',
+            label: 'd',
+            text: 'Trong Bảng tuần hoàn, Magnesium thuộc chu kì 3, nhóm IIA và là nguyên tố kim loại.',
+            isTrue: true,
+            explanation: 'Đúng vì Mg có 3 lớp electron (chu kì 3) và 2e lớp ngoài cùng (nhóm IIA).',
+          },
+        ],
+        explanation: 'Đáp án Đúng/Sai: a) Đúng | b) Đúng | c) Sai (A = 12 + 12 = 24 amu) | d) Đúng.',
+      },
+      {
+        id: 'mq-khtn7-b2-4',
+        questionType: 'essay',
+        question:
+          'Nguyên tử của nguyên tố Aluminium (Nhôm - Al) có số đơn vị điện tích hạt nhân Z = 13 và số hạt Neutron trong hạt nhân là 14. Em hãy xác định số hạt Proton, số hạt Electron, khối lượng nguyên tử (amu), sự phân bố Electron trên các lớp vỏ và vị trí (ô, chu kì, nhóm) của Aluminium trong Bảng tuần hoàn.',
+        options: [],
+        correctIndex: 0,
+        sampleAnswer:
+          '- Số hạt cơ bản: p = e = Z = 13 hạt; n = 14 hạt.\n- Khối lượng nguyên tử: A ≈ p + n = 13 + 14 = 27 (amu).\n- Phân bố 13 electron trên 3 lớp vỏ: Lớp K (2e) – Lớp L (8e) – Lớp M (3e, có 3e lớp ngoài cùng).\n- Vị trí trong Bảng tuần hoàn: Ô số 13, Chu kì 3 (vì có 3 lớp electron), Nhóm IIIA (vì có 3e lớp ngoài cùng).',
+        rubric:
+          'Tính đúng p = e = 13 và A = 27 amu (0,5đ); Viết đúng phân bố 2 - 8 - 3 và vị trí Ô 13, Chu kì 3, Nhóm IIIA (0,5đ).',
+        explanation:
+          'Aluminium (Z = 13) có p = e = 13, n = 14, A = 27 amu; phân bố e: 2 - 8 - 3 (Ô 13, Chu kì 3, Nhóm IIIA).',
+      },
     ],
     thumbnailUrl: grade7Img,
     simulationId: 'sim-atom-bohr',
     videoUrl: 'https://www.youtube.com/embed/FSyAehMdpyI',
     documentId: 'doc-khtn-7-1',
-    quizCount: 5,
+    quizCount: 4,
     viewCount: 4890,
     author: 'KHOA HỌC SỐ KHTN',
   },
@@ -417,20 +723,117 @@ export const LESSONS: Lesson[] = [
     durationMinutes: 45,
     sections: [
       {
-        title: '1. Công thức tính tốc độ chuyển động',
+        title: '1. Khái niệm, Công thức tính tốc độ & Quy đổi đơn vị',
         content: [
-          'Tốc độ chuyển động của một vật được xác định bằng thương số giữa quãng đường vật đi được (s) và thời gian (t) để đi hết quãng đường đó.',
-          'Đơn vị tốc độ trong hệ SI là mét trên giây (m/s) và đơn vị thường dùng trong giao thông là kilômét trên giờ (km/h). Quy đổi: 1 m/s = 3,6 km/h.',
+          'a) Ý nghĩa vật lí của tốc độ: Tốc độ là đại lượng vật lí đặc trưng cho mức độ nhanh hay chậm của chuyển động, được xác định bằng độ dài quãng đường vật đi được trong một đơn vị thời gian.',
+          'b) Công thức tính tốc độ và các đại lượng dẫn xuất: Gọi s là quãng đường đi được và t là thời gian đi hết quãng đường đó, tốc độ chuyển động v được tính bằng thương số giữa s và t. Khi vật chuyển động trên nhiều đoạn đường liên tiếp, tốc độ trung bình tính bằng tổng quãng đường chia cho tổng thời gian.',
+          'c) Đơn vị đo tốc độ hợp pháp: Trong hệ đơn vị quốc tế SI, đơn vị của tốc độ là mét trên giây (m/s). Trong giao thông, đơn vị thường dùng là kilômét trên giờ (km/h). Hệ số quy đổi chuẩn: 1 m/s = 3,6 km/h.',
         ],
-        formula: 'v = s / t   ⇒   s = v × t   |   t = s / v',
-        formulaMeaning: 'v: tốc độ (m/s hoặc km/h); s: quãng đường (m hoặc km); t: thời gian (s hoặc h).',
+        formula: 'v = \\frac{s}{t}   |   s = v × t   |   t = \\frac{s}{v}   |   v_tb = \\frac{s₁ + s₂}{t₁ + t₂}',
+        formulaMeaning: 'v: tốc độ chuyển động (m/s hoặc km/h); s: quãng đường đi được (m hoặc km); t: thời gian chuyển động (s hoặc h); v_tb: tốc độ trung bình trên cả lộ trình.',
+        keyPoints: [
+          'Đổi từ m/s sang km/h: Nhân giá trị tốc độ với 3,6 (ví dụ: 10 m/s = 10 × 3,6 = 36 km/h).',
+          'Đổi từ km/h sang m/s: Chia giá trị tốc độ cho 3,6 (ví dụ: 72 km/h = \\frac{72}{3,6} = 20 m/s).',
+        ],
         imageUrl: domainPhysImg,
         imageCaption: 'Minh họa phép đo tốc độ chuyển động bằng cổng quang điện trong phòng thực hành Vật lí.',
       },
+      {
+        title: '2. Đồ thị quãng đường – thời gian (s – t) & Khoảng cách an toàn',
+        content: [
+          'a) Cách vẽ đồ thị quãng đường – thời gian: Trục nằm ngang Ot biểu diễn thời gian (t), trục thẳng đứng Os biểu diễn quãng đường (s). Với chuyển động có tốc độ không đổi, đồ thị s – t là một đường thẳng đi qua gốc tọa độ O(0; 0).',
+          'b) Cách đọc đồ thị s – t: Đoạn thẳng nằm ngang song song với trục thời gian Ot biểu thị vật đang đứng yên (quãng đường s không thay đổi khi thời gian t tăng). Đường biểu diễn nào có độ dốc lớn hơn thì vật đó chuyển động với tốc độ lớn hơn.',
+          'c) Quy tắc "3 giây" giữ khoảng cách an toàn giao thông: Khi điều khiển phương tiện trên đường cao tốc, khoảng cách an toàn tối thiểu giữa hai xe được ước tính theo công thức d_at = v × 3 (với v tính bằng m/s).',
+        ],
+        highlightBox: {
+          title: 'Cảnh báo sai lầm thường gặp khi tính tốc độ trung bình',
+          text: 'Tốc độ trung bình trên nhiều đoạn đường luôn tính theo công thức v_tb = (s₁ + s₂) / (t₁ + t₂) (kể cả thời gian nghỉ nếu có), tuyệt đối không lấy trung bình cộng (v₁ + v₂) / 2 khi thời gian đi trên các đoạn đường khác nhau.',
+        },
+      },
     ],
     keyTakeaways: [
-      'Công thức tốc độ: v = s / t.',
-      'Đổi đơn vị: 1 m/s = 3,6 km/h; 36 km/h = 10 m/s.',
+      'Công thức tốc độ: v = \\frac{s}{t} ⇒ s = v × t và t = \\frac{s}{v}.',
+      'Đổi đơn vị: 1 m/s = 3,6 km/h (ví dụ: 10 m/s = 36 km/h; 20 m/s = 72 km/h).',
+    ],
+    miniQuiz: [
+      {
+        id: 'mq-khtn7-b8-1',
+        questionType: 'single_choice',
+        question:
+          'Một vận động viên xe đạp chuyển động đều trên đoạn đường thẳng dài 1,8 km hết thời gian 3 phút. Tốc độ của vận động viên tính theo đơn vị m/s là:',
+        options: ['10 m/s', '15 m/s', '36 m/s', '6 m/s'],
+        correctIndex: 0,
+        explanation:
+          'Đổi s = 1,8 km = 1800 m; t = 3 phút = 180 s ⇒ v = s / t = 1800 / 180 = 10 m/s.',
+      },
+      {
+        id: 'mq-khtn7-b8-2',
+        questionType: 'single_choice',
+        question:
+          'Một ô tô đang chạy trên đường cao tốc với tốc độ ổn định 72 km/h. Giá trị tốc độ này khi quy đổi sang đơn vị chuẩn m/s là:',
+        options: ['20 m/s', '25 m/s', '15 m/s', '259,2 m/s'],
+        correctIndex: 0,
+        explanation:
+          'Ta có 1 m/s = 3,6 km/h ⇒ v = 72 / 3,6 = 20 m/s.',
+      },
+      {
+        id: 'mq-khtn7-b8-3',
+        questionType: 'true_false',
+        question:
+          'Một người đi xe đạp chuyển động trên một đường thẳng: trong 2 giờ đầu đi được 24 km, sau đó dừng lại nghỉ 30 phút rồi đi tiếp 12 km trong 1 giờ. Xét tính Đúng/Sai của các nhận định sau:',
+        options: [
+          'Tốc độ của người đi xe đạp trong 2 giờ đầu là v₁ = 24 / 2 = 12 km/h.',
+          'Trong khoảng thời gian 30 phút nghỉ ngơi, đồ thị quãng đường – thời gian (s – t) là một đoạn thẳng nằm ngang song song với trục thời gian Ot.',
+          'Tổng quãng đường người đó đã đi được là 36 km và tổng thời gian tính cả lúc nghỉ là 3,5 giờ.',
+          'Tốc độ trung bình trên cả quãng đường (tính cả thời gian nghỉ) bằng 12 km/h.',
+        ],
+        correctIndex: 0,
+        trueFalseStatements: [
+          {
+            id: 'a',
+            label: 'a',
+            text: 'Tốc độ của người đi xe đạp trong 2 giờ đầu là v₁ = 24 / 2 = 12 km/h.',
+            isTrue: true,
+            explanation: 'Đúng, v₁ = s₁ / t₁ = 24 / 2 = 12 km/h.',
+          },
+          {
+            id: 'b',
+            label: 'b',
+            text: 'Trong khoảng thời gian 30 phút nghỉ ngơi, đồ thị quãng đường – thời gian (s – t) là một đoạn thẳng nằm ngang song song với trục thời gian Ot.',
+            isTrue: true,
+            explanation: 'Đúng, khi vật đứng yên thì quãng đường s không đổi theo thời gian t.',
+          },
+          {
+            id: 'c',
+            label: 'c',
+            text: 'Tổng quãng đường người đó đã đi được là 36 km và tổng thời gian tính cả lúc nghỉ là 3,5 giờ.',
+            isTrue: true,
+            explanation: 'Đúng, s = 24 + 12 = 36 km; t = 2 + 0,5 + 1 = 3,5 h.',
+          },
+          {
+            id: 'd',
+            label: 'd',
+            text: 'Tốc độ trung bình trên cả quãng đường (tính cả thời gian nghỉ) bằng 12 km/h.',
+            isTrue: false,
+            explanation: 'Sai vì v_tb = s_tổng / t_tổng = 36 / 3,5 ≈ 10,29 km/h (nhỏ hơn 12 km/h).',
+          },
+        ],
+        explanation: 'Đáp án Đúng/Sai: a) Đúng | b) Đúng | c) Đúng | d) Sai (v_tb = 36 / 3,5 ≈ 10,29 km/h).',
+      },
+      {
+        id: 'mq-khtn7-b8-4',
+        questionType: 'essay',
+        question:
+          'Lúc 7 giờ sáng, một xe máy khởi hành từ địa điểm A đi đến địa điểm B cách A một khoảng 54 km với tốc độ không đổi v = 36 km/h. a) Đổi tốc độ của xe máy ra đơn vị m/s; b) Tính thời gian xe máy đi từ A đến B và cho biết xe đến B lúc mấy giờ?',
+        options: [],
+        correctIndex: 0,
+        sampleAnswer:
+          'a) Đổi đơn vị tốc độ: v = 36 km/h = 36 / 3,6 = 10 m/s.\nb) Thời gian xe máy đi từ A đến B là: t = s / v = 54 / 36 = 1,5 (giờ) = 1 giờ 30 phút.\n- Thời điểm xe máy đến B là: 7 giờ + 1 giờ 30 phút = 8 giờ 30 phút sáng.',
+        rubric:
+          'Đổi đúng 36 km/h = 10 m/s (0,5đ); Tính đúng t = 1,5 giờ và kết luận đến B lúc 8 giờ 30 phút (0,5đ).',
+        explanation:
+          'v = 36 / 3,6 = 10 m/s; t = s / v = 54 / 36 = 1,5 h (1 giờ 30 phút) ⇒ Đến B lúc 8 giờ 30 phút.',
+      },
     ],
     thumbnailUrl: domainPhysImg,
     simulationId: 'sim-light-refraction',
@@ -459,38 +862,131 @@ export const LESSONS: Lesson[] = [
     durationMinutes: 45,
     sections: [
       {
-        title: '1. Dung dịch Acid và Dung dịch Base theo danh pháp IUPAC',
+        title: '1. Dung dịch Acid, Dung dịch Base & Thang đo pH theo chuẩn IUPAC',
         content: [
-          'Acid là những hợp chất trong phân tử có nguyên tử Hydrogen liên kết với gốc acid; khi tan trong nước, Acid tạo ra ion H⁺. Các Acid quan trọng: Hydrochloric acid (HCl), Sulfuric acid (H₂SO₄), Nitric acid (HNO₃), Phosphoric acid (H₃PO₄), Acetic acid (CH₃COOH). Dung dịch Acid làm quỳ tím chuyển sang màu đỏ (pH < 7).',
-          'Base là những hợp chất trong phân tử có nguyên tử kim loại liên kết với nhóm Hydroxide (-OH); khi tan trong nước, các Base kiềm tạo ra ion OH⁻. Các Base quan trọng: Sodium hydroxide (NaOH), Potassium hydroxide (KOH), Calcium hydroxide (Ca(OH)₂), Barium hydroxide (Ba(OH)₂), Copper(II) hydroxide (Cu(OH)₂), Iron(III) hydroxide (Fe(OH)₃). Dung dịch Base tan làm quỳ tím hóa xanh và Phenolphthalein hóa hồng (pH > 7).',
+          'a) Khái niệm và tính chất hóa học của Acid: Acid là những hợp chất trong phân tử có nguyên tử Hydrogen liên kết với gốc acid; khi tan trong nước, Acid phân li tạo ra ion H⁺. Các Acid quan trọng theo danh pháp IUPAC: Hydrochloric acid (HCl), Sulfuric acid (H₂SO₄), Nitric acid (HNO₃), Phosphoric acid (H₃PO₄), Acetic acid (CH₃COOH). Dung dịch Acid làm giấy quỳ tím chuyển sang màu đỏ, tác dụng với kim loại đứng trước H (như Mg, Al, Zn, Fe) giải phóng khí Hydrogen (H₂).',
+          'b) Khái niệm và tính chất hóa học của Base: Base là những hợp chất trong phân tử có nguyên tử kim loại liên kết với một hay nhiều nhóm Hydroxide (-OH); khi tan trong nước, các Base tan (kiềm) tạo ra ion OH⁻. Các Base quan trọng: Sodium hydroxide (NaOH), Potassium hydroxide (KOH), Calcium hydroxide (Ca(OH)₂), Barium hydroxide (Ba(OH)₂), Copper(II) hydroxide (Cu(OH)₂ - kết tủa xanh lam), Iron(III) hydroxide (Fe(OH)₃ - kết tủa nâu đỏ). Dung dịch kiềm làm quỳ tím hóa xanh và dung dịch Phenolphthalein không màu chuyển sang màu hồng.',
+          'c) Ý nghĩa của thang đo pH (từ 1 đến 14): Thang pH dùng để biểu thị độ acid hoặc độ base của dung dịch. Môi trường Acid có pH < 7 (pH càng nhỏ độ acid càng mạnh); Môi trường trung tính (nước tinh khiết, dung dịch NaCl) có pH = 7; Môi trường Base (kiềm) có pH > 7.',
         ],
         keyPoints: [
-          'Hydrochloric acid (HCl) + Sodium hydroxide (NaOH) → Sodium chloride (NaCl) + Nước (H₂O).',
-          'Môi trường Acid: pH < 7; Môi trường trung tính: pH = 7; Môi trường Base: pH > 7.',
+          'Nhận biết nhanh bằng chất chỉ thị: Acid (pH < 7) làm quỳ tím hóa đỏ; Base kiềm (pH > 7) làm quỳ tím hóa xanh và Phenolphthalein hóa hồng.',
+          'Phản ứng trung hòa giữa Acid và Base luôn tạo thành Muối và Nước, đồng thời tỏa nhiệt.',
         ],
-        formula: 'HCl + NaOH → NaCl + H₂O   |   pH = -log[H⁺]',
-        formulaMeaning: 'Phản ứng trung hòa giữa Hydrochloric acid và Sodium hydroxide tạo muối Sodium chloride và nước.',
+        formula: 'HCl + NaOH → NaCl + H₂O   |   Zn + H₂SO₄ → ZnSO₄ + H₂ ↑   |   n = \\frac{m}{M}   |   C_M = \\frac{n}{V}',
+        formulaMeaning: 'Phản ứng trung hòa Acid - Base, phản ứng kim loại tác dụng với Acid loãng và công thức tính số mol n (mol), nồng độ mol C_M (mol/L).',
         imageUrl: grade8Img,
         imageCaption: 'Thí nghiệm chuẩn độ Acid - Base và đo pH điện tử trong KHOA HỌC SỐ KHTN.',
       },
       {
-        title: '2. Oxide và Muối theo chuẩn IUPAC',
+        title: '2. Phân loại Oxide và Muối theo danh pháp quốc tế IUPAC',
         content: [
-          'Oxide là hợp chất của hai nguyên tố, trong đó có một nguyên tố là Oxygen. Ví dụ: Carbon dioxide (CO₂), Sulfur dioxide (SO₂), Sulfur trioxide (SO₃), Diphosphorus pentoxide (P₂O₅), Calcium oxide (CaO), Copper(II) oxide (CuO), Iron(III) oxide (Fe₂O₃), Aluminium oxide (Al₂O₃).',
-          'Muối là hợp chất được tạo thành khi thay thế ion H⁺ của Acid bằng ion kim loại hoặc ion Ammonium (NH₄⁺). Ví dụ: Sodium chloride (NaCl), Calcium carbonate (CaCO₃), Copper(II) sulfate (CuSO₄), Silver nitrate (AgNO₃), Barium sulfate (BaSO₄).',
+          'a) Khái niệm và phân loại Oxide: Oxide là hợp chất của hai nguyên tố, trong đó có một nguyên tố là Oxygen. Gồm 4 nhóm chính: Oxide acid (CO₂ - Carbon dioxide, SO₂ - Sulfur dioxide, SO₃ - Sulfur trioxide, P₂O₅ - Diphosphorus pentoxide); Oxide base (CaO - Calcium oxide, CuO - Copper(II) oxide, Fe₂O₃ - Iron(III) oxide, Na₂O - Sodium oxide); Oxide lưỡng tính (Al₂O₃ - Aluminium oxide, ZnO - Zinc oxide); và Oxide trung tính (CO - Carbon monoxide, NO - Nitrogen monoxide).',
+          'b) Khái niệm và tính chất của Muối: Muối là hợp chất được hình thành khi thay thế ion H⁺ của Acid bằng ion kim loại hoặc ion Ammonium (NH₄⁺). Tên muối theo chuẩn IUPAC = Tên kim loại (kèm hóa trị La Mã nếu kim loại đa hóa trị) + Tên gốc acid: Sodium chloride (NaCl), Calcium carbonate (CaCO₃), Copper(II) sulfate (CuSO₄), Iron(III) chloride (FeCl₃), Silver nitrate (AgNO₃), Barium sulfate (BaSO₄ - kết tủa trắng).',
+          'c) Điều kiện phản ứng trao đổi trong dung dịch: Phản ứng trao đổi giữa các dung dịch muối, acid, base chỉ xảy ra khi sản phẩm tạo thành có ít nhất một chất kết tủa (↓), chất khí bay hơi (↑) hoặc chất điện li yếu như nước (H₂O).',
         ],
+        formula: 'CuO + 2HCl → (t°) CuCl₂ + H₂O   |   CO₂ + Ca(OH)₂ → CaCO₃ ↓ + H₂O   |   BaCl₂ + H₂SO₄ → BaSO₄ ↓ + 2HCl',
+        formulaMeaning: 'Phương trình hóa học đặc trưng của Oxide base tác dụng với Acid, Oxide acid tác dụng với dung dịch kiềm và phản ứng nhận biết gốc Sulfate (=SO₄).',
+        highlightBox: {
+          title: 'Công thức chuẩn thể tích mol chất khí ở điều kiện chuẩn (25°C, 1 bar)',
+          text: 'Trong chương trình GDPT 2018 (Kết nối tri thức với cuộc sống), ở điều kiện chuẩn (25°C và 1 bar), 1 mol của bất kì chất khí nào cũng chiếm thể tích V = 24,79 lít ⇒ Công thức tính: V = 24,79 × n (lít).',
+        },
       },
     ],
     keyTakeaways: [
-      'Acid phân li ra ion H⁺ (pH < 7, quỳ tím hóa đỏ): Hydrochloric acid (HCl), Sulfuric acid (H₂SO₄).',
+      'Acid phân li ra ion H⁺ (pH < 7, quỳ tím hóa đỏ): Hydrochloric acid (HCl), Sulfuric acid (H₂SO₄), Nitric acid (HNO₃).',
       'Base kiềm phân li ra ion OH⁻ (pH > 7, quỳ tím hóa xanh, Phenolphthalein hóa hồng): Sodium hydroxide (NaOH), Calcium hydroxide (Ca(OH)₂).',
-      'Oxide và Muối được gọi tên thống nhất theo danh pháp quốc tế IUPAC.',
+      'Công thức tính toán hóa học chuẩn: n = \\frac{m}{M}; V_khí (đkc) = 24,79 × n; C_M = \\frac{n}{V}.',
+    ],
+    miniQuiz: [
+      {
+        id: 'mq-khtn8-b5-1',
+        questionType: 'single_choice',
+        question:
+          'Cho các dung dịch sau: Hydrochloric acid (HCl), Sulfuric acid (H₂SO₄), Sodium hydroxide (NaOH), Calcium hydroxide (Ca(OH)₂). Nhóm các dung dịch có pH > 7 và làm dung dịch Phenolphthalein không màu chuyển sang màu hồng là:',
+        options: [
+          'Sodium hydroxide (NaOH) và Calcium hydroxide (Ca(OH)₂)',
+          'Hydrochloric acid (HCl) và Sulfuric acid (H₂SO₄)',
+          'Hydrochloric acid (HCl) và Sodium hydroxide (NaOH)',
+          'Sulfuric acid (H₂SO₄) và Calcium hydroxide (Ca(OH)₂)',
+        ],
+        correctIndex: 0,
+        explanation:
+          'NaOH và Ca(OH)₂ là hai Base tan (kiềm), phân li ra ion OH⁻ nên có pH > 7 và làm Phenolphthalein hóa hồng.',
+      },
+      {
+        id: 'mq-khtn8-b5-2',
+        questionType: 'single_choice',
+        question:
+          'Cho 5,6 gam Iron (Fe = 56) phản ứng hoàn toàn với dung dịch Hydrochloric acid (HCl) dư tạo thành muối Iron(II) chloride (FeCl₂) và khí Hydrogen (H₂). Thể tích khí Hydrogen thu được ở điều kiện chuẩn (25°C, 1 bar; 1 mol khí chiếm 24,79 L) là:',
+        options: ['2,479 lít', '2,240 lít', '4,958 lít', '1,2395 lít'],
+        correctIndex: 0,
+        explanation:
+          'n_Fe = 5,6 / 56 = 0,1 mol. PTHH: Fe + 2HCl → FeCl₂ + H₂↑ ⇒ n_H₂ = 0,1 mol ⇒ V_H₂ (đkc) = 0,1 × 24,79 = 2,479 lít.',
+      },
+      {
+        id: 'mq-khtn8-b5-3',
+        questionType: 'true_false',
+        question:
+          'Tiến hành thí nghiệm khảo sát tính chất của dung dịch Hydrochloric acid (HCl) và dung dịch Sodium hydroxide (NaOH). Xét tính Đúng/Sai của các phát biểu sau:',
+        options: [
+          'Dung dịch HCl có giá trị pH < 7 và làm giấy quỳ tím chuyển sang màu đỏ.',
+          'Dung dịch NaOH làm dung dịch Phenolphthalein từ không màu chuyển sang màu hồng cánh sen.',
+          'Kim loại Copper (Cu) tan mạnh trong dung dịch HCl loãng giải phóng khí Hydrogen (H₂).',
+          'Phản ứng trung hòa giữa HCl và NaOH tạo thành muối Sodium chloride (NaCl) và nước: HCl + NaOH → NaCl + H₂O.',
+        ],
+        correctIndex: 0,
+        trueFalseStatements: [
+          {
+            id: 'a',
+            label: 'a',
+            text: 'Dung dịch HCl có giá trị pH < 7 và làm giấy quỳ tím chuyển sang màu đỏ.',
+            isTrue: true,
+            explanation: 'Đúng, HCl phân li ra ion H⁺ làm quỳ tím hóa đỏ và pH < 7.',
+          },
+          {
+            id: 'b',
+            label: 'b',
+            text: 'Dung dịch NaOH làm dung dịch Phenolphthalein từ không màu chuyển sang màu hồng cánh sen.',
+            isTrue: true,
+            explanation: 'Đúng, NaOH là base kiềm (pH > 7) làm Phenolphthalein hóa hồng.',
+          },
+          {
+            id: 'c',
+            label: 'c',
+            text: 'Kim loại Copper (Cu) tan mạnh trong dung dịch HCl loãng giải phóng khí Hydrogen (H₂).',
+            isTrue: false,
+            explanation: 'Sai vì Copper (Cu) đứng sau Hydrogen trong dãy hoạt động hóa học nên không tác dụng với dung dịch HCl.',
+          },
+          {
+            id: 'd',
+            label: 'd',
+            text: 'Phản ứng trung hòa giữa HCl và NaOH tạo thành muối Sodium chloride (NaCl) và nước: HCl + NaOH → NaCl + H₂O.',
+            isTrue: true,
+            explanation: 'Đúng theo phương trình phản ứng trung hòa Acid - Base.',
+          },
+        ],
+        explanation: 'Đáp án Đúng/Sai: a) Đúng | b) Đúng | c) Sai (Cu không phản ứng với HCl) | d) Đúng.',
+      },
+      {
+        id: 'mq-khtn8-b5-4',
+        questionType: 'essay',
+        question:
+          'Cho 6,5 gam kim loại Zinc (Kẽm - Zn = 65) tác dụng vừa đủ với 200 mL dung dịch Hydrochloric acid (HCl), thu được muối Zinc chloride (ZnCl₂) và khí Hydrogen (H₂) ở điều kiện chuẩn (25°C, 1 bar). a) Viết phương trình hóa học; b) Tính thể tích khí Hydrogen thu được ở đkc; c) Tính nồng độ mol (CM) của dung dịch HCl đã dùng.',
+        options: [],
+        correctIndex: 0,
+        sampleAnswer:
+          'a) Phương trình hóa học: Zn + 2HCl → ZnCl₂ + H₂ ↑\n- Số mol Zinc phản ứng: n(Zn) = 6,5 / 65 = 0,1 (mol).\nb) Theo PTHH: n(H₂) = n(Zn) = 0,1 mol ⇒ Thể tích khí H₂ ở đkc: V(H₂) = 0,1 × 24,79 = 2,479 (L).\nc) Theo PTHH: n(HCl) = 2 × n(Zn) = 0,2 mol; Đổi 200 mL = 0,2 L ⇒ CM(HCl) = 0,2 / 0,2 = 1 (M).',
+        rubric:
+          'Viết đúng PTHH và tính n(Zn) = 0,1 mol (0,5đ); Tính đúng V(H₂) = 2,479 L và CM(HCl) = 1 M (0,5đ).',
+        explanation:
+          'a) Zn + 2HCl → ZnCl₂ + H₂ ↑. b) n(Zn) = 0,1 mol ⇒ V(H₂) = 0,1 × 24,79 = 2,479 L. c) n(HCl) = 0,2 mol ⇒ CM(HCl) = 0,2 / 0,200 = 1 M.',
+      },
     ],
     thumbnailUrl: grade8Img,
     simulationId: 'sim-acid-base-ph',
     videoUrl: 'https://www.youtube.com/embed/ANi709MYnWg',
     documentId: 'doc-khtn-8-1',
-    quizCount: 5,
+    quizCount: 4,
     viewCount: 5640,
     author: 'KHOA HỌC SỐ KHTN',
   },
@@ -511,20 +1007,119 @@ export const LESSONS: Lesson[] = [
     durationMinutes: 45,
     sections: [
       {
-        title: '1. Áp suất và Lực đẩy Archimedes',
+        title: '1. Khối lượng riêng, Áp suất trên một bề mặt & Áp suất chất lỏng',
         content: [
-          'Áp suất là độ lớn của áp lực (F) trên một đơn vị diện tích bị ép (S): p = F / S (1 Pa = 1 N/m²).',
-          'Một vật nhúng vào chất lỏng bị chất lỏng đẩy thẳng đứng từ dưới lên với lực đẩy Archimedes có độ lớn bằng trọng lượng phần chất lỏng mà vật chiếm chỗ: F_A = d × V.',
+          'a) Khối lượng riêng và Trọng lượng riêng: Khối lượng riêng (D) của một chất được xác định bằng khối lượng (m) của một đơn vị thể tích (V) chất đó: D = \\frac{m}{V} (kg/m³ hoặc g/cm³). Trọng lượng riêng (d) là trọng lượng của một đơn vị thể tích: d = \\frac{P}{V} = 10 × D (N/m³).',
+          'b) Áp lực và Áp suất trên một bề mặt: Áp lực (F) là lực ép có phương vuông góc với mặt bị ép. Áp suất (p) được tính bằng độ lớn của áp lực trên một đơn vị diện tích bị ép (S). Đơn vị đo áp suất là Pascal (1 Pa = 1 N/m²).',
+          'c) Áp suất chất lỏng: Chất lỏng gây ra áp suất theo mọi phương lên đáy bình, thành bình và các vật ở trong lòng nó. Tại độ sâu h so với mặt thoáng chất lỏng có trọng lượng riêng d, áp suất chất lỏng là p = d × h.',
         ],
-        formula: 'p = F / S   |   F_A = d × V',
-        formulaMeaning: 'p: áp suất (Pa); F: áp lực (N); S: diện tích bị ép (m²); d: trọng lượng riêng của chất lỏng (N/m³); V: thể tích phần chất lỏng bị chiếm chỗ (m³).',
+        formula: 'D = \\frac{m}{V}   |   p = \\frac{F}{S}   |   p_lỏng = d × h',
+        formulaMeaning: 'D: khối lượng riêng (kg/m³); p: áp suất (Pa); F: áp lực vuông góc (N); S: diện tích mặt bị ép (m²); d: trọng lượng riêng chất lỏng (N/m³); h: độ sâu tính từ mặt thoáng (m).',
+        keyPoints: [
+          'Muốn tăng áp suất (mài sắc lưỡi dao, đầu đinh nhọn): tăng áp lực F hoặc giảm diện tích bị ép S.',
+          'Muốn giảm áp suất (bánh xích xe tăng, kê ván rộng dưới chân tủ): tăng diện tích mặt bị ép S.',
+        ],
         imageUrl: domainPhysImg,
         imageCaption: 'Mô phỏng khảo sát mạch điện và đo đại lượng vật lí trong KHOA HỌC SỐ KHTN.',
       },
+      {
+        title: '2. Lực đẩy Archimedes & Quy tắc đo dòng điện trong mạch',
+        content: [
+          'a) Định luật và Công thức lực đẩy Archimedes: Một vật nhúng vào chất lỏng bị chất lỏng đẩy thẳng đứng từ dưới lên với một lực (gọi là lực đẩy Archimedes, kí hiệu F_A) có độ lớn bằng trọng lượng của phần chất lỏng mà vật chiếm chỗ.',
+          'b) Điều kiện định tính vật nổi, vật lơ lửng, vật chìm: Khi thả một vật đặc vào trong chất lỏng: Vật chìm xuống khi P > F_A (tương đương d_vật > d_lỏng); Vật lơ lửng trong chất lỏng khi P = F_A (d_vật = d_lỏng); Vật nổi lên trên mặt thoáng khi P < F_A (d_vật < d_lỏng).',
+          'c) Đo cường độ dòng điện (I) và hiệu điện thế (U): Ampe kế dùng để đo cường độ dòng điện (đơn vị Ampere - A) và phải mắc nối tiếp với dụng cụ cần đo. Vôn kế dùng để đo hiệu điện thế (đơn vị Volt - V) và phải mắc song song với hai đầu dụng cụ cần đo.',
+        ],
+        formula: 'F_A = d_lỏng × V_chìm   |   Vật nổi khi: d_vật < d_lỏng (F_A > P)',
+        formulaMeaning: 'F_A: độ lớn lực đẩy Archimedes (N); d_lỏng: trọng lượng riêng của chất lỏng (N/m³); V_chìm: thể tích phần chất lỏng bị vật chiếm chỗ (m³); P: trọng lượng của vật (N).',
+        highlightBox: {
+          title: 'Quy đổi nhanh đơn vị thể tích khi tính lực đẩy Archimedes',
+          text: 'Trong công thức F_A = d × V, thể tích V bắt buộc phải đổi ra đơn vị chuẩn mét khối (m³): 1 dm³ = 1 lít = 10⁻³ m³ = 0,001 m³; 1 cm³ = 1 mL = 10⁻⁶ m³ (ví dụ: 500 cm³ = 0,0005 m³).',
+        },
+      },
     ],
     keyTakeaways: [
-      'Công thức áp suất: p = F / S (Pa).',
-      'Công thức lực đẩy Archimedes: F_A = d × V (N).',
+      'Công thức áp suất: p = \\frac{F}{S} (Pa); Khối lượng riêng: D = \\frac{m}{V} (kg/m³).',
+      'Công thức lực đẩy Archimedes: F_A = d_lỏng × V_chìm (N); vật nổi khi d_vật < d_lỏng.',
+    ],
+    miniQuiz: [
+      {
+        id: 'mq-khtn8-b8-1',
+        questionType: 'single_choice',
+        question:
+          'Tác dụng một áp lực F = 600 N vuông góc lên một mặt sàn có diện tích bị ép S = 0,03 m². Áp suất p gây ra trên mặt sàn là:',
+        options: ['20 000 Pa', '18 Pa', '2 000 Pa', '200 Pa'],
+        correctIndex: 0,
+        explanation:
+          'Áp suất p = F / S = 600 / 0,03 = 20 000 Pa (20 kPa).',
+      },
+      {
+        id: 'mq-khtn8-b8-2',
+        questionType: 'single_choice',
+        question:
+          'Nhúng chìm hoàn toàn một khối kim loại có thể tích V = 0,002 m³ vào trong nước có trọng lượng riêng d = 10 000 N/m³. Độ lớn lực đẩy Archimedes (F_A) tác dụng lên khối kim loại là:',
+        options: ['20 N', '200 N', '2 N', '5 000 N'],
+        correctIndex: 0,
+        explanation:
+          'Áp dụng công thức lực đẩy Archimedes: F_A = d × V = 10 000 × 0,002 = 20 N.',
+      },
+      {
+        id: 'mq-khtn8-b8-3',
+        questionType: 'true_false',
+        question:
+          'Xét các phát biểu sau về áp suất, lực đẩy Archimedes và cách mắc dụng cụ đo điện:',
+        options: [
+          'Muốn tăng áp suất (ví dụ mài sắc lưỡi dao), ta giữ nguyên áp lực F và giảm diện tích mặt bị ép S.',
+          'Lực đẩy Archimedes tác dụng lên vật nhúng trong chất lỏng có phương thẳng đứng, chiều từ trên xuống dưới.',
+          'Khi trọng lượng riêng của vật nhỏ hơn trọng lượng riêng của chất lỏng (d_vật < d_lỏng), vật sẽ nổi lên.',
+          'Trong mạch điện, Ampe kế được mắc nối tiếp còn Vôn kế được mắc song song với đoạn mạch cần đo.',
+        ],
+        correctIndex: 0,
+        trueFalseStatements: [
+          {
+            id: 'a',
+            label: 'a',
+            text: 'Muốn tăng áp suất (ví dụ mài sắc lưỡi dao), ta giữ nguyên áp lực F và giảm diện tích mặt bị ép S.',
+            isTrue: true,
+            explanation: 'Đúng vì p = F / S, khi S giảm thì p tăng.',
+          },
+          {
+            id: 'b',
+            label: 'b',
+            text: 'Lực đẩy Archimedes tác dụng lên vật nhúng trong chất lỏng có phương thẳng đứng, chiều từ trên xuống dưới.',
+            isTrue: false,
+            explanation: 'Sai vì lực đẩy Archimedes có phương thẳng đứng nhưng chiều hướng từ dưới lên trên.',
+          },
+          {
+            id: 'c',
+            label: 'c',
+            text: 'Khi trọng lượng riêng của vật nhỏ hơn trọng lượng riêng của chất lỏng (d_vật < d_lỏng), vật sẽ nổi lên.',
+            isTrue: true,
+            explanation: 'Đúng, khi d_vật < d_lỏng thì F_A > P nên vật nổi lên.',
+          },
+          {
+            id: 'd',
+            label: 'd',
+            text: 'Trong mạch điện, Ampe kế được mắc nối tiếp còn Vôn kế được mắc song song với đoạn mạch cần đo.',
+            isTrue: true,
+            explanation: 'Đúng theo quy tắc mắc dụng cụ đo điện.',
+          },
+        ],
+        explanation: 'Đáp án Đúng/Sai: a) Đúng | b) Sai (chiều từ dưới lên trên) | c) Đúng | d) Đúng.',
+      },
+      {
+        id: 'mq-khtn8-b8-4',
+        questionType: 'essay',
+        question:
+          'Một khối gỗ hình hộp chữ nhật có thể tích V = 500 cm³ được nhấn chìm hoàn toàn trong bể nước (trọng lượng riêng của nước là d = 10 000 N/m³). a) Đổi thể tích V ra đơn vị m³ và tính độ lớn lực đẩy Archimedes tác dụng lên khối gỗ; b) Biết khối gỗ có khối lượng m = 350 g, khi buông tay ra thì khối gỗ sẽ nổi lên hay chìm xuống? Giải thích.',
+        options: [],
+        correctIndex: 0,
+        sampleAnswer:
+          'a) Đổi V = 500 cm³ = 0,0005 m³.\n- Lực đẩy Archimedes khi khối gỗ chìm hoàn toàn: F_A = d × V = 10 000 × 0,0005 = 5 (N).\nb) Trọng lượng của khối gỗ: m = 350 g = 0,35 kg ⇒ P = 10 × m = 3,5 (N).\n- Vì F_A = 5 N > P = 3,5 N nên khi buông tay, khối gỗ sẽ nổi lên trên mặt nước.',
+        rubric:
+          'Đổi đúng V = 0,0005 m³ và tính F_A = 5 N (0,5đ); Tính đúng P = 3,5 N, so sánh F_A > P và kết luận vật nổi (0,5đ).',
+        explanation:
+          'F_A = 10 000 × 0,0005 = 5 N; P = 10 × 0,35 = 3,5 N. Do F_A > P nên khối gỗ nổi lên.',
+      },
     ],
     thumbnailUrl: domainPhysImg,
     simulationId: 'sim-electric-circuit',
@@ -553,26 +1148,130 @@ export const LESSONS: Lesson[] = [
     durationMinutes: 45,
     sections: [
       {
-        title: '1. Định luật Ohm và Công suất điện',
+        title: '1. Định luật Ohm, Đoạn mạch nối tiếp – song song & Công suất điện',
         content: [
-          'Cường độ dòng điện I chạy qua một dây dẫn tỉ lệ thuận với hiệu điện thế U đặt vào hai đầu dây và tỉ lệ nghịch với điện trở R của dây dẫn đó: I = U / R.',
-          'Đơn vị đo điện trở là Ohm (Ω). Công suất tiêu thụ điện năng của đoạn mạch là P = U × I = I² × R (đơn vị Watt - W).',
+          'a) Hệ thức Định luật Ohm: Cường độ dòng điện (I) chạy qua một dây dẫn tỉ lệ thuận với hiệu điện thế (U) đặt vào hai đầu dây dẫn và tỉ lệ nghịch với điện trở (R) của dây dẫn đó. Điện trở của dây dẫn phụ thuộc vào chiều dài l, tiết diện S và điện trở suất ρ của vật liệu: R = ρ × \\frac{l}{S} (đơn vị Ohm - Ω).',
+          'b) Đoạn mạch mắc nối tiếp và mắc song song: Với hai điện trở R₁, R₂ mắc nối tiếp: I = I₁ = I₂; U = U₁ + U₂ và điện trở tương đương R_tđ = R₁ + R₂. Với hai điện trở R₁, R₂ mắc song song: U = U₁ = U₂; I = I₁ + I₂ và R_tđ = \\frac{R₁ · R₂}{R₁ + R₂}.',
+          'c) Công suất điện và Nhiệt lượng Jun – Lenxơ: Công suất tiêu thụ điện năng của một đoạn mạch bằng tích của hiệu điện thế giữa hai đầu đoạn mạch và cường độ dòng điện chạy qua nó: P = U × I = I² × R = \\frac{U²}{R} (đơn vị Watt - W). Nhiệt lượng tỏa ra trên điện trở R trong thời gian t là Q = I² × R × t (đơn vị Joule - J).',
         ],
-        formula: 'I = U / R   |   P = U × I = I² × R   |   n₁ · sin(i) = n₂ · sin(r)',
-        formulaMeaning: 'I: cường độ dòng điện (A); U: hiệu điện thế (V); R: điện trở (Ω); P: công suất điện (W).',
+        formula: 'I = \\frac{U}{R}   |   R_nt = R₁ + R₂   |   R_ss = \\frac{R₁ · R₂}{R₁ + R₂}   |   P = U × I = I² × R',
+        formulaMeaning: 'I: cường độ dòng điện (A); U: hiệu điện thế (V); R: điện trở (Ω); R_nt, R_ss: điện trở tương đương mạch nối tiếp và song song (Ω); P: công suất điện (W).',
+        keyPoints: [
+          'Trong đoạn mạch nối tiếp, dòng điện có cùng cường độ ở mọi vị trí (I = I₁ = I₂).',
+          'Trong đoạn mạch song song, hiệu điện thế giữa hai đầu mỗi nhánh bằng nhau (U = U₁ = U₂) và điện trở tương đương luôn nhỏ hơn mỗi điện trở thành phần.',
+        ],
         imageUrl: domainPhysImg,
         imageCaption: 'Thực hành mạch điện Định luật Ohm và quang học khúc xạ ánh sáng 3D.',
       },
+      {
+        title: '2. Định luật khúc xạ ánh sáng Snell & Hiện tượng phản xạ toàn phần',
+        content: [
+          'a) Hiện tượng khúc xạ ánh sáng: Là hiện tượng tia sáng truyền từ môi trường trong suốt này sang môi trường trong suốt khác bị gãy khúc tại mặt phân cách giữa hai môi trường.',
+          'b) Định luật khúc xạ ánh sáng (Snell): Tia khúc xạ nằm trong mặt phẳng tới (tạo bởi tia tới và pháp tuyến) và ở phía bên kia pháp tuyến so với tia tới. Với hai môi trường trong suốt nhất định, tỉ số giữa sin góc tới (sin i) và sin góc khúc xạ (sin r) luôn không đổi.',
+          'c) Chiết suất và Phản xạ toàn phần: Khi tia sáng truyền từ không khí (n₁ ≈ 1) vào nước hoặc thủy tinh (n₂ > 1) thì góc khúc xạ nhỏ hơn góc tới (r < i). Ngược lại, khi truyền từ môi trường chiết quang hơn (n₁ > n₂) với góc tới lớn hơn hoặc bằng góc giới hạn (sin i_gh = \\frac{n₂}{n₁}) thì xảy ra phản xạ toàn phần.',
+        ],
+        formula: 'n₁ · sin(i) = n₂ · sin(r)   |   \\frac{sin(i)}{sin(r)} = \\frac{n₂}{n₁}   |   sin(i_gh) = \\frac{n₂}{n₁} (khi n₁ > n₂)',
+        formulaMeaning: 'n₁: chiết suất môi trường chứa tia tới; n₂: chiết suất môi trường chứa tia khúc xạ; i: góc tới; r: góc khúc xạ; i_gh: góc giới hạn phản xạ toàn phần.',
+        highlightBox: {
+          title: 'Ứng dụng thực tiễn của phản xạ toàn phần',
+          text: 'Hiện tượng phản xạ toàn phần là nguyên lí hoạt động cốt lõi của cáp quang truyền dữ liệu Internet tốc độ cao và ống nội soi y học.',
+        },
+      },
     ],
     keyTakeaways: [
-      'Định luật Ohm: I = U / R (I tính bằng Ampere, U tính bằng Volt, R tính bằng Ohm).',
-      'Định luật khúc xạ ánh sáng: n₁ · sin(i) = n₂ · sin(r).',
+      'Định luật Ohm: I = \\frac{U}{R}; Công suất điện: P = U × I = I² × R; Nhiệt lượng: Q = I² × R × t.',
+      'Định luật khúc xạ ánh sáng Snell: n₁ · sin(i) = n₂ · sin(r).',
+    ],
+    miniQuiz: [
+      {
+        id: 'mq-khtn9-b4-1',
+        questionType: 'single_choice',
+        question:
+          'Theo Định luật Ohm, khi đặt hiệu điện thế U = 12 V vào hai đầu đoạn mạch gồm hai điện trở R₁ = 8 Ω và R₂ = 16 Ω mắc nối tiếp thì cường độ dòng điện chạy trong mạch và công suất tiêu thụ của cả đoạn mạch lần lượt là:',
+        options: [
+          'I = 0,5 A và P = 6,0 W',
+          'I = 1,5 A và P = 18,0 W',
+          'I = 0,5 A và P = 12,0 W',
+          'I = 2,0 A và P = 24,0 W',
+        ],
+        correctIndex: 0,
+        explanation:
+          'R_tđ = R₁ + R₂ = 8 + 16 = 24 Ω; I = U / R_tđ = 12 / 24 = 0,5 A; P = U × I = 12 × 0,5 = 6,0 W.',
+      },
+      {
+        id: 'mq-khtn9-b4-2',
+        questionType: 'single_choice',
+        question:
+          'Chiếu một tia sáng từ không khí (chiết suất n₁ ≈ 1) vào mặt nước (chiết suất n₂ = 4/3) với góc tới i = 30°. Giá trị sin(r) của góc khúc xạ r là:',
+        options: ['sin(r) = 3/8 = 0,375', 'sin(r) = 2/3 ≈ 0,667', 'sin(r) = 1/2 = 0,500', 'sin(r) = 3/4 = 0,750'],
+        correctIndex: 0,
+        explanation:
+          'Theo định luật khúc xạ ánh sáng: n₁ · sin(i) = n₂ · sin(r) ⇒ 1 · sin(30°) = (4/3) · sin(r) ⇒ sin(r) = 0,5 / (4/3) = 3/8 = 0,375.',
+      },
+      {
+        id: 'mq-khtn9-b4-3',
+        questionType: 'true_false',
+        question:
+          'Cho đoạn mạch gồm hai điện trở R₁ = 6 Ω và R₂ = 12 Ω mắc song song vào hiệu điện thế U = 12 V. Xét tính Đúng/Sai của các phát biểu sau:',
+        options: [
+          'Điện trở tương đương của đoạn mạch song song là R_tđ = (R₁ · R₂) / (R₁ + R₂) = 4 Ω.',
+          'Hiệu điện thế giữa hai đầu mỗi điện trở bằng nhau và bằng U₁ = U₂ = 12 V.',
+          'Cường độ dòng điện chạy qua R₁ là I₁ = 1 A và qua R₂ là I₂ = 2 A.',
+          'Công suất điện tiêu thụ của toàn mạch là P = U · I = 12 × 3 = 36 W.',
+        ],
+        correctIndex: 0,
+        trueFalseStatements: [
+          {
+            id: 'a',
+            label: 'a',
+            text: 'Điện trở tương đương của đoạn mạch song song là R_tđ = (R₁ · R₂) / (R₁ + R₂) = 4 Ω.',
+            isTrue: true,
+            explanation: 'Đúng, R_tđ = (6 × 12) / (6 + 12) = 72 / 18 = 4 Ω.',
+          },
+          {
+            id: 'b',
+            label: 'b',
+            text: 'Hiệu điện thế giữa hai đầu mỗi điện trở bằng nhau và bằng U₁ = U₂ = 12 V.',
+            isTrue: true,
+            explanation: 'Đúng vì R₁ mắc song song với R₂.',
+          },
+          {
+            id: 'c',
+            label: 'c',
+            text: 'Cường độ dòng điện chạy qua R₁ là I₁ = 1 A và qua R₂ là I₂ = 2 A.',
+            isTrue: false,
+            explanation: 'Sai vì I₁ = U / R₁ = 12 / 6 = 2 A và I₂ = U / R₂ = 12 / 12 = 1 A.',
+          },
+          {
+            id: 'd',
+            label: 'd',
+            text: 'Công suất điện tiêu thụ của toàn mạch là P = U · I = 12 × 3 = 36 W.',
+            isTrue: true,
+            explanation: 'Đúng vì I = I₁ + I₂ = 2 + 1 = 3 A ⇒ P = 12 × 3 = 36 W.',
+          },
+        ],
+        explanation: 'Đáp án Đúng/Sai: a) Đúng | b) Đúng | c) Sai (I₁ = 2 A, I₂ = 1 A) | d) Đúng.',
+      },
+      {
+        id: 'mq-khtn9-b4-4',
+        questionType: 'essay',
+        question:
+          'Cho đoạn mạch gồm hai điện trở R₁ = 6 Ω và R₂ = 12 Ω mắc song song với nhau vào nguồn điện một chiều có hiệu điện thế không đổi U = 12 V. a) Tính điện trở tương đương R_tđ của đoạn mạch; b) Tính cường độ dòng điện qua mỗi điện trở (I₁, I₂) và cường độ dòng điện mạch chính (I); c) Tính nhiệt lượng Q tỏa ra trên cả đoạn mạch trong thời gian 5 phút.',
+        options: [],
+        correctIndex: 0,
+        sampleAnswer:
+          'a) Điện trở tương đương: R_tđ = (R₁ × R₂) / (R₁ + R₂) = (6 × 12) / (6 + 12) = 4 (Ω).\nb) Cường độ dòng điện: I₁ = U / R₁ = 12 / 6 = 2 (A); I₂ = U / R₂ = 12 / 12 = 1 (A) ⇒ I = I₁ + I₂ = 3 (A).\nc) Đổi t = 5 phút = 300 s ⇒ Nhiệt lượng tỏa ra: Q = U × I × t = 12 × 3 × 300 = 10 800 (J) = 10,8 (kJ).',
+        rubric:
+          'Tính đúng R_tđ = 4 Ω (0,25đ); Tính đúng I₁ = 2 A, I₂ = 1 A, I = 3 A (0,5đ); Tính đúng Q = 10 800 J (0,25đ).',
+        explanation:
+          'a) R(tđ) = 4 Ω. b) I₁ = 2 A; I₂ = 1 A; I = 3 A. c) Q = U · I · t = 12 × 3 × 300 = 10 800 J.',
+      },
     ],
     thumbnailUrl: domainPhysImg,
-    simulationId: 'sim-electric-circuit',
+    simulationId: 'sim-khuc-xa-anh-sang-3d',
     videoUrl: 'https://www.youtube.com/embed/HsLLq6Rm5tU',
     documentId: 'doc-khtn-9-1',
-    quizCount: 5,
+    quizCount: 4,
     viewCount: 5190,
     author: 'KHOA HỌC SỐ KHTN',
   },
@@ -593,39 +1292,428 @@ export const LESSONS: Lesson[] = [
     durationMinutes: 45,
     sections: [
       {
-        title: '1. Cấu trúc không gian phân tử DNA và Phiên mã RNA',
+        title: '1. Cấu trúc không gian xoắn kép phân tử DNA & Phiên mã RNA',
         content: [
-          'Phân tử DNA (Deoxyribonucleic acid) gồm 2 mạch polynucleotide xoắn song song quanh một trục, cấu tạo từ 4 loại đơn phân Nucleotide: Adenine (A), Thymine (T), Guanine (G) và Cytosine (C).',
-          'Theo nguyên tắc bổ sung: Adenine (A) liên kết với Thymine (T) bằng 2 liên kết Hydrogen; Guanine (G) liên kết với Cytosine (C) bằng 3 liên kết Hydrogen. Phân tử RNA (Ribonucleic acid) có cấu trúc 1 mạch đơn gồm 4 loại đơn phân A, U (Uracil), G, C.',
+          'a) Cấu tạo hóa học và cấu trúc xoắn kép của DNA: Phân tử DNA (Deoxyribonucleic acid) gồm 2 mạch polynucleotide xoắn song song ngược chiều quanh một trục tưởng tượng (mỗi chu kì xoắn dài 34 Å gồm 10 cặp nucleotide, chiều dài mỗi cặp nucleotide là 3,4 Å). Đơn phân của DNA gồm 4 loại Nucleotide: Adenine (A), Thymine (T), Guanine (G) và Cytosine (C).',
+          'b) Nguyên tắc bổ sung (Watson – Crick): Giữa hai mạch đơn của phân tử DNA, các Nucleotide liên kết với nhau thành từng cặp theo nguyên tắc bổ sung: Adenine (A) luôn liên kết với Thymine (T) bằng 2 liên kết Hydrogen; Guanine (G) luôn liên kết với Cytosine (C) bằng 3 liên kết Hydrogen. Do đó trong phân tử DNA mạch kép luôn có: A = T và G = C.',
+          'c) Cấu trúc phân tử RNA và Cơ chế phiên mã: Phân tử RNA (Ribonucleic acid) có cấu trúc 1 mạch polynucleotide được tổng hợp từ mạch khuôn của gen (DNA) thông qua quá trình phiên mã, cấu tạo từ 4 loại đơn phân: Adenine (A), Uracil (U), Guanine (G) và Cytosine (C).',
         ],
-        formula: 'N = 2A + 2G   |   L = (N / 2) × 3,4 Å   |   H = 2A + 3G',
-        formulaMeaning: 'N: tổng số Nucleotide; L: chiều dài phân tử DNA (Å); H: tổng số liên kết Hydrogen.',
+        formula: 'N = 2A + 2G   |   L = \\frac{N}{2} × 3,4 (Å)   |   H = 2A + 3G   |   %A + %G = 50%',
+        formulaMeaning: 'N: tổng số Nucleotide của gen; L: chiều dài đoạn phân tử DNA (1 Å = 10⁻⁴ μm = 10⁻¹ nm); H: tổng số liên kết Hydrogen giữa hai mạch DNA.',
+        keyPoints: [
+          'Hệ quả nguyên tắc bổ sung trong DNA mạch kép: A = T, G = C ⇒ A + G = T + C = \\frac{N}{2} (50% tổng số Nucleotide).',
+          'Trong quá trình phiên mã tổng hợp RNA: A_mạch gốc liên kết với U_RNA; T_mạch gốc liên kết với A_RNA; G ↔ C.',
+        ],
         imageUrl: grade9Img,
         imageCaption: 'Mô hình 3D chuỗi xoắn kép phân tử DNA và các cặp base bổ sung A-T, G-C.',
       },
       {
-        title: '2. Các hợp chất hữu cơ trọng tâm Lớp 9 (IUPAC)',
+        title: '2. Các hợp chất hữu cơ trọng tâm Lớp 9 theo danh pháp IUPAC',
         content: [
-          'Hydrocarbon: Methane (CH₄) tham gia phản ứng thế với Chlorine (Cl₂); Ethylene (CH₂=CH₂) có liên kết đôi C=C làm mất màu dung dịch Bromine (Br₂) và trùng hợp tạo Polyethylene (PE).',
-          'Dẫn xuất Hydrocarbon & Carbohydrate: Ethylic alcohol hay Ethanol (C₂H₅OH) tác dụng với Sodium (Na); Acetic acid (CH₃COOH) phản ứng với Ethylic alcohol tạo ester Ethyl acetate (CH₃COOC₂H₅); Glucose (C₆H₁₂O₆) tham gia phản ứng tráng bạc với dung dịch Silver nitrate (AgNO₃) trong Ammonia (NH₃).',
+          'a) Hydrocarbon (Alkane & Alkene): Methane (CH₄) chỉ chứa các liên kết đơn C–H bền vững, đặc trưng bởi phản ứng đốt cháy tỏa nhiệt và phản ứng thế với Chlorine (Cl₂) ngoài ánh sáng. Ethylene (CH₂=CH₂ hay C₂H₄) có 1 liên kết đôi C=C kém bền, đặc trưng bởi phản ứng cộng làm mất màu dung dịch nước Bromine (Br₂) và phản ứng trùng hợp tạo nhựa Polyethylene (PE).',
+          'b) Dẫn xuất Hydrocarbon (Ethylic alcohol & Acetic acid): Ethylic alcohol hay Ethanol (C₂H₅OH) tác dụng với kim loại mạnh như Sodium (Na) giải phóng khí H₂. Acetic acid (CH₃COOH) có đầy đủ tính chất của một acid yếu và tác dụng với Ethylic alcohol tạo ester Ethyl acetate (CH₃COOC₂H₅) có mùi thơm.',
+          'c) Hợp chất Carbohydrate (Glucose, Saccharose, Tinh bột, Cellulose): Glucose (C₆H₁₂O₆) có trong máu người (~0,1%) và quả nho chín, tham gia phản ứng tráng bạc với dung dịch AgNO₃ trong NH₃ đun nóng tạo kết tủa bạc (Ag) sáng bóng.',
         ],
+        formula: 'CH₂=CH₂ + Br₂ → CH₂Br–CH₂Br   |   CH₃COOH + C₂H₅OH ⇄ (H₂SO₄ đặc, t°) CH₃COOC₂H₅ + H₂O',
+        formulaMeaning: 'Phương trình phản ứng cộng Bromine nhận biết khí Ethylene và phản ứng ester hóa điều chế Ethyl acetate.',
+        highlightBox: {
+          title: 'Phân biệt nhanh các chất hữu cơ bằng thuốc thử hóa học',
+          text: 'Dùng giấy quỳ tím nhận biết Acetic acid (CH₃COOH hóa đỏ); dùng dung dịch nước Bromine (Br₂) nhận biết khí Ethylene (C₂H₄ làm mất màu nâu đỏ của dung dịch Br₂); dùng phản ứng tráng bạc (AgNO₃/NH₃, t°) nhận biết dung dịch Glucose (C₆H₁₂O₆).',
+        },
       },
     ],
     keyTakeaways: [
-      'Trong phân tử DNA: A = T, G = C; tổng số Nucleotide N = 2A + 2G; tổng liên kết Hydrogen H = 2A + 3G.',
-      'Danh pháp hữu cơ chuẩn IUPAC: Methane (CH₄), Ethylene (C₂H₄), Ethylic alcohol / Ethanol (C₂H₅OH), Acetic acid (CH₃COOH), Ethyl acetate (CH₃COOC₂H₅), Glucose (C₆H₁₂O₆), Saccharose (C₁₂H₂₂O₁₁), Starch (Tinh bột), Cellulose.',
+      'Trong phân tử DNA mạch kép: A = T, G = C; Tổng số Nucleotide N = 2A + 2G; Chiều dài L = \\frac{N}{2} × 3,4 Å; Tổng liên kết Hydrogen H = 2A + 3G.',
+      'Danh pháp hữu cơ chuẩn IUPAC: Methane (CH₄), Ethylene (C₂H₄), Ethylic alcohol / Ethanol (C₂H₅OH), Acetic acid (CH₃COOH), Ethyl acetate (CH₃COOC₂H₅), Glucose (C₆H₁₂O₆).',
+    ],
+    miniQuiz: [
+      {
+        id: 'mq-khtn9-b8-1',
+        questionType: 'single_choice',
+        question:
+          'Đun nóng hỗn hợp gồm Acetic acid (CH₃COOH) và Ethylic alcohol (C₂H₅OH) có mặt dung dịch Sulfuric acid (H₂SO₄) đặc làm xúc tác thì thu được chất hữu cơ có mùi thơm đặc trưng. Tên gọi chuẩn IUPAC và công thức của ester đó là:',
+        options: [
+          'Ethyl acetate (CH₃COOC₂H₅)',
+          'Sodium acetate (CH₃COONa)',
+          'Ethylene (CH₂=CH₂)',
+          'Methane (CH₄)',
+        ],
+        correctIndex: 0,
+        explanation:
+          'Phản ứng ester hóa: CH₃COOH + C₂H₅OH ⇄ CH₃COOC₂H₅ (Ethyl acetate) + H₂O (xúc tác H₂SO₄ đặc, t°).',
+      },
+      {
+        id: 'mq-khtn9-b8-2',
+        questionType: 'single_choice',
+        question:
+          'Một đoạn phân tử DNA (Deoxyribonucleic acid) ở sinh vật nhân thực có tổng số N = 3000 Nucleotide, trong đó số Nucleotide loại Adenine (A) = 600. Số Nucleotide loại Guanine (G) và tổng số liên kết Hydrogen (H) của đoạn DNA lần lượt là:',
+        options: [
+          'G = 900 Nucleotide và H = 3900 liên kết Hydrogen',
+          'G = 600 Nucleotide và H = 3000 liên kết Hydrogen',
+          'G = 900 Nucleotide và H = 3600 liên kết Hydrogen',
+          'G = 1200 Nucleotide và H = 4200 liên kết Hydrogen',
+        ],
+        correctIndex: 0,
+        explanation:
+          'Từ 2A + 2G = 3000 ⇒ G = (3000 - 2×600)/2 = 900. Liên kết Hydrogen: H = 2A + 3G = 2×600 + 3×900 = 3900.',
+      },
+      {
+        id: 'mq-khtn9-b8-3',
+        questionType: 'true_false',
+        question:
+          'Xét tính Đúng/Sai của các phát biểu sau về cấu trúc phân tử DNA và tính chất các hợp chất hữu cơ:',
+        options: [
+          'Trong phân tử DNA mạch kép, Adenine (A) luôn liên kết bổ sung với Thymine (T) bằng 2 liên kết Hydrogen, còn Guanine (G) liên kết với Cytosine (C) bằng 3 liên kết Hydrogen.',
+          'Khí Ethylene (CH₂=CH₂) có liên kết đôi C=C nên làm mất màu dung dịch nước Bromine (Br₂).',
+          'Phân tử RNA có cấu trúc xoắn kép gồm 2 mạch đơn phân A, T, G, C giống hệt phân tử DNA.',
+          'Dung dịch Glucose (C₆H₁₂O₆) tham gia phản ứng tráng bạc với dung dịch AgNO₃/NH₃ đun nóng tạo lớp bạc (Ag) sáng bóng.',
+        ],
+        correctIndex: 0,
+        trueFalseStatements: [
+          {
+            id: 'a',
+            label: 'a',
+            text: 'Trong phân tử DNA mạch kép, Adenine (A) luôn liên kết bổ sung với Thymine (T) bằng 2 liên kết Hydrogen, còn Guanine (G) liên kết với Cytosine (C) bằng 3 liên kết Hydrogen.',
+            isTrue: true,
+            explanation: 'Đúng theo nguyên tắc bổ sung của Watson - Crick.',
+          },
+          {
+            id: 'b',
+            label: 'b',
+            text: 'Khí Ethylene (CH₂=CH₂) có liên kết đôi C=C nên làm mất màu dung dịch nước Bromine (Br₂).',
+            isTrue: true,
+            explanation: 'Đúng theo phản ứng cộng: CH₂=CH₂ + Br₂ → CH₂Br-CH₂Br.',
+          },
+          {
+            id: 'c',
+            label: 'c',
+            text: 'Phân tử RNA có cấu trúc xoắn kép gồm 2 mạch đơn phân A, T, G, C giống hệt phân tử DNA.',
+            isTrue: false,
+            explanation: 'Sai vì RNA có cấu trúc 1 mạch đơn và gồm 4 loại đơn phân A, U (Uracil), G, C.',
+          },
+          {
+            id: 'd',
+            label: 'd',
+            text: 'Dung dịch Glucose (C₆H₁₂O₆) tham gia phản ứng tráng bạc với dung dịch AgNO₃/NH₃ đun nóng tạo lớp bạc (Ag) sáng bóng.',
+            isTrue: true,
+            explanation: 'Đúng, đây là phản ứng đặc trưng nhận biết Glucose.',
+          },
+        ],
+        explanation: 'Đáp án Đúng/Sai: a) Đúng | b) Đúng | c) Sai (RNA là mạch đơn gồm A, U, G, C) | d) Đúng.',
+      },
+      {
+        id: 'mq-khtn9-b8-4',
+        questionType: 'essay',
+        question:
+          'Một gen (đoạn phân tử DNA xoắn kép) có chiều dài L = 4080 Å và có số Nucleotide loại Adenine chiếm 20% tổng số Nucleotide của gen. a) Tính tổng số Nucleotide (N) của gen; b) Tính số lượng từng loại Nucleotide (A, T, G, C) và tổng số liên kết Hydrogen (H) của gen.',
+        options: [],
+        correctIndex: 0,
+        sampleAnswer:
+          'a) Tổng số Nucleotide của gen: N = (2 × L) / 3,4 = (2 × 4080) / 3,4 = 2400 (Nucleotide).\nb) Theo đề bài: A = T = 20% × N = 0,2 × 2400 = 480 (Nucleotide).\n- Ta có G = C = (N / 2) - A = 1200 - 480 = 720 (Nucleotide).\n- Tổng số liên kết Hydrogen: H = 2A + 3G = 2 × 480 + 3 × 720 = 960 + 2160 = 3120 (liên kết).',
+        rubric:
+          'Tính đúng N = 2400 Nucleotide (0,5đ); Tính đúng A = T = 480, G = C = 720 và H = 3120 liên kết (0,5đ).',
+        explanation:
+          'N = (2 × 4080)/3,4 = 2400; A = T = 480; G = C = 720; H = 2A + 3G = 3120 liên kết.',
+      },
     ],
     thumbnailUrl: grade9Img,
     simulationId: 'sim-dna-double-helix',
     videoUrl: 'https://www.youtube.com/embed/8kK2zwjRV0M',
     documentId: 'doc-khtn-9-1',
-    quizCount: 5,
+    quizCount: 4,
     viewCount: 4980,
+    author: 'KHOA HỌC SỐ KHTN',
+  },
+  {
+    id: 'khtn-9-bai-24',
+    topicId: 't9-2',
+    grade: 9,
+    domain: 'hoa-hoc',
+    code: 'KHTN9-B24',
+    title: 'Bài 24: Khai thác nhiên liệu hóa thạch – Dầu mỏ & Khí thiên nhiên',
+    summary:
+      'Khám phá cấu tạo địa chất mỏ dầu với 3 lớp chất lưu (Lớp khí mỏ dầu CH₄, Lớp dầu mỏ chứa Hydrocarbon nhẹ và nặng, Lớp nước đáy mỏ), phương pháp khoan khai thác và chế biến dầu mỏ.',
+    objectives: [
+      'Mô tả được cấu tạo 3 lớp chất lưu trong mỏ dầu tự nhiên (Khí mỏ dầu, Dầu thô, Nước đáy mỏ).',
+      'Giải thích được nguyên lí dùng áp suất khí và bơm nước vào giếng phụ để đẩy dầu mỏ lên mặt đất.',
+      'Trình bày được thành phần hóa học chính của khí thiên nhiên, khí mỏ dầu (Methane CH₄) và các phân đoạn chưng cất dầu mỏ.',
+    ],
+    durationMinutes: 45,
+    sections: [
+      {
+        title: '1. Cấu tạo địa chất mỏ dầu và sự phân tầng 3 lớp chất lưu',
+        content: [
+          'a) Cấu trúc bẫy địa chất mỏ dầu: Mỏ dầu tự nhiên nằm sâu trong lòng đất dưới lớp đá chắn không thấm (ngăn không cho dầu và khí thoát lên trên). Bên trong vỉa đá chứa xốp, các chất lưu tự động phân tầng theo thứ tự khối lượng riêng tăng dần từ trên xuống dưới.',
+          'b) Ba lớp chất lưu từ trên xuống dưới: Lớp khí mỏ dầu (Khí đồng hành) nằm ở vòm trên cùng do nhẹ nhất, chứa khoảng 75% khí Methane (CH₄) cùng Ethane (C₂H₆), Propane (C₃H₈), Butane (C₄H₁₀); Lớp dầu mỏ (Dầu thô) nằm ở giữa, là hỗn hợp phức tạp của hàng trăm Hydrocarbon nhẹ và nặng (C₈H₁₈, C₆H₁₂, C₆H₆, C₁₀H₈); Lớp nước vỉa (Nước mặn chứa các ion Na⁺, Cl⁻) nằm ở dưới đáy mỏ do có khối lượng riêng lớn nhất.',
+          'c) Quy trình khoan khai thác dầu mỏ: Khi khoan giếng trúng lớp dầu lỏng, giai đoạn đầu dầu tự phun lên nhờ áp suất vỉa cao. Khi áp suất giảm, người ta bơm nước hoặc khí xuống các giếng phụ để đẩy dầu thô dâng lên qua giếng khai thác chính.',
+        ],
+        keyPoints: [
+          'Thứ tự phân tầng theo chiều tăng khối lượng riêng: Lớp khí mỏ dầu (trên cùng) → Lớp dầu mỏ (ở giữa) → Lớp nước mặn đáy mỏ (dưới cùng).',
+          'Thành phần chính của khí thiên nhiên (~95%) và khí mỏ dầu (~75%) đều là khí Methane (CH₄).',
+        ],
+        formula: 'CH₄ + 2O₂ → (t°) CO₂ + 2H₂O   |   n_khí = \\frac{V}{24,79} (mol, đkc)',
+        formulaMeaning: 'Phương trình phản ứng đốt cháy hoàn toàn khí Methane tỏa nhiều nhiệt và công thức tính số mol chất khí ở điều kiện chuẩn (25°C, 1 bar).',
+        imageUrl: domainChemImg,
+        imageCaption: 'Mô phỏng 3D mỏ dầu và chuyển động phân tử trong các lớp chất lưu.',
+      },
+      {
+        title: '2. Chế biến dầu mỏ (Chưng cất phân đoạn & Cracking) và An toàn năng lượng',
+        content: [
+          'a) Chưng cất phân đoạn dầu mỏ: Dầu thô sau khi khai thác được xử lí loại bỏ nước, muối rồi đưa vào tháp chưng cất phân đoạn ở áp suất thường để tách thành các phân đoạn theo nhiệt độ sôi từ thấp đến cao: Khí đốt hóa lỏng (LPG), Xăng (nhiên liệu động cơ), Dầu hỏa, Dầu diesel, Dầu nhờn bôi trơn và cặn Nhựa đường.',
+          'b) Phản ứng Cracking và Reforming: Cracking là quá trình bẻ gãy các phân tử Hydrocarbon mạch dài (như dầu nặng, dầu mazut) dưới tác dụng của nhiệt độ và xúc tác để tạo thành xăng và các Hydrocarbon mạch ngắn có giá trị kinh tế cao (như Ethylene C₂H₄, Propylene C₃H₆ làm nguyên liệu sản xuất nhựa polymer).',
+        ],
+        highlightBox: {
+          title: 'Xử lí sự cố tràn dầu trên biển dựa vào tính chất vật lí',
+          text: 'Vì dầu mỏ không tan trong nước và nhẹ hơn nước (D_dầu ≈ 0,8 – 0,9 g/cm³ < D_nước = 1,0 g/cm³) nên khi tràn ra biển, dầu nổi thành váng trên mặt nước. Do đó người ta dùng phao quây cô lập vết dầu loang rồi dùng bơm hút hoặc vật liệu hấp phụ thu gom dầu.',
+        },
+      },
+    ],
+    keyTakeaways: [
+      'Mỏ dầu gồm 3 lớp chất lưu phân tầng theo khối lượng riêng: Khí mỏ dầu (trên cùng, ~75% CH₄) – Dầu thô (ở giữa) – Nước mặn (dưới đáy).',
+      'Chưng cất phân đoạn dầu mỏ thu được khí đốt LPG, xăng, dầu hỏa, dầu diesel, dầu nhờn và nhựa đường; phản ứng cháy: CH₄ + 2O₂ → (t°) CO₂ + 2H₂O.',
+    ],
+    miniQuiz: [
+      {
+        id: 'mq-khtn9-b24-1',
+        questionType: 'single_choice',
+        question:
+          'Trong cấu tạo địa chất của một mỏ dầu tự nhiên, thứ tự sắp xếp 3 lớp chất lưu từ trên xuống dưới theo chiều tăng dần khối lượng riêng là:',
+        options: [
+          'Lớp khí mỏ dầu (trên cùng) → Lớp dầu mỏ (ở giữa) → Lớp nước đáy mỏ (dưới cùng)',
+          'Lớp nước đáy mỏ (trên cùng) → Lớp dầu mỏ (ở giữa) → Lớp khí mỏ dầu (dưới cùng)',
+          'Lớp dầu mỏ (trên cùng) → Lớp khí mỏ dầu (ở giữa) → Lớp nước đáy mỏ (dưới cùng)',
+          'Ba lớp hòa tan đồng nhất vào nhau không phân tách',
+        ],
+        correctIndex: 0,
+        explanation:
+          'Do khí nhẹ nhất nên tích tụ ở phần vòm trên cùng (lớp khí mỏ dầu); dầu mỏ nhẹ hơn nước nhưng nặng hơn khí nên nằm ở lớp giữa; nước mặn nặng nhất nằm ở lớp đáy mỏ.',
+      },
+      {
+        id: 'mq-khtn9-b24-2',
+        questionType: 'single_choice',
+        question:
+          'Thành phần hydrocarbon chiếm tỉ lệ thể tích lớn nhất trong khí thiên nhiên (khoảng 95%) và khí mỏ dầu (khoảng 75%) là:',
+        options: [
+          'Methane (CH₄)',
+          'Ethylene (C₂H₄)',
+          'Carbon dioxide (CO₂)',
+          'Acetylene (C₂H₂)',
+        ],
+        correctIndex: 0,
+        explanation:
+          'Methane (CH₄) là thành phần chính của cả khí thiên nhiên (~95%) và khí mỏ dầu (~75%).',
+      },
+      {
+        id: 'mq-khtn9-b24-3',
+        questionType: 'true_false',
+        question:
+          'Quan sát mô phỏng 3D mỏ dầu và các lớp chất lưu, xét tính Đúng/Sai của các nhận định sau:',
+        options: [
+          'Dầu mỏ là một hỗn hợp tự nhiên phức tạp gồm nhiều loại Hydrocarbon khác nhau, không tan trong nước và nhẹ hơn nước.',
+          'Hàm lượng khí Methane (CH₄) trong khí mỏ dầu cao hơn hàm lượng Methane trong khí thiên nhiên.',
+          'Khi áp suất trong mỏ dầu giảm xuống, người ta bơm nước hoặc khí xuống giếng phụ để đẩy dầu thô dâng lên giếng khai thác.',
+          'Chưng cất phân đoạn dầu mỏ ở áp suất thường thu được khí đốt hóa lỏng, xăng, dầu hỏa, dầu diesel và nhựa đường.',
+        ],
+        correctIndex: 0,
+        trueFalseStatements: [
+          {
+            id: 'a',
+            label: 'a',
+            text: 'Dầu mỏ là một hỗn hợp tự nhiên phức tạp gồm nhiều loại Hydrocarbon khác nhau, không tan trong nước và nhẹ hơn nước.',
+            isTrue: true,
+            explanation: 'Đúng theo tính chất vật lí và thành phần của dầu mỏ.',
+          },
+          {
+            id: 'b',
+            label: 'b',
+            text: 'Hàm lượng khí Methane (CH₄) trong khí mỏ dầu cao hơn hàm lượng Methane trong khí thiên nhiên.',
+            isTrue: false,
+            explanation: 'Sai vì trong khí thiên nhiên CH₄ chiếm ~95%, còn trong khí mỏ dầu CH₄ chiếm khoảng 75%.',
+          },
+          {
+            id: 'c',
+            label: 'c',
+            text: 'Khi áp suất trong mỏ dầu giảm xuống, người ta bơm nước hoặc khí xuống giếng phụ để đẩy dầu thô dâng lên giếng khai thác.',
+            isTrue: true,
+            explanation: 'Đúng theo quy trình kỹ thuật khai thác dầu mỏ thứ cấp.',
+          },
+          {
+            id: 'd',
+            label: 'd',
+            text: 'Chưng cất phân đoạn dầu mỏ ở áp suất thường thu được khí đốt hóa lỏng, xăng, dầu hỏa, dầu diesel và nhựa đường.',
+            isTrue: true,
+            explanation: 'Đúng, dựa vào nhiệt độ sôi khác nhau của các phân đoạn Hydrocarbon.',
+          },
+        ],
+        explanation: 'Đáp án Đúng/Sai: a) Đúng | b) Sai (Khí thiên nhiên ~95% CH₄ > Khí mỏ dầu ~75% CH₄) | c) Đúng | d) Đúng.',
+      },
+      {
+        id: 'mq-khtn9-b24-4',
+        questionType: 'essay',
+        question:
+          'Đốt cháy hoàn toàn 4,958 lít khí Methane (CH₄, thành phần chính của khí mỏ dầu) ở điều kiện chuẩn (25°C, 1 bar; 1 mol khí chiếm 24,79 L). a) Viết phương trình hóa học của phản ứng cháy; b) Tính thể tích khí Oxygen (O₂) cần dùng và khối lượng khí Carbon dioxide (CO₂) sinh ra.',
+        options: [],
+        correctIndex: 0,
+        sampleAnswer:
+          'a) Phương trình hóa học: CH₄ + 2O₂ → CO₂ + 2H₂O (t°)\n- Số mol khí Methane: n(CH₄) = 4,958 / 24,79 = 0,2 (mol).\nb) Theo PTHH:\n- n(O₂) = 2 × n(CH₄) = 2 × 0,2 = 0,4 (mol) ⇒ Thể tích O₂ (đkc): V(O₂) = 0,4 × 24,79 = 9,916 (L).\n- n(CO₂) = n(CH₄) = 0,2 (mol) ⇒ Khối lượng CO₂: m(CO₂) = 0,2 × 44 = 8,8 (gam).',
+        rubric:
+          'Viết đúng PTHH và tính n(CH₄) = 0,2 mol (0,5đ); Tính đúng V(O₂) = 9,916 L và m(CO₂) = 8,8 g (0,5đ).',
+        explanation:
+          'n(CH₄) = 0,2 mol; PTHH: CH₄ + 2O₂ → CO₂ + 2H₂O ⇒ V(O₂) = 0,4 × 24,79 = 9,916 L; m(CO₂) = 0,2 × 44 = 8,8 g.',
+      },
+    ],
+    thumbnailUrl: domainChemImg,
+    simulationId: 'sim-oil-reservoir-3d',
+    videoUrl: 'https://www.youtube.com/embed/8kK2zwjRV0M',
+    documentId: 'doc-khtn-9-1',
+    quizCount: 4,
+    viewCount: 3850,
     author: 'KHOA HỌC SỐ KHTN',
   },
 ];
 
 export const SIMULATIONS_3D: Simulation3D[] = [
+  {
+    id: 'sim-khuc-xa-anh-sang-3d',
+    title: 'Khúc Xạ Ánh Sáng 3D Rõ Nét - KHTN 9',
+    grade: 9,
+    domain: 'vat-li',
+    category: 'Ánh sáng & Quang hình học',
+    description:
+      'Mô phỏng trực quan 3D hiện tượng khúc xạ ánh sáng khi truyền qua mặt phân cách giữa hai môi trường trong suốt (Không khí, Nước pha lê, Thủy tinh, Kim cương) với tia Laser đồng nhất màu đỏ rõ nét, đĩa đo độ 360°, Mini-game Săn Ngọc và 10 câu hỏi trắc nghiệm.',
+    learningGoal:
+      'Khảo sát đường truyền tia tới, tia khúc xạ, tia phản xạ và nghiệm lại định luật Snell: n₁ · sin(i) = n₂ · sin(r).',
+    keyConcepts: [
+      'Khúc xạ ánh sáng',
+      'Định luật Snell (n₁·sin i = n₂·sin r)',
+      'Góc tới i & Góc khúc xạ r',
+      'Tia Laser 3D & Mini-game Săn Ngọc',
+    ],
+    thumbnail: domainPhysImg,
+    type: 'external-embed',
+    externalUrl: '/assets/aistudio/Kh_c_x___nh_s_ng_3bf52125.html',
+    difficulty: 'Cơ bản',
+    relatedLessonId: 'khtn-9-bai-4',
+    controlsDescription: [
+      { key: 'Chọn 2 môi trường (n₁, n₂)', action: 'Chuyển đổi Không khí (1,00), Nước (1,33), Thủy tinh (1,50), Kim cương (2,42)' },
+      { key: 'Thanh trượt Góc tới i', action: 'Điều chỉnh góc chiếu tia Laser từ 0° đến 89°' },
+      { key: '3 Tab tương tác', action: 'Thí nghiệm 3D • Game Săn Ngọc • Bài tập 10 câu' },
+    ],
+    parameters: [],
+  },
+  {
+    id: 'sim-phan-xa-toan-phan-3d',
+    title: 'Phản Xạ Toàn Phần & Cáp Quang 3D - KHTN 9',
+    grade: 9,
+    domain: 'vat-li',
+    category: 'Ánh sáng & Quang hình học',
+    description:
+      'Khảo sát điều kiện phản xạ toàn phần (n₁ > n₂ và i ≥ i_gh) qua bản bán trụ thủy tinh, nước và kim cương. Tính góc giới hạn sin(i_gh) = n₂ / n₁, thực hành Mini-game Truyền Tín Hiệu Cáp Quang và làm 10 câu trắc nghiệm.',
+    learningGoal:
+      'Xác định điều kiện xảy ra phản xạ toàn phần, tính góc tới giới hạn i_gh và giải thích nguyên lí cáp quang Internet.',
+    keyConcepts: [
+      'Phản xạ toàn phần (i ≥ i_gh)',
+      'Góc giới hạn sin(i_gh) = n₂/n₁',
+      'Bản bán trụ thủy tinh',
+      'Cáp quang & Nội soi y học',
+    ],
+    thumbnail: classicLabImg,
+    type: 'external-embed',
+    externalUrl: '/assets/aistudio/Ph_n_x__to_n_ph_n_2acb5007.html',
+    difficulty: 'Trung bình',
+    relatedLessonId: 'khtn-9-bai-4',
+    controlsDescription: [
+      { key: 'Đặt đúng i = i_gh', action: 'Chuyển nhanh tới góc giới hạn để quan sát tia khúc xạ đi sát mặt phân cách' },
+      { key: 'Góc tới i (0° – 85°)', action: 'Tăng góc tới vượt i_gh để quan sát phản xạ toàn phần 100%' },
+      { key: 'Game Truyền Cáp Quang', action: 'Căn góc bắn xung Laser truyền dữ liệu tốc độ cao' },
+    ],
+    parameters: [],
+  },
+  {
+    id: 'sim-lang-kinh-tan-sac-3d',
+    title: 'Lăng Kính & Tán Sắc Ánh Sáng 3D (Hình 7.5 KHTN 9)',
+    grade: 9,
+    domain: 'vat-li',
+    category: 'Ánh sáng & Quang hình học',
+    description:
+      'Mô phỏng 3D chuẩn Hình 7.5 SGK KHTN 9: chiếu chùm ánh sáng trắng hoặc tia Laser đỏ đơn sắc qua lăng kính tam giác, quan sát dải quang phổ 7 màu (Đỏ, Da cam, Vàng, Lục, Lam, Chàm, Tím) trên màn hứng kèm Mini-game Bắt Màu và 10 câu hỏi.',
+    learningGoal:
+      'Giải thích hiện tượng tán sắc ánh sáng trắng qua lăng kính và so sánh góc lệch từ tia Đỏ (lệch ít nhất) đến tia Tím (lệch nhiều nhất).',
+    keyConcepts: [
+      'Tán sắc ánh sáng (Hình 7.5)',
+      'Lăng kính tam giác 3D',
+      'Quang phổ 7 màu (Đỏ → Tím)',
+      'Ánh sáng trắng & Đơn sắc',
+    ],
+    thumbnail: grade9Img,
+    type: 'external-embed',
+    externalUrl: '/assets/aistudio/L_ng_k_nh_d88b6c2d.html',
+    difficulty: 'Trung bình',
+    relatedLessonId: 'khtn-9-bai-4',
+    controlsDescription: [
+      { key: 'Chế độ chùm sáng', action: 'Chuyển đổi Chùm ánh sáng trắng (Hình 7.5) và Tia Laser đỏ đơn sắc' },
+      { key: 'Góc nghiêng & Màn hứng', action: 'Điều chỉnh góc chiếu đèn và khoảng cách màn hứng quang phổ' },
+      { key: 'Game Bắt Màu & 10 Câu đố', action: 'Thực hành bắt trúng dải màu trên cảm biến quang học' },
+    ],
+    parameters: [],
+  },
+  {
+    id: 'sim-thau-kinh-3d',
+    title: 'Mô Hình Thấu Kính Hội Tụ & Phân Kì 3D - KHTN 9',
+    grade: 9,
+    domain: 'vat-li',
+    category: 'Ánh sáng & Quang hình học',
+    description:
+      'Khảo sát hình dạng 3D và đường truyền 3 tia sáng đặc biệt qua Thấu kính Hội tụ (rìa mỏng) và Thấu kính Phân kì (rìa dày). Điều chỉnh tiêu cự f, khoảng cách vật d, chiều cao h, thực hành Mini-game Lấy Nét Máy Chiếu và làm 10 câu hỏi trắc nghiệm.',
+    learningGoal:
+      'Phân biệt thấu kính hội tụ – phân kì, vẽ 3 tia sáng đặc biệt và xác định tính chất ảnh thật / ảnh ảo của vật sáng AB.',
+    keyConcepts: [
+      'Thấu kính Hội tụ (Rìa mỏng)',
+      'Thấu kính Phân kì (Rìa dày)',
+      '3 Tia sáng đặc biệt (O, F, F\')',
+      'Ảnh thật & Ảnh ảo (Kính lúp)',
+    ],
+    thumbnail: grade7Img,
+    type: 'external-embed',
+    externalUrl: '/assets/aistudio/Th_u_k_nh_82cbc246.html',
+    difficulty: 'Trung bình',
+    relatedLessonId: 'khtn-9-bai-4',
+    controlsDescription: [
+      { key: 'Loại thấu kính & Chế độ tia', action: 'Chuyển đổi TK Hội tụ / TK Phân kì và Vật sáng AB / Chùm tia song song' },
+      { key: 'Thanh trượt f, d, h', action: 'Thay đổi tiêu cự f (8–18 cm), vị trí vật d (6–42 cm) và chiều cao vật h' },
+      { key: 'Game Lấy Nét Máy Chiếu', action: 'Điều chỉnh khoảng cách d để bắt nét ảnh thật trên màn chiếu' },
+    ],
+    parameters: [],
+  },
+  {
+    id: 'sim-oil-reservoir-3d',
+    title: 'Mô Phỏng 3D Mỏ Dầu & Phân Tử Trong Các Lớp Chất Lưu',
+    grade: 9,
+    domain: 'hoa-hoc',
+    category: 'Nhiên liệu hóa thạch & Dầu mỏ - Khí thiên nhiên',
+    description:
+      'Khám phá cấu tạo địa chất bẫy dầu khí 3D (đá chắn, đá chứa, sự phân tầng khí – dầu – nước) và nhấp vào từng lớp chất lưu để quan sát cấu trúc phân tử 3D chuyển động (CH₄, C₂H₆, C₃H₈, C₄H₁₀, C₈H₁₈, C₆H₁₂, C₆H₆, C₁₀H₈, H₂O, Na⁺, Cl⁻) kèm Quiz tương tác.',
+    learningGoal:
+      'Mô tả được cấu tạo bẫy dầu khí, sự phân lớp Khí – Dầu – Nước theo khối lượng riêng và thành phần phân tử chính của khí mỏ dầu, dầu thô, nước vỉa.',
+    keyConcepts: [
+      'Đá chứa & Đá chắn',
+      'Khí mỏ dầu (CH₄, C₂H₆, C₃H₈, C₄H₁₀)',
+      'Dầu thô (C₈H₁₈, C₆H₁₂, C₆H₆, C₁₀H₈)',
+      'Nước vỉa (H₂O, Na⁺, Cl⁻)',
+    ],
+    thumbnail: grade9Img,
+    type: 'external-embed',
+    externalUrl:
+      '/assets/aistudio/M__ph_ng_3D_m__d_u_v__ph_n_t__trong_c_c_l_p_ch_t_l_u__1__ac609d1f.html',
+    difficulty: 'Trung bình',
+    relatedLessonId: 'khtn-9-bai-24',
+    controlsDescription: [
+      { key: 'Xoay 360° & Thu phóng', action: 'Kéo chuột xoay địa tầng 3D và lăn chuột thu phóng' },
+      { key: 'Bấm vào lớp Khí / Dầu / Nước', action: 'Mở cửa sổ xem mô hình phân tử 3D chuyển động' },
+      { key: 'Độ trong suốt đất đá', action: 'Kéo thanh trượt để nhìn xuyên qua các lớp trầm tích' },
+    ],
+    parameters: [],
+  },
   {
     id: 'sim-chemical-equation-3d',
     title: 'Cân Bằng Phương Trình Hóa Học 3D (Định Luật Bảo Toàn Khối Lượng)',

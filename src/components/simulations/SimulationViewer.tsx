@@ -175,32 +175,18 @@ const ExternalEmbedSimulationViewer: React.FC<{
 
         <iframe
           key={iframeKey}
-          src={embedUrl}
+          src={embedUrl.startsWith('data:text/html') ? undefined : embedUrl}
+          srcDoc={
+            embedUrl.startsWith('data:text/html')
+              ? decodeURIComponent(embedUrl.replace(/^data:text\/html;charset=utf-8,/, ''))
+              : undefined
+          }
           title={simulation.title}
           onLoad={() => setIsLoaded(true)}
           className="w-full h-full border-0 bg-slate-950"
           allow="fullscreen; accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
           allowFullScreen
         />
-
-        {/* Bottom quick-access bar for external simulation */}
-        <div className="absolute bottom-3 left-3 right-3 z-20 pointer-events-none flex items-center justify-between">
-          <div className="pointer-events-auto px-3 py-1.5 rounded-xl bg-slate-950/85 backdrop-blur-md border border-slate-800 text-[11px] text-slate-300 flex items-center gap-2 shadow-lg">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="truncate max-w-[260px] sm:max-w-md font-mono text-slate-400">
-              {embedUrl}
-            </span>
-          </div>
-          <a
-            href={embedUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="pointer-events-auto px-3.5 py-1.5 rounded-xl bg-teal-600/90 hover:bg-teal-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-lg transition"
-          >
-            <ExternalLink className="w-3.5 h-3.5" />
-            <span>Trải nghiệm trên tab mới</span>
-          </a>
-        </div>
 
         {showGuide && (
           <div className="absolute top-4 right-4 z-30 w-80 max-h-[85%] bg-slate-900/95 border border-slate-700/80 rounded-2xl p-4 shadow-2xl backdrop-blur-md overflow-y-auto text-xs text-slate-300 space-y-3.5">

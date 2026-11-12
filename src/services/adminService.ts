@@ -18,6 +18,7 @@ import {
   QUIZ_QUESTIONS,
   LESSON_QUIZZES,
 } from '../data/mockData.ts';
+import cmsSnapshot from '../data/cmsSnapshot.json';
 import {
   SciencePairItem,
   CrosswordRowItem,
@@ -96,7 +97,18 @@ export const STORAGE_KEYS = {
   GAME_DETECTIVE: 'khtn_admin_game_detective_v2',
   USERS: 'khtn_admin_users_v2',
   SETTINGS: 'khtn_admin_site_settings_v2',
+  DELETED_IDS: 'khtn_admin_deleted_ids_v1',
 } as const;
+
+export interface DeletedIdsRegistry {
+  lessons: string[];
+  videos: string[];
+  topics: string[];
+  catalogDocs: string[];
+  questions: string[];
+  quizzes: string[];
+  clearedLessonVideoIds: string[];
+}
 
 export const DEFAULT_SITE_SETTINGS: SiteSettings = {
   siteName: 'KHOA HỌC TỰ NHIÊN',
@@ -199,18 +211,142 @@ function safeWriteLocal<T>(key: string, data: T): void {
   }
 }
 
+const snapshotLessons: AdminLesson[] = Array.isArray((cmsSnapshot as any)?.lessons)
+  ? ((cmsSnapshot as any).lessons as AdminLesson[])
+  : [];
+
+const snapshotQuestions: QuizQuestion[] = Array.isArray((cmsSnapshot as any)?.questions)
+  ? ((cmsSnapshot as any).questions as QuizQuestion[])
+  : [];
+
+const snapshotDeletedIds: Partial<DeletedIdsRegistry> =
+  (cmsSnapshot as any)?.deletedIds && typeof (cmsSnapshot as any).deletedIds === 'object'
+    ? ((cmsSnapshot as any).deletedIds as Partial<DeletedIdsRegistry>)
+    : {};
+
+const DEFAULT_DELETED_IDS: DeletedIdsRegistry = {
+  lessons: [],
+  videos: [],
+  topics: [],
+  catalogDocs: [],
+  questions: [],
+  quizzes: [],
+  clearedLessonVideoIds: [],
+};
+
+export function getDeletedIdsRegistrySync(): DeletedIdsRegistry {
+  const local = safeReadLocal<Partial<DeletedIdsRegistry>>(
+    STORAGE_KEYS.DELETED_IDS,
+    DEFAULT_DELETED_IDS
+  );
+  const mergeUnique = (a?: string[], b?: string[]) =>
+    Array.from(new Set([...(Array.isArray(a) ? a : []), ...(Array.isArray(b) ? b : [])]));
+
+  return {
+    lessons: mergeUnique(local.lessons, snapshotDeletedIds.lessons),
+    videos: mergeUnique(local.videos, snapshotDeletedIds.videos),
+    topics: mergeUnique(local.topics, snapshotDeletedIds.topics),
+    catalogDocs: mergeUnique(local.catalogDocs, snapshotDeletedIds.catalogDocs),
+    questions: mergeUnique(local.questions, snapshotDeletedIds.questions),
+    quizzes: mergeUnique(local.quizzes, snapshotDeletedIds.quizzes),
+    clearedLessonVideoIds: mergeUnique(
+      local.clearedLessonVideoIds,
+      snapshotDeletedIds.clearedLessonVideoIds
+    ),
+  };
+}
+
+export function markIdAsDeleted(category: keyof DeletedIdsRegistry, id: string): void {
+  if (!id) return;
+  const reg = getDeletedIdsRegistrySync();
+  if (!reg[category].includes(id)) {
+    reg[category] = [...reg[category], id];
+    safeWriteLocal(STORAGE_KEYS.DELETED_IDS, reg);
+  }
+}
+
+export function unmarkIdAsDeleted(category: keyof DeletedIdsRegistry, id: string): void {
+  if (!id) return;
+  const reg = getDeletedIdsRegistrySync();
+  if (reg[category].includes(id)) {
+    reg[category] = reg[category].filter((item) => item !== id);
+    safeWriteLocal(STORAGE_KEYS.DELETED_IDS, reg);
+  }
+}
+
+function isLegacyPlaceholderVideoUrl(url?: string): boolean {
+  if (!url) return false;
+  return extractYouTubeId(url) === 'dQw4w9WgXcQ';
+}
+
+export function syncCmsSnapshotToRepo(): void {
+  try {
+    if (typeof window === 'undefined' || typeof fetch === 'undefined') return;
+    const rawLessons = safeReadLocal<AdminLesson[]>(STORAGE_KEYS.LESSONS, []);
+    const rawQuestions = safeReadLocal<QuizQuestion[]>(STORAGE_KEYS.QUESTIONS, []);
+    const rawQuizzes = safeReadLocal<QuizMeta[]>(STORAGE_KEYS.QUIZZES, []);
+    const rawVideos = safeReadLocal<VideoLesson[] | null>(STORAGE_KEYS.VIDEOS, null);
+    const rawTopics = safeReadLocal<Topic[] | null>(STORAGE_KEYS.TOPICS, null);
+    const rawCatalogDocs = safeReadLocal<DocumentItem[] | null>(STORAGE_KEYS.CATALOG_DOCS, null);
+    const deletedIds = getDeletedIdsRegistrySync();
+
+    // Keep assets lightweight in git snapshot (strip huge base64 data URLs > 150KB)
+    const cleanLessons = rawLessons.map((l) => ({
+      ...l,
+      assets: (l.assets || []).map((a) => ({
+        ...a,
+        fileUrl: a.fileUrl && a.fileUrl.length > 150000 ? '#' : a.fileUrl,
+      })),
+    }));
+
+    fetch('/api/sync-cms-snapshot', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        lessons: cleanLessons,
+        questions: rawQuestions,
+        quizzes: rawQuizzes,
+        videos: rawVideos ?? undefined,
+        topics: rawTopics ?? undefined,
+        catalogDocs: rawCatalogDocs ?? undefined,
+        deletedIds,
+      }),
+    }).catch(() => {});
+  } catch {
+    // ignore in static environments
+  }
+}
+
 /**
  * ============================================================================
  * 1. LESSONS MANAGEMENT
  * ============================================================================
  */
 export function getInitialLocalLessons(): AdminLesson[] {
+  const deletedReg = getDeletedIdsRegistrySync();
+  const deletedLessonSet = new Set(deletedReg.lessons);
+  const clearedVideoSet = new Set(deletedReg.clearedLessonVideoIds);
+
   const cached = safeReadLocal<AdminLesson[] | null>(STORAGE_KEYS.LESSONS, null);
-  if (cached && Array.isArray(cached) && cached.length > 0) {
+  if (cached !== null && Array.isArray(cached)) {
     let needsResave = false;
-    const cleaned = cached.map((item) => {
+    const activeCached = cached.filter((c) => {
+      if (!c || !c.id || deletedLessonSet.has(c.id)) {
+        needsResave = true;
+        return false;
+      }
+      return true;
+    });
+    const existingIds = new Set(activeCached.map((c) => c.id));
+
+    const cleaned: AdminLesson[] = activeCached.map((item): AdminLesson => {
       const baseLesson = LESSONS.find((m) => m.id === item.id);
-      const fixedVideoUrl = normalizeVideoUrl(item.videoUrl);
+      const snapLesson = snapshotLessons.find((s) => s.id === item.id);
+      const isClearedVideo =
+        clearedVideoSet.has(item.id) ||
+        item.videoUrl === '' ||
+        isLegacyPlaceholderVideoUrl(item.videoUrl);
+      const fixedVideoUrl = isClearedVideo ? '' : normalizeVideoUrl(item.videoUrl) || '';
       if (fixedVideoUrl !== item.videoUrl) {
         needsResave = true;
       }
@@ -222,53 +358,149 @@ export function getInitialLocalLessons(): AdminLesson[] {
       if (realAssets.length !== rawAssets.length) {
         needsResave = true;
       }
+
+      const currentMiniQuiz = Array.isArray(item.miniQuiz) ? item.miniQuiz : [];
+      const fallbackMiniQuiz =
+        snapLesson?.miniQuiz && snapLesson.miniQuiz.length > 0
+          ? snapLesson.miniQuiz
+          : baseLesson?.miniQuiz && baseLesson.miniQuiz.length > 0
+          ? baseLesson.miniQuiz
+          : [];
+
+      const resolvedMiniQuiz =
+        currentMiniQuiz.length > 0 ? currentMiniQuiz : fallbackMiniQuiz;
+
+      if (currentMiniQuiz.length === 0 && resolvedMiniQuiz.length > 0) {
+        needsResave = true;
+      }
+
       return {
         ...item,
         videoUrl: fixedVideoUrl,
         assets: realAssets,
-        miniQuiz: item.miniQuiz ?? baseLesson?.miniQuiz ?? [],
+        miniQuiz: resolvedMiniQuiz,
       };
     });
+
+    // Append any new lessons from cmsSnapshot or LESSONS not yet in cached localStorage and NOT deleted
+    snapshotLessons.forEach((snap) => {
+      if (snap && snap.id && !existingIds.has(snap.id) && !deletedLessonSet.has(snap.id)) {
+        existingIds.add(snap.id);
+        cleaned.push({
+          ...snap,
+          videoUrl:
+            clearedVideoSet.has(snap.id) || isLegacyPlaceholderVideoUrl(snap.videoUrl)
+              ? ''
+              : normalizeVideoUrl(snap.videoUrl) || '',
+        });
+        needsResave = true;
+      }
+    });
+
+    LESSONS.forEach((l, index) => {
+      if (!existingIds.has(l.id) && !deletedLessonSet.has(l.id)) {
+        existingIds.add(l.id);
+        cleaned.push({
+          id: l.id,
+          topicId: l.topicId || 'topic-default',
+          grade: l.grade,
+          domain: l.domain,
+          code: l.code,
+          slug: generateSlug(l.title),
+          title: l.title,
+          summary: l.summary,
+          content:
+            l.sections?.map((s) => `### ${s.title}\n${s.content.join('\n')}`).join('\n\n') ||
+            l.summary,
+          durationMinutes: l.durationMinutes || 45,
+          orderIndex: index + 1,
+          isPublished: true,
+          thumbnailUrl: l.thumbnailUrl,
+          videoUrl: clearedVideoSet.has(l.id) ? '' : normalizeVideoUrl(l.videoUrl) || '',
+          viewCount: l.viewCount || 120,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          simulationIds: l.simulationId ? [l.simulationId] : [],
+          miniQuiz: l.miniQuiz ? [...l.miniQuiz] : [],
+          assets: [],
+        });
+        needsResave = true;
+      }
+    });
+
     if (needsResave) {
       safeWriteLocal(STORAGE_KEYS.LESSONS, cleaned);
     }
     return cleaned;
   }
 
-  const initial: AdminLesson[] = LESSONS.map((l, index) => ({
-    id: l.id,
-    topicId: l.topicId || 'topic-default',
-    grade: l.grade,
-    domain: l.domain,
-    code: l.code,
-    slug: generateSlug(l.title),
-    title: l.title,
-    summary: l.summary,
-    content:
-      l.sections?.map((s) => `### ${s.title}\n${s.content.join('\n')}`).join('\n\n') ||
-      l.summary,
-    durationMinutes: l.durationMinutes || 45,
-    orderIndex: index + 1,
-    isPublished: true,
-    thumbnailUrl: l.thumbnailUrl,
-    videoUrl: normalizeVideoUrl(l.videoUrl) || 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
-    viewCount: l.viewCount || 120,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    simulationIds: l.simulationId ? [l.simulationId] : [],
-    miniQuiz: l.miniQuiz ? [...l.miniQuiz] : [],
-    assets: [],
-  }));
+  const baseSeeded: AdminLesson[] = LESSONS.filter((l) => !deletedLessonSet.has(l.id)).map(
+    (l, index) => {
+      const snapLesson = snapshotLessons.find((s) => s.id === l.id);
+      const rawVid = snapLesson?.videoUrl !== undefined ? snapLesson.videoUrl : l.videoUrl;
+      const cleanVid =
+        clearedVideoSet.has(l.id) || isLegacyPlaceholderVideoUrl(rawVid)
+          ? ''
+          : normalizeVideoUrl(rawVid) || '';
+      return {
+        id: l.id,
+        topicId: l.topicId || 'topic-default',
+        grade: l.grade,
+        domain: l.domain,
+        code: l.code,
+        slug: generateSlug(l.title),
+        title: snapLesson?.title || l.title,
+        summary: snapLesson?.summary || l.summary,
+        content:
+          snapLesson?.content ||
+          l.sections?.map((s) => `### ${s.title}\n${s.content.join('\n')}`).join('\n\n') ||
+          l.summary,
+        durationMinutes: l.durationMinutes || 45,
+        orderIndex: index + 1,
+        isPublished: true,
+        thumbnailUrl: l.thumbnailUrl,
+        videoUrl: cleanVid,
+        viewCount: l.viewCount || 120,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        simulationIds: l.simulationId ? [l.simulationId] : [],
+        miniQuiz:
+          snapLesson?.miniQuiz && snapLesson.miniQuiz.length > 0
+            ? [...snapLesson.miniQuiz]
+            : l.miniQuiz
+            ? [...l.miniQuiz]
+            : [],
+        assets: snapLesson?.assets || [],
+      };
+    }
+  );
 
-  safeWriteLocal(STORAGE_KEYS.LESSONS, initial);
-  return initial;
+  const seededIds = new Set(baseSeeded.map((b) => b.id));
+  snapshotLessons.forEach((snap) => {
+    if (snap && snap.id && !seededIds.has(snap.id) && !deletedLessonSet.has(snap.id)) {
+      seededIds.add(snap.id);
+      baseSeeded.push({
+        ...snap,
+        videoUrl:
+          clearedVideoSet.has(snap.id) || isLegacyPlaceholderVideoUrl(snap.videoUrl)
+            ? ''
+            : normalizeVideoUrl(snap.videoUrl) || '',
+      });
+    }
+  });
+
+  safeWriteLocal(STORAGE_KEYS.LESSONS, baseSeeded);
+  return baseSeeded;
 }
 
 function saveLocalLessons(lessons: AdminLesson[]) {
   safeWriteLocal(STORAGE_KEYS.LESSONS, lessons);
+  syncCmsSnapshotToRepo();
 }
 
 export async function fetchAdminLessons(): Promise<AdminLesson[]> {
+  const localLessons = getInitialLocalLessons();
+
   if (isSupabaseConfigured && supabase) {
     try {
       const { data: lessonsData, error: lessonsError } = await supabase
@@ -281,6 +513,10 @@ export async function fetchAdminLessons(): Promise<AdminLesson[]> {
         const { data: simLinks } = await supabase.from('lesson_simulations').select('*');
 
         return lessonsData.map((l: any) => {
+          const localMatch = localLessons.find((loc) => loc.id === l.id);
+          const baseMatch = LESSONS.find((m) => m.id === l.id);
+          const snapMatch = snapshotLessons.find((s) => s.id === l.id);
+
           const lessonAssets: LessonAssetItem[] = (assetsData || [])
             .filter((a: any) => a.lesson_id === l.id)
             .map((a: any) => ({
@@ -300,9 +536,18 @@ export async function fetchAdminLessons(): Promise<AdminLesson[]> {
             .filter((sl: any) => sl.lesson_id === l.id)
             .map((sl: any) => sl.simulation_id);
 
+          const resolvedMiniQuiz: LessonMiniQuizItem[] =
+            Array.isArray(l.mini_quiz) && l.mini_quiz.length > 0
+              ? l.mini_quiz
+              : localMatch?.miniQuiz && localMatch.miniQuiz.length > 0
+              ? localMatch.miniQuiz
+              : snapMatch?.miniQuiz && snapMatch.miniQuiz.length > 0
+              ? snapMatch.miniQuiz
+              : baseMatch?.miniQuiz || [];
+
           return {
             id: l.id,
-            topicId: l.topic_id || '',
+            topicId: l.topic_id || localMatch?.topicId || '',
             grade: l.grade as Grade,
             domain: l.domain as SubjectDomain,
             code: l.code,
@@ -313,14 +558,15 @@ export async function fetchAdminLessons(): Promise<AdminLesson[]> {
             durationMinutes: l.duration_minutes || 45,
             orderIndex: l.order_index ?? 0,
             isPublished: l.is_published ?? true,
-            thumbnailUrl: l.thumbnail_url || undefined,
-            videoUrl: normalizeVideoUrl(l.video_url),
+            thumbnailUrl: l.thumbnail_url || localMatch?.thumbnailUrl || undefined,
+            videoUrl: normalizeVideoUrl(l.video_url || localMatch?.videoUrl),
             viewCount: l.view_count || 0,
             createdAt: l.created_at,
             updatedAt: l.updated_at,
-            assets: lessonAssets,
-            simulationIds,
-            miniQuiz: [],
+            assets: lessonAssets.length > 0 ? lessonAssets : localMatch?.assets || [],
+            simulationIds:
+              simulationIds.length > 0 ? simulationIds : localMatch?.simulationIds || [],
+            miniQuiz: resolvedMiniQuiz,
           };
         });
       }
@@ -329,7 +575,7 @@ export async function fetchAdminLessons(): Promise<AdminLesson[]> {
     }
   }
 
-  return getInitialLocalLessons();
+  return localLessons;
 }
 
 export async function checkSlugAvailable(
@@ -383,6 +629,30 @@ export async function saveAdminLesson(
   const id = lessonData.id || `custom-lesson-${Date.now()}`;
   const existing = local.find((l) => l.id === id);
 
+  unmarkIdAsDeleted('lessons', id);
+
+  const normalizedVid = normalizeVideoUrl(lessonData.videoUrl);
+  if (!normalizedVid) {
+    markIdAsDeleted('clearedLessonVideoIds', id);
+    // Also remove any unified video resource attached to this lesson so it does not resurface
+    try {
+      const uniKey = 'khtn_unified_learning_resources_v2';
+      const rawUni = safeReadLocal<any[] | null>(uniKey, null);
+      if (rawUni && Array.isArray(rawUni)) {
+        const filteredUni = rawUni.filter(
+          (r) => !(r.category === 'video' && (r.lessonId === id || r.lessonTitle === lessonData.title))
+        );
+        if (filteredUni.length !== rawUni.length) {
+          safeWriteLocal(uniKey, filteredUni);
+        }
+      }
+    } catch {
+      // ignore
+    }
+  } else {
+    unmarkIdAsDeleted('clearedLessonVideoIds', id);
+  }
+
   const savedLesson: AdminLesson = {
     id,
     topicId: lessonData.topicId,
@@ -397,7 +667,7 @@ export async function saveAdminLesson(
     orderIndex: lessonData.orderIndex,
     isPublished: lessonData.isPublished,
     thumbnailUrl: lessonData.thumbnailUrl,
-    videoUrl: normalizeVideoUrl(lessonData.videoUrl),
+    videoUrl: normalizedVid || '',
     viewCount: existing?.viewCount || 0,
     createdAt: existing?.createdAt || now,
     updatedAt: now,
@@ -419,6 +689,66 @@ export async function saveAdminLesson(
 
   saveLocalLessons(local);
   return savedLesson;
+}
+
+export async function clearAdminLessonVideo(lessonId: string): Promise<boolean> {
+  if (!lessonId) return false;
+  markIdAsDeleted('clearedLessonVideoIds', lessonId);
+  const local = getInitialLocalLessons();
+  const target = local.find((l) => l.id === lessonId || l.code === lessonId);
+  if (target) {
+    markIdAsDeleted('clearedLessonVideoIds', target.id);
+    target.videoUrl = '';
+    target.updatedAt = new Date().toISOString();
+    saveLocalLessons(local);
+  }
+  try {
+    const uniKey = 'khtn_unified_learning_resources_v2';
+    const rawUni = safeReadLocal<any[] | null>(uniKey, null);
+    if (rawUni && Array.isArray(rawUni)) {
+      const filteredUni = rawUni.filter(
+        (r) =>
+          !(
+            r.category === 'video' &&
+            (r.lessonId === lessonId || (target && r.lessonTitle === target.title))
+          )
+      );
+      safeWriteLocal(uniKey, filteredUni);
+    }
+  } catch {
+    // ignore
+  }
+  return true;
+}
+
+export async function clearAllAdminLessonVideos(grade?: Grade): Promise<number> {
+  const local = getInitialLocalLessons();
+  let clearedCount = 0;
+  local.forEach((l) => {
+    if (grade === undefined || l.grade === grade) {
+      markIdAsDeleted('clearedLessonVideoIds', l.id);
+      if (l.videoUrl) {
+        clearedCount++;
+      }
+      l.videoUrl = '';
+      l.updatedAt = new Date().toISOString();
+    }
+  });
+  saveLocalLessons(local);
+
+  try {
+    const uniKey = 'khtn_unified_learning_resources_v2';
+    const rawUni = safeReadLocal<any[] | null>(uniKey, null);
+    if (rawUni && Array.isArray(rawUni)) {
+      const filteredUni = rawUni.filter(
+        (r) => !(r.category === 'video' && (grade === undefined || r.grade === grade))
+      );
+      safeWriteLocal(uniKey, filteredUni);
+    }
+  } catch {
+    // ignore
+  }
+  return clearedCount;
 }
 
 export function updateLessonMiniQuizSync(
@@ -457,9 +787,26 @@ export async function toggleLessonPublish(
 }
 
 export async function deleteAdminLesson(lessonId: string): Promise<boolean> {
+  if (!lessonId) return false;
+  markIdAsDeleted('lessons', lessonId);
   const local = getInitialLocalLessons();
+  const target = local.find((l) => l.id === lessonId);
   const filtered = local.filter((l) => l.id !== lessonId);
   saveLocalLessons(filtered);
+
+  // Also remove any unified learning resources linked to this deleted lesson
+  try {
+    const uniKey = 'khtn_unified_learning_resources_v2';
+    const rawUni = safeReadLocal<any[] | null>(uniKey, null);
+    if (rawUni && Array.isArray(rawUni)) {
+      const filteredUni = rawUni.filter(
+        (r) => r.lessonId !== lessonId && (!target || r.lessonTitle !== target.title)
+      );
+      safeWriteLocal(uniKey, filteredUni);
+    }
+  } catch {
+    // ignore
+  }
   return true;
 }
 
@@ -572,12 +919,14 @@ export async function updateAssetMetadata(
  * ============================================================================
  */
 export function getAdminTopicsSync(): Topic[] {
+  const deletedTopicSet = new Set(getDeletedIdsRegistrySync().topics);
   const cached = safeReadLocal<Topic[] | null>(STORAGE_KEYS.TOPICS, null);
-  if (cached && Array.isArray(cached) && cached.length > 0) {
-    return cached;
+  if (cached !== null && Array.isArray(cached)) {
+    return cached.filter((t) => !deletedTopicSet.has(t.id));
   }
-  safeWriteLocal(STORAGE_KEYS.TOPICS, TOPICS);
-  return [...TOPICS];
+  const initial = TOPICS.filter((t) => !deletedTopicSet.has(t.id));
+  safeWriteLocal(STORAGE_KEYS.TOPICS, initial);
+  return [...initial];
 }
 
 export async function fetchAdminTopics(): Promise<Topic[]> {
@@ -587,6 +936,7 @@ export async function fetchAdminTopics(): Promise<Topic[]> {
 export async function saveAdminTopic(topicInput: Partial<Topic> & { title: string; grade: Grade; domain: SubjectDomain }): Promise<Topic> {
   const all = getAdminTopicsSync();
   const id = topicInput.id || `topic-${topicInput.grade}-${Date.now()}`;
+  unmarkIdAsDeleted('topics', id);
   const saved: Topic = {
     id,
     grade: topicInput.grade,
@@ -608,12 +958,15 @@ export async function saveAdminTopic(topicInput: Partial<Topic> & { title: strin
     all.unshift(saved);
   }
   safeWriteLocal(STORAGE_KEYS.TOPICS, all);
+  syncCmsSnapshotToRepo();
   return saved;
 }
 
 export async function deleteAdminTopic(topicId: string): Promise<boolean> {
+  markIdAsDeleted('topics', topicId);
   const all = getAdminTopicsSync().filter((t) => t.id !== topicId);
   safeWriteLocal(STORAGE_KEYS.TOPICS, all);
+  syncCmsSnapshotToRepo();
   return true;
 }
 
@@ -623,20 +976,25 @@ export async function deleteAdminTopic(topicId: string): Promise<boolean> {
  * ============================================================================
  */
 export function getAdminQuestionsSync(): QuizQuestion[] {
+  const deletedQuestionSet = new Set(getDeletedIdsRegistrySync().questions);
+  const allBuiltIns = [...snapshotQuestions, ...QUIZ_QUESTIONS].filter(
+    (q) => !deletedQuestionSet.has(q.id)
+  );
   const cached = safeReadLocal<QuizQuestion[] | null>(STORAGE_KEYS.QUESTIONS, null);
-  if (cached && Array.isArray(cached) && cached.length > 0) {
-    const builtInMap = new Map(QUIZ_QUESTIONS.map((q) => [q.id, q]));
-    const existingIds = new Set(cached.map((q) => q.id));
+  if (cached !== null && Array.isArray(cached)) {
+    const activeCached = cached.filter((q) => !deletedQuestionSet.has(q.id));
+    const builtInMap = new Map(allBuiltIns.map((q) => [q.id, q]));
+    const existingIds = new Set(activeCached.map((q) => q.id));
 
     // Upgrade built-in questions and any cached custom questions that used old generic guidance templates
-    const upgraded = cached.map((q) => {
+    const upgraded = activeCached.map((q) => {
       const builtIn = builtInMap.get(q.id);
       if (builtIn) {
         return {
           ...builtIn,
           ...q,
-          explanation: builtIn.explanation,
-          solutionSteps: builtIn.solutionSteps,
+          explanation: builtIn.explanation || q.explanation,
+          solutionSteps: builtIn.solutionSteps || q.solutionSteps,
           sampleAnswer: builtIn.sampleAnswer || q.sampleAnswer,
           hint: builtIn.hint || q.hint,
           allowImageUpload: q.allowImageUpload ?? builtIn.allowImageUpload,
@@ -679,14 +1037,82 @@ export function getAdminQuestionsSync(): QuizQuestion[] {
       return q;
     });
 
-    // Append any newly added built-in questions (such as the essay questions)
-    const missingBuiltIns = QUIZ_QUESTIONS.filter((q) => !existingIds.has(q.id));
+    // Append any newly added built-in or snapshot questions that have NOT been deleted
+    const missingBuiltIns = allBuiltIns.filter(
+      (q) => !existingIds.has(q.id) && !deletedQuestionSet.has(q.id)
+    );
     const merged = missingBuiltIns.length > 0 ? [...upgraded, ...missingBuiltIns] : upgraded;
     safeWriteLocal(STORAGE_KEYS.QUESTIONS, merged);
     return merged;
   }
-  safeWriteLocal(STORAGE_KEYS.QUESTIONS, QUIZ_QUESTIONS);
-  return [...QUIZ_QUESTIONS];
+  safeWriteLocal(STORAGE_KEYS.QUESTIONS, allBuiltIns);
+  return [...allBuiltIns];
+}
+
+function mapQuizQuestionToMiniQuizItem(q: QuizQuestion): LessonMiniQuizItem {
+  const mappedType =
+    q.questionType === 'true_false'
+      ? 'true_false'
+      : q.questionType === 'essay' || q.questionType === 'short_answer'
+      ? 'essay'
+      : 'single_choice';
+  return {
+    id: q.id,
+    questionType: mappedType,
+    question: q.question,
+    options:
+      mappedType === 'essay'
+        ? []
+        : q.options && q.options.length >= 2
+        ? q.options.slice(0, 4)
+        : ['Phương án A', 'Phương án B', 'Phương án C', 'Phương án D'],
+    correctIndex: typeof q.correctAnswer === 'number' && q.correctAnswer >= 0 ? q.correctAnswer : 0,
+    trueFalseStatements: q.trueFalseStatements,
+    sampleAnswer: mappedType === 'essay' ? q.sampleAnswer || q.shortAnswer || q.explanation : undefined,
+    rubric: q.rubric,
+    explanation: q.explanation || 'Xem lại kiến thức trọng tâm trong bài học.',
+  };
+}
+
+function syncQuestionsToLessonsMiniQuiz(questions: QuizQuestion[]): void {
+  const withLesson = questions.filter((q) => q.lessonId && q.lessonId.trim() !== '');
+  if (withLesson.length === 0) return;
+
+  const localLessons = getInitialLocalLessons();
+  let modified = false;
+
+  withLesson.forEach((q) => {
+    const lessonIdx = localLessons.findIndex(
+      (l) =>
+        l.id === q.lessonId ||
+        l.slug === q.lessonId ||
+        l.code.toLowerCase() === (q.lessonId || '').toLowerCase()
+    );
+    if (lessonIdx >= 0) {
+      const currentQuiz = [...(localLessons[lessonIdx].miniQuiz || [])];
+      const mapped = mapQuizQuestionToMiniQuizItem(q);
+      const existingQIdx = currentQuiz.findIndex(
+        (mq) =>
+          (mq.id && mq.id === mapped.id) ||
+          mq.question.trim().toLowerCase() === mapped.question.trim().toLowerCase()
+      );
+      if (existingQIdx >= 0) {
+        currentQuiz[existingQIdx] = mapped;
+      } else {
+        currentQuiz.push(mapped);
+      }
+      localLessons[lessonIdx] = {
+        ...localLessons[lessonIdx],
+        miniQuiz: currentQuiz,
+        updatedAt: new Date().toISOString(),
+      };
+      modified = true;
+    }
+  });
+
+  if (modified) {
+    safeWriteLocal(STORAGE_KEYS.LESSONS, localLessons);
+  }
 }
 
 export async function fetchAdminQuestions(): Promise<QuizQuestion[]> {
@@ -748,6 +1174,8 @@ export async function saveAdminQuestion(qInput: Partial<QuizQuestion> & { questi
     all.unshift(saved);
   }
   safeWriteLocal(STORAGE_KEYS.QUESTIONS, all);
+  syncQuestionsToLessonsMiniQuiz([saved]);
+  syncCmsSnapshotToRepo();
   return saved;
 }
 
@@ -812,22 +1240,28 @@ export async function saveAdminQuestionsBulk(
   const existingIds = new Set(savedItems.map((s) => s.id));
   const merged = [...savedItems, ...all.filter((q) => !existingIds.has(q.id))];
   safeWriteLocal(STORAGE_KEYS.QUESTIONS, merged);
+  syncQuestionsToLessonsMiniQuiz(savedItems);
+  syncCmsSnapshotToRepo();
   return savedItems;
 }
 
 export async function deleteAdminQuestion(questionId: string): Promise<boolean> {
+  markIdAsDeleted('questions', questionId);
   const all = getAdminQuestionsSync().filter((q) => q.id !== questionId);
   safeWriteLocal(STORAGE_KEYS.QUESTIONS, all);
+  syncCmsSnapshotToRepo();
   return true;
 }
 
 export function getAdminQuizzesSync(): QuizMeta[] {
+  const deletedQuizSet = new Set(getDeletedIdsRegistrySync().quizzes);
   const cached = safeReadLocal<QuizMeta[] | null>(STORAGE_KEYS.QUIZZES, null);
-  if (cached && Array.isArray(cached) && cached.length > 0) {
-    return cached;
+  if (cached !== null && Array.isArray(cached)) {
+    return cached.filter((q) => !deletedQuizSet.has(q.id));
   }
-  safeWriteLocal(STORAGE_KEYS.QUIZZES, LESSON_QUIZZES);
-  return [...LESSON_QUIZZES];
+  const initial = LESSON_QUIZZES.filter((q) => !deletedQuizSet.has(q.id));
+  safeWriteLocal(STORAGE_KEYS.QUIZZES, initial);
+  return [...initial];
 }
 
 export async function fetchAdminQuizzes(): Promise<QuizMeta[]> {
@@ -837,6 +1271,7 @@ export async function fetchAdminQuizzes(): Promise<QuizMeta[]> {
 export async function saveAdminQuiz(quizInput: Partial<QuizMeta> & { title: string; grade: Grade; domain: SubjectDomain }): Promise<QuizMeta> {
   const all = getAdminQuizzesSync();
   const id = quizInput.id || `quiz-custom-${Date.now()}`;
+  unmarkIdAsDeleted('quizzes', id);
   const saved: QuizMeta = {
     id,
     lessonId: quizInput.lessonId,
@@ -858,12 +1293,15 @@ export async function saveAdminQuiz(quizInput: Partial<QuizMeta> & { title: stri
     all.unshift(saved);
   }
   safeWriteLocal(STORAGE_KEYS.QUIZZES, all);
+  syncCmsSnapshotToRepo();
   return saved;
 }
 
 export async function deleteAdminQuiz(quizId: string): Promise<boolean> {
+  markIdAsDeleted('quizzes', quizId);
   const all = getAdminQuizzesSync().filter((q) => q.id !== quizId);
   safeWriteLocal(STORAGE_KEYS.QUIZZES, all);
+  syncCmsSnapshotToRepo();
   return true;
 }
 
@@ -873,12 +1311,14 @@ export async function deleteAdminQuiz(quizId: string): Promise<boolean> {
  * ============================================================================
  */
 export function getAdminVideosSync(): VideoLesson[] {
+  const deletedVideoSet = new Set(getDeletedIdsRegistrySync().videos);
   const cached = safeReadLocal<VideoLesson[] | null>(STORAGE_KEYS.VIDEOS, null);
-  if (cached && Array.isArray(cached) && cached.length > 0) {
-    return cached;
+  if (cached !== null && Array.isArray(cached)) {
+    return cached.filter((v) => !deletedVideoSet.has(v.id));
   }
-  safeWriteLocal(STORAGE_KEYS.VIDEOS, VIDEOS);
-  return [...VIDEOS];
+  const initial = VIDEOS.filter((v) => !deletedVideoSet.has(v.id));
+  safeWriteLocal(STORAGE_KEYS.VIDEOS, initial);
+  return [...initial];
 }
 
 export async function fetchAdminVideos(): Promise<VideoLesson[]> {
@@ -888,7 +1328,8 @@ export async function fetchAdminVideos(): Promise<VideoLesson[]> {
 export async function saveAdminVideo(vInput: Partial<VideoLesson> & { title: string; grade: Grade; domain: SubjectDomain; youtubeId: string }): Promise<VideoLesson> {
   const all = getAdminVideosSync();
   const id = vInput.id || `vid-custom-${Date.now()}`;
-  const cleanYt = extractYouTubeId(vInput.youtubeId) || vInput.youtubeId.trim() || 'dQw4w9WgXcQ';
+  unmarkIdAsDeleted('videos', id);
+  const cleanYt = extractYouTubeId(vInput.youtubeId) || vInput.youtubeId.trim();
 
   const saved: VideoLesson = {
     id,
@@ -917,12 +1358,52 @@ export async function saveAdminVideo(vInput: Partial<VideoLesson> & { title: str
     all.unshift(saved);
   }
   safeWriteLocal(STORAGE_KEYS.VIDEOS, all);
+  syncCmsSnapshotToRepo();
   return saved;
 }
 
 export async function deleteAdminVideo(videoId: string): Promise<boolean> {
-  const all = getAdminVideosSync().filter((v) => v.id !== videoId);
+  const currentVideos = getAdminVideosSync();
+  const targetVideo = currentVideos.find((v) => v.id === videoId);
+  markIdAsDeleted('videos', videoId);
+  const all = currentVideos.filter((v) => v.id !== videoId);
   safeWriteLocal(STORAGE_KEYS.VIDEOS, all);
+
+  // Also clear matching videoUrl from any lessons that used this video's youtubeId
+  if (targetVideo && targetVideo.youtubeId) {
+    const targetYtId = extractYouTubeId(targetVideo.youtubeId) || targetVideo.youtubeId;
+    const localLessons = getInitialLocalLessons();
+    let lessonsModified = false;
+    localLessons.forEach((l) => {
+      const lessonYtId = extractYouTubeId(l.videoUrl || '');
+      if (lessonYtId && lessonYtId === targetYtId) {
+        markIdAsDeleted('clearedLessonVideoIds', l.id);
+        l.videoUrl = '';
+        l.updatedAt = new Date().toISOString();
+        lessonsModified = true;
+      }
+    });
+    if (lessonsModified) {
+      safeWriteLocal(STORAGE_KEYS.LESSONS, localLessons);
+    }
+
+    try {
+      const uniKey = 'khtn_unified_learning_resources_v2';
+      const rawUni = safeReadLocal<any[] | null>(uniKey, null);
+      if (rawUni && Array.isArray(rawUni)) {
+        const filteredUni = rawUni.filter((r) => {
+          if (r.category !== 'video') return true;
+          const rYtId = extractYouTubeId(r.externalUrl || '');
+          return rYtId !== targetYtId;
+        });
+        safeWriteLocal(uniKey, filteredUni);
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  syncCmsSnapshotToRepo();
   return true;
 }
 
@@ -932,12 +1413,14 @@ export async function deleteAdminVideo(videoId: string): Promise<boolean> {
  * ============================================================================
  */
 export function getAdminCatalogDocsSync(): DocumentItem[] {
+  const deletedDocSet = new Set(getDeletedIdsRegistrySync().catalogDocs);
   const cached = safeReadLocal<DocumentItem[] | null>(STORAGE_KEYS.CATALOG_DOCS, null);
-  if (cached && Array.isArray(cached) && cached.length > 0) {
-    return cached;
+  if (cached !== null && Array.isArray(cached)) {
+    return cached.filter((d) => !deletedDocSet.has(d.id));
   }
-  safeWriteLocal(STORAGE_KEYS.CATALOG_DOCS, DOCUMENTS);
-  return [...DOCUMENTS];
+  const initial = DOCUMENTS.filter((d) => !deletedDocSet.has(d.id));
+  safeWriteLocal(STORAGE_KEYS.CATALOG_DOCS, initial);
+  return [...initial];
 }
 
 export async function fetchAdminCatalogDocs(): Promise<DocumentItem[]> {
@@ -947,6 +1430,7 @@ export async function fetchAdminCatalogDocs(): Promise<DocumentItem[]> {
 export async function saveAdminCatalogDoc(docInput: Partial<DocumentItem> & { title: string; grade: Grade; domain: SubjectDomain }): Promise<DocumentItem> {
   const all = getAdminCatalogDocsSync();
   const id = docInput.id || `doc-custom-${Date.now()}`;
+  unmarkIdAsDeleted('catalogDocs', id);
   const resolvedUrl =
     (docInput.fileUrl && docInput.fileUrl.trim() !== '#' ? docInput.fileUrl.trim() : '') ||
     (docInput.downloadUrl && docInput.downloadUrl.trim() !== '#' ? docInput.downloadUrl.trim() : '') ||
@@ -981,12 +1465,15 @@ export async function saveAdminCatalogDoc(docInput: Partial<DocumentItem> & { ti
     all.unshift(saved);
   }
   safeWriteLocal(STORAGE_KEYS.CATALOG_DOCS, all);
+  syncCmsSnapshotToRepo();
   return saved;
 }
 
 export async function deleteAdminCatalogDoc(docId: string): Promise<boolean> {
+  markIdAsDeleted('catalogDocs', docId);
   const all = getAdminCatalogDocsSync().filter((d) => d.id !== docId);
   safeWriteLocal(STORAGE_KEYS.CATALOG_DOCS, all);
+  syncCmsSnapshotToRepo();
   return true;
 }
 
@@ -1173,6 +1660,7 @@ export function saveSiteSettingsSync(settings: SiteSettings): SiteSettings {
 }
 
 export function resetAllAdminDataToDefault(): void {
+  memoryFallbackStore.clear();
   if (typeof localStorage === 'undefined') return;
   Object.values(STORAGE_KEYS).forEach((key) => {
     try {
@@ -1181,4 +1669,11 @@ export function resetAllAdminDataToDefault(): void {
       // ignore
     }
   });
+  try {
+    localStorage.removeItem('khtn_unified_learning_resources_v2');
+  } catch {
+    // ignore
+  }
+  syncCmsSnapshotToRepo();
 }
+

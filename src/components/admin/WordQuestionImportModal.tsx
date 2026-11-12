@@ -31,6 +31,7 @@ import {
 import { normalizeSolutionPresentation } from '../../utils/scientificSolution.ts';
 import { sanitizeStudentPII } from '../../utils/studentPrivacyGuard.ts';
 import {
+  getInitialLocalLessons,
   saveAdminQuestion,
   saveAdminQuestionsBulk,
   saveAdminQuiz,
@@ -208,7 +209,14 @@ export const WordQuestionImportModal: React.FC<WordQuestionImportModalProps> = (
     mcqCount?: number;
   } | null>(null);
 
-  // Option to also create a new QuizMeta exam
+  // Option to also create a new QuizMeta exam & attach to a Lesson's end-of-lesson review section
+  const availableLessons = getInitialLocalLessons();
+  const [targetLessonId, setTargetLessonId] = useState<string>(() => {
+    const match = availableLessons.find(
+      (l) => l.grade === defaultGrade && l.domain === defaultDomain
+    );
+    return match?.id || availableLessons[0]?.id || '';
+  });
   const [createNewExam, setCreateNewExam] = useState(true);
   const [newExamTitle, setNewExamTitle] = useState('Đề kiểm tra KHTN (Nhập từ Word)');
   const [newExamDuration, setNewExamDuration] = useState(15);
@@ -779,6 +787,7 @@ export const WordQuestionImportModal: React.FC<WordQuestionImportModalProps> = (
       });
       return {
         id: q.id || `q-word-${Date.now()}-${idx + 1}`,
+        lessonId: targetLessonId || undefined,
         topicId: targetQuizId,
         grade: q.grade,
         domain: q.domain,
@@ -2283,47 +2292,73 @@ export const WordQuestionImportModal: React.FC<WordQuestionImportModalProps> = (
                 </div>
               )}
 
-              {/* Create Exam Option Box */}
-              <div className="p-4 rounded-2xl bg-sky-50/70 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-800/70 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <label className="flex items-center gap-2.5 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={createNewExam}
-                    onChange={(e) => setCreateNewExam(e.target.checked)}
-                    className="rounded accent-teal-600 w-4 h-4"
-                  />
+              {/* Create Exam & Attach to Lesson End-of-Lesson Review Box */}
+              <div className="p-4 rounded-2xl bg-sky-50/70 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-800/70 space-y-3">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-sky-200/70 dark:border-sky-800/60">
                   <div>
-                    <span className="font-extrabold text-slate-900 dark:text-white block">
-                      Đồng thời tạo thành 1 Bộ Đề Kiểm Tra mới trên trang Luyện tập (/luyen-tap)
+                    <span className="font-extrabold text-slate-900 dark:text-white text-xs sm:text-sm block">
+                      Hiển thị tại mục &quot;Câu hỏi ôn tập cuối bài&quot; của Bài giảng:
                     </span>
                     <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                      Học sinh có thể làm đủ 4 dạng câu hỏi, tải ảnh tự luận và xem lời giải ngắn gọn đã duyệt sau khi nộp bài
+                      Chọn bài giảng để toàn bộ câu hỏi sau khi lưu tự động hiển thị ở cuối bài học đó trên Web
                     </span>
                   </div>
-                </label>
+                  <select
+                    value={targetLessonId}
+                    onChange={(e) => setTargetLessonId(e.target.value)}
+                    data-testid="word-import-target-lesson-select"
+                    className="px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-teal-300 dark:border-teal-700 font-bold text-xs text-slate-800 dark:text-slate-100 max-w-full md:w-96"
+                  >
+                    <option value="">-- Chỉ lưu vào Ngân hàng câu hỏi chung --</option>
+                    {availableLessons.map((les) => (
+                      <option key={les.id} value={les.id}>
+                        [Lớp {les.grade}] {les.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-                {createNewExam && (
-                  <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <label className="flex items-center gap-2.5 cursor-pointer">
                     <input
-                      type="text"
-                      value={newExamTitle}
-                      onChange={(e) => setNewExamTitle(e.target.value)}
-                      placeholder="Tên bộ đề kiểm tra..."
-                      className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-bold text-xs w-64"
+                      type="checkbox"
+                      checked={createNewExam}
+                      onChange={(e) => setCreateNewExam(e.target.checked)}
+                      className="rounded accent-teal-600 w-4 h-4"
                     />
-                    <div className="flex items-center gap-1">
-                      <input
-                        type="number"
-                        min={5}
-                        max={90}
-                        value={newExamDuration}
-                        onChange={(e) => setNewExamDuration(Number(e.target.value))}
-                        className="px-2.5 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-bold text-xs w-16 text-center"
-                      />
-                      <span className="text-[11px] font-semibold text-slate-500">phút</span>
+                    <div>
+                      <span className="font-extrabold text-slate-900 dark:text-white block">
+                        Đồng thời tạo thành 1 Bộ Đề Kiểm Tra mới trên trang Luyện tập (/luyen-tap)
+                      </span>
+                      <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                        Học sinh có thể làm đủ 4 dạng câu hỏi, tải ảnh tự luận và xem lời giải ngắn gọn đã duyệt sau khi nộp bài
+                      </span>
                     </div>
-                  </div>
-                )}
+                  </label>
+
+                  {createNewExam && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <input
+                        type="text"
+                        value={newExamTitle}
+                        onChange={(e) => setNewExamTitle(e.target.value)}
+                        placeholder="Tên bộ đề kiểm tra..."
+                        className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-bold text-xs w-64"
+                      />
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="number"
+                          min={5}
+                          max={90}
+                          value={newExamDuration}
+                          onChange={(e) => setNewExamDuration(Number(e.target.value))}
+                          className="px-2.5 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-bold text-xs w-16 text-center"
+                        />
+                        <span className="text-[11px] font-semibold text-slate-500">phút</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* TWO-PANE LAYOUT vs ALL-LIST LAYOUT */}

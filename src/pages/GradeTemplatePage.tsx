@@ -4,15 +4,21 @@ import { Grade, SubjectDomain, Lesson, Simulation3D, DocumentResource, VideoReso
 import {
   HERO_LAB_IMAGE,
   GRADE_COVER_IMAGES,
-  TOPICS,
-  LESSONS,
   SIMULATIONS_3D,
-  DOCUMENTS,
-  VIDEOS,
-  QUIZ_QUESTIONS,
   DOMAINS,
 } from '../data/mockData.ts';
-import { getLessonsByGrade, getDocumentsByGrade, getVideosByGrade } from '../services/contentService.ts';
+import {
+  getLessonsByGrade,
+  getPublishedLessonsSync,
+  getDocumentsByGrade,
+  getVideosByGrade,
+} from '../services/contentService.ts';
+import {
+  getAdminTopicsSync,
+  getAdminVideosSync,
+  getAdminCatalogDocsSync,
+  getAdminQuestionsSync,
+} from '../services/adminService.ts';
 import { Breadcrumbs } from '../components/common/Breadcrumbs.tsx';
 import { DocumentViewerModal } from '../components/common/DocumentViewerModal.tsx';
 import {
@@ -119,20 +125,20 @@ export const GradeTemplatePage: React.FC<GradeTemplatePageProps> = ({ grade }) =
   const [activeTab, setActiveTab] = useState<'topics' | 'simulations' | 'docs' | 'quiz'>('topics');
   const [previewDocData, setPreviewDocData] = useState<GeneratedDocumentData | null>(null);
   const [gradeLessons, setGradeLessons] = useState<Lesson[]>(() =>
-    LESSONS.filter((l) => l.grade === grade)
+    getPublishedLessonsSync(grade)
   );
   const [gradeDocuments, setGradeDocuments] = useState<DocumentResource[]>(() =>
-    DOCUMENTS.filter((d) => d.grade === grade)
+    getAdminCatalogDocsSync().filter((d) => d.grade === grade)
   );
   const [gradeVideos, setGradeVideos] = useState<VideoResource[]>(() =>
-    VIDEOS.filter((v) => v.grade === grade)
+    getAdminVideosSync().filter((v) => v.grade === grade)
   );
 
   useEffect(() => {
     let mounted = true;
-    setGradeLessons(LESSONS.filter((l) => l.grade === grade));
-    setGradeDocuments(DOCUMENTS.filter((d) => d.grade === grade));
-    setGradeVideos(VIDEOS.filter((v) => v.grade === grade));
+    setGradeLessons(getPublishedLessonsSync(grade));
+    setGradeDocuments(getAdminCatalogDocsSync().filter((d) => d.grade === grade));
+    setGradeVideos(getAdminVideosSync().filter((v) => v.grade === grade));
 
     Promise.all([
       getLessonsByGrade(grade),
@@ -153,8 +159,9 @@ export const GradeTemplatePage: React.FC<GradeTemplatePageProps> = ({ grade }) =
 
   const info = GRADE_INFO[grade];
 
-  const gradeTopics = TOPICS.filter(
-    (t) => t.grade === grade && (selectedDomain === 'all' || t.domain === selectedDomain)
+  const allGradeTopics = getAdminTopicsSync().filter((t) => t.grade === grade);
+  const gradeTopics = allGradeTopics.filter(
+    (t) => selectedDomain === 'all' || t.domain === selectedDomain
   );
   const filteredLessons = gradeLessons.filter(
     (l) => selectedDomain === 'all' || l.domain === selectedDomain
@@ -165,7 +172,10 @@ export const GradeTemplatePage: React.FC<GradeTemplatePageProps> = ({ grade }) =
   const filteredDocuments = gradeDocuments.filter(
     (d) => selectedDomain === 'all' || d.domain === selectedDomain
   );
-  const gradeQuizzes = QUIZ_QUESTIONS.filter(
+  const filteredVideos = gradeVideos.filter(
+    (v) => selectedDomain === 'all' || v.domain === selectedDomain
+  );
+  const gradeQuizzes = getAdminQuestionsSync().filter(
     (q) => q.grade === grade && (selectedDomain === 'all' || q.domain === selectedDomain)
   );
 
@@ -200,19 +210,19 @@ export const GradeTemplatePage: React.FC<GradeTemplatePageProps> = ({ grade }) =
               <div className="grid grid-cols-3 gap-3 bg-slate-950/30 backdrop-blur-md p-4 rounded-2xl border border-white/25 text-center max-w-md pt-3">
                 <div>
                   <div className="text-2xl font-black font-mono text-amber-300">
-                    {info.stats.topics}
+                    {allGradeTopics.length}
                   </div>
                   <div className="text-xs text-white/90 mt-0.5 font-semibold">Chủ đề</div>
                 </div>
                 <div className="border-x border-white/20">
                   <div className="text-2xl font-black font-mono text-cyan-200">
-                    {info.stats.lessons}
+                    {gradeLessons.length}
                   </div>
                   <div className="text-xs text-white/90 mt-0.5 font-semibold">Bài giảng</div>
                 </div>
                 <div>
                   <div className="text-2xl font-black font-mono text-emerald-200">
-                    {info.stats.labs}
+                    {SIMULATIONS_3D.filter((s) => s.grade === grade).length}
                   </div>
                   <div className="text-xs text-white/90 mt-0.5 font-semibold">Thí nghiệm số</div>
                 </div>
@@ -315,7 +325,7 @@ export const GradeTemplatePage: React.FC<GradeTemplatePageProps> = ({ grade }) =
               }`}
             >
               <FileText className="w-4 h-4" />
-              <span>Học liệu & Video ({filteredDocuments.length + gradeVideos.length})</span>
+              <span>Học liệu & Video ({filteredDocuments.length + filteredVideos.length})</span>
             </button>
             <button
               onClick={() => setActiveTab('quiz')}
@@ -387,57 +397,66 @@ export const GradeTemplatePage: React.FC<GradeTemplatePageProps> = ({ grade }) =
               </h3>
 
               <div className="space-y-4">
-                {filteredLessons.map((lesson) => {
-                  const domainObj = DOMAINS.find((d) => d.id === lesson.domain);
-                  return (
-                    <Link
-                      key={lesson.id}
-                      to={`/bai-hoc/${lesson.id}`}
-                      className="block p-5 rounded-3xl bg-white dark:bg-slate-900 border-2 border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-md hover:border-teal-400 transition group"
-                    >
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                        <div className="flex items-start gap-4">
-                          <img
-                            src={lesson.thumbnailUrl || domainObj?.image || HERO_LAB_IMAGE}
-                            alt={lesson.title}
-                            className="w-24 h-24 rounded-2xl object-cover shrink-0 border border-slate-200 hidden sm:block"
-                          />
-                          <div className="space-y-2">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="text-xs font-mono font-extrabold text-teal-700 bg-teal-50 px-2.5 py-0.5 rounded-md border border-teal-200">
-                                {lesson.code}
-                              </span>
-                              <span className="text-xs font-bold text-sky-600">
-                                {domainObj?.shortName}
-                              </span>
-                              <span className="text-xs text-slate-400 flex items-center gap-1">
-                                <Clock className="w-3.5 h-3.5" /> {lesson.durationMinutes} phút
-                              </span>
-                              {lesson.simulationId && (
-                                <span className="text-[11px] font-extrabold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 flex items-center gap-1">
-                                  <Atom className="w-3 h-3" /> Có mô phỏng 3D
+                {filteredLessons.length === 0 ? (
+                  <div className="p-8 rounded-3xl bg-white dark:bg-slate-900 border-2 border-dashed border-slate-200 dark:border-slate-800 text-center space-y-2">
+                    <BookOpen className="w-8 h-8 text-slate-400 mx-auto" />
+                    <p className="text-sm font-bold text-slate-600 dark:text-slate-300">
+                      Chưa có bài giảng nào trong mục này.
+                    </p>
+                  </div>
+                ) : (
+                  filteredLessons.map((lesson) => {
+                    const domainObj = DOMAINS.find((d) => d.id === lesson.domain);
+                    return (
+                      <Link
+                        key={lesson.id}
+                        to={`/bai-hoc/${lesson.id}`}
+                        className="block p-5 rounded-3xl bg-white dark:bg-slate-900 border-2 border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-md hover:border-teal-400 transition group"
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                          <div className="flex items-start gap-4">
+                            <img
+                              src={lesson.thumbnailUrl || domainObj?.image || HERO_LAB_IMAGE}
+                              alt={lesson.title}
+                              className="w-24 h-24 rounded-2xl object-cover shrink-0 border border-slate-200 hidden sm:block"
+                            />
+                            <div className="space-y-2">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="text-xs font-mono font-extrabold text-teal-700 bg-teal-50 px-2.5 py-0.5 rounded-md border border-teal-200">
+                                  {lesson.code}
                                 </span>
-                              )}
+                                <span className="text-xs font-bold text-sky-600">
+                                  {domainObj?.shortName}
+                                </span>
+                                <span className="text-xs text-slate-400 flex items-center gap-1">
+                                  <Clock className="w-3.5 h-3.5" /> {lesson.durationMinutes} phút
+                                </span>
+                                {lesson.simulationId && (
+                                  <span className="text-[11px] font-extrabold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 flex items-center gap-1">
+                                    <Atom className="w-3 h-3" /> Có mô phỏng 3D
+                                  </span>
+                                )}
+                              </div>
+
+                              <h4 className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-white group-hover:text-teal-600 transition">
+                                {lesson.title}
+                              </h4>
+
+                              <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                                {lesson.summary}
+                              </p>
                             </div>
+                          </div>
 
-                            <h4 className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-white group-hover:text-teal-600 transition">
-                              {lesson.title}
-                            </h4>
-
-                            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-                              {lesson.summary}
-                            </p>
+                          <div className="shrink-0 flex items-center gap-1.5 text-xs font-extrabold text-teal-600 group-hover:translate-x-1 transition self-end sm:self-center">
+                            <span>Vào học</span>
+                            <ArrowRight className="w-4 h-4" />
                           </div>
                         </div>
-
-                        <div className="shrink-0 flex items-center gap-1.5 text-xs font-extrabold text-teal-600 group-hover:translate-x-1 transition self-end sm:self-center">
-                          <span>Vào học</span>
-                          <ArrowRight className="w-4 h-4" />
-                        </div>
-                      </div>
-                    </Link>
-                  );
-                })}
+                      </Link>
+                    );
+                  })
+                )}
               </div>
             </div>
           </div>
@@ -553,26 +572,32 @@ export const GradeTemplatePage: React.FC<GradeTemplatePageProps> = ({ grade }) =
               <h3 className="font-extrabold text-slate-900 dark:text-white text-base">
                 Video Bài Giảng & Thí Nghiệm Trực Quan Lớp {grade}
               </h3>
-              {gradeVideos.map((vid) => (
-                <div
-                  key={vid.id}
-                  className="p-4 rounded-2xl bg-white dark:bg-slate-900 border-2 border-slate-100 dark:border-slate-800 flex items-center justify-between gap-4"
-                >
-                  <div className="space-y-1">
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-rose-50 text-rose-700">
-                      Thời lượng: {vid.duration} • KHOA HỌC SỐ KHTN
-                    </span>
-                    <h4 className="font-bold text-sm text-slate-900 dark:text-white">{vid.title}</h4>
-                    <p className="text-xs text-slate-500">{vid.summary}</p>
-                  </div>
-                  <Link
-                    to="/video"
-                    className="px-3 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold flex items-center gap-1.5 shrink-0"
-                  >
-                    <Play className="w-3.5 h-3.5" /> Xem
-                  </Link>
+              {filteredVideos.length === 0 ? (
+                <div className="p-6 rounded-2xl bg-white dark:bg-slate-900 border-2 border-dashed border-slate-200 dark:border-slate-800 text-center text-xs text-slate-500">
+                  Chưa có video nào cho khối lớp này.
                 </div>
-              ))}
+              ) : (
+                filteredVideos.map((vid) => (
+                  <div
+                    key={vid.id}
+                    className="p-4 rounded-2xl bg-white dark:bg-slate-900 border-2 border-slate-100 dark:border-slate-800 flex items-center justify-between gap-4"
+                  >
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-rose-50 text-rose-700">
+                        Thời lượng: {vid.duration} • KHOA HỌC SỐ KHTN
+                      </span>
+                      <h4 className="font-bold text-sm text-slate-900 dark:text-white">{vid.title}</h4>
+                      <p className="text-xs text-slate-500">{vid.summary || vid.description}</p>
+                    </div>
+                    <Link
+                      to="/video"
+                      className="px-3 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold flex items-center gap-1.5 shrink-0"
+                    >
+                      <Play className="w-3.5 h-3.5" /> Xem
+                    </Link>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         )}

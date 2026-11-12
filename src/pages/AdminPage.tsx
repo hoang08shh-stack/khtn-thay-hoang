@@ -26,6 +26,8 @@ import {
   fetchAdminLessons,
   toggleLessonPublish,
   deleteAdminLesson,
+  clearAdminLessonVideo,
+  clearAllAdminLessonVideos,
   fetchAllAdminDocuments,
   deleteAdminAsset,
   fetchAdminTopics,
@@ -1290,10 +1292,33 @@ export const AdminPage: React.FC = () => {
                   </select>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="text-[11px] text-slate-400">
                     Hiển thị <strong>{filteredLessons.length}</strong> bài học
                   </span>
+                  {filteredLessons.some((l) => Boolean(l.videoUrl && l.videoUrl.trim())) && (
+                    <button
+                      onClick={async () => {
+                        const targetGrade = selectedGrade === 'all' ? undefined : selectedGrade;
+                        await clearAllAdminLessonVideos(targetGrade);
+                        await loadAllData();
+                        showToast(
+                          targetGrade
+                            ? `Đã xóa toàn bộ link video trong các bài giảng Lớp ${targetGrade}.`
+                            : 'Đã xóa toàn bộ link video trong tất cả các bài giảng.'
+                        );
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-rose-50 dark:bg-rose-950/60 hover:bg-rose-100 text-rose-600 dark:text-rose-300 border border-rose-200 dark:border-rose-800 font-bold text-xs flex items-center gap-1 cursor-pointer"
+                      title="Gỡ toàn bộ link video khỏi các bài giảng đang hiển thị"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>
+                        {selectedGrade === 'all'
+                          ? 'Xóa tất cả link Video'
+                          : `Xóa link Video Lớp ${selectedGrade}`}
+                      </span>
+                    </button>
+                  )}
                   <button
                     onClick={() => {
                       setUnifiedUploadInitialTab('wizard');
@@ -1318,10 +1343,21 @@ export const AdminPage: React.FC = () => {
                 <RefreshCw className="w-8 h-8 animate-spin mx-auto text-teal-600 mb-2" />
                 <p className="text-xs">Đang tải dữ liệu bài học...</p>
               </div>
+            ) : filteredLessons.length === 0 ? (
+              <div className="p-12 text-center text-slate-400 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 space-y-2">
+                <BookOpen className="w-8 h-8 mx-auto text-slate-400" />
+                <p className="text-sm font-bold text-slate-600 dark:text-slate-300">
+                  Không còn bài giảng nào trong bộ lọc này.
+                </p>
+                <p className="text-xs text-slate-400">
+                  Bấm &quot;Thêm bài giảng&quot; ở góc trên nếu bạn muốn soạn bài học mới.
+                </p>
+              </div>
             ) : (
               <div className="space-y-3">
                 {filteredLessons.map((l) => {
                   const domainInfo = DOMAINS.find((d) => d.id === l.domain);
+                  const hasVideo = Boolean(l.videoUrl && l.videoUrl.trim());
                   return (
                     <div
                       key={l.id}
@@ -1353,6 +1389,11 @@ export const AdminPage: React.FC = () => {
                               </>
                             )}
                           </span>
+                          {hasVideo && (
+                            <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 flex items-center gap-1">
+                              <Video className="w-3 h-3" /> Đang gắn link Video
+                            </span>
+                          )}
                         </div>
                         <h3 className="font-extrabold text-sm sm:text-base text-slate-800 dark:text-white truncate">
                           {l.title}
@@ -1361,6 +1402,24 @@ export const AdminPage: React.FC = () => {
                       </div>
 
                       <div className="flex flex-wrap items-center gap-2 self-end md:self-center shrink-0">
+                        {hasVideo && (
+                          <button
+                            onClick={async () => {
+                              await clearAdminLessonVideo(l.id);
+                              setLessons((prev) =>
+                                prev.map((item) =>
+                                  item.id === l.id ? { ...item, videoUrl: '' } : item
+                                )
+                              );
+                              showToast(`Đã xóa link video khỏi bài: "${l.title}".`);
+                            }}
+                            className="px-2.5 py-1.5 rounded-xl text-xs font-bold border border-rose-200 dark:border-rose-800 bg-rose-50/70 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 hover:bg-rose-100 flex items-center gap-1 cursor-pointer"
+                            title="Gỡ link video khỏi bài giảng này"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Xóa link Video</span>
+                          </button>
+                        )}
                         <button
                           onClick={() => handleOpenEditLesson(l, 'miniquiz')}
                           className="px-3 py-1.5 rounded-xl text-xs font-bold border border-teal-200 dark:border-teal-800 bg-teal-50/70 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 hover:bg-teal-100 flex items-center gap-1 cursor-pointer"

@@ -88,7 +88,7 @@ const SimulationFormModalContent: React.FC<Omit<SimulationFormModalProps, 'isOpe
   const [title, setTitle] = useState(simulation?.title || '');
   const [subtitle, setSubtitle] = useState(simulation?.subtitle || '');
   const [version, setVersion] = useState(simulation?.version || '1.0.0');
-  const [mode, setMode] = useState<SimulationMode>(simulation?.mode || 'declarative_glb');
+  const [mode, setMode] = useState<SimulationMode>(simulation?.mode || 'external_embed');
   const [status, setStatus] = useState<SimulationStatus>(simulation?.status || 'published');
   const [grade, setGrade] = useState<Grade>(simulation?.grade || 7);
   const [domain, setDomain] = useState<SubjectDomain>(simulation?.domain || 'hoa-hoc');
@@ -236,6 +236,35 @@ const SimulationFormModalContent: React.FC<Omit<SimulationFormModalProps, 'isOpe
     } finally {
       setIsUploadingModel(false);
       setUploadProgress(0);
+    }
+  };
+
+  // Handle HTML 3D Simulation File Upload
+  const handleHtmlSimFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const htmlText = await file.text();
+      const titleMatch = htmlText.match(/<title[^>]*>([^<]+)<\/title>/i);
+      const extractedTitle = titleMatch?.[1]?.trim() || file.name.replace(/\.html?$/i, '');
+
+      const dataUrl = `data:text/html;charset=utf-8,${encodeURIComponent(htmlText)}`;
+      setExternalUrl(dataUrl);
+
+      if (!title.trim()) {
+        setTitle(extractedTitle);
+        const generatedSlug = generateSlug(extractedTitle);
+        setSlug(generatedSlug);
+        setId(`sim-${generatedSlug}`);
+      }
+      if (!summary.trim()) {
+        setSummary(`Mô phỏng tương tác 3D: ${extractedTitle} (Tệp gốc: ${file.name}).`);
+      }
+    } catch (err: any) {
+      alert(`Không thể đọc tệp HTML mô phỏng 3D: ${err.message}`);
+    } finally {
+      e.target.value = '';
     }
   };
 
@@ -494,26 +523,61 @@ const SimulationFormModalContent: React.FC<Omit<SimulationFormModalProps, 'isOpe
             <div className="space-y-6">
               {mode === 'external_embed' ? (
                 <div className="p-5 rounded-2xl bg-sky-50 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-800 space-y-4">
-                  <div>
-                    <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-1 flex items-center gap-2">
-                      <ExternalLink className="w-4 h-4 text-sky-600 dark:text-sky-400" />
-                      <span>Đường Dẫn URL Trạm Mô Phỏng Web 3D / AI Studio *</span>
-                    </h3>
-                    <p className="text-slate-500 dark:text-slate-400">
-                      Dán đường dẫn ứng dụng Web 3D của bạn (bắt đầu bằng <code>https://</code>). Học sinh có thể tương tác trực tiếp ngay trong khung 3D hoặc mở toàn màn hình.
-                    </p>
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-1 flex items-center gap-2">
+                        <ExternalLink className="w-4 h-4 text-sky-600 dark:text-sky-400" />
+                        <span>Tải Tệp Mô Phỏng 3D (.html) Hoặc Dán Đường Dẫn Web 3D *</span>
+                      </h3>
+                      <p className="text-slate-500 dark:text-slate-400">
+                        Tải trực tiếp tệp <code>.html</code> (Three.js / WebGL) từ máy tính hoặc dán đường dẫn ứng dụng Web 3D (<code>https://...</code> hoặc <code>/assets/...html</code>).
+                      </p>
+                    </div>
+
+                    <label className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-xs font-extrabold shadow-md transition shrink-0">
+                      <Upload className="w-4 h-4" />
+                      <span>Tải file Mô phỏng 3D (.html)</span>
+                      <input
+                        type="file"
+                        accept=".html,.htm"
+                        onChange={handleHtmlSimFileUpload}
+                        className="hidden"
+                      />
+                    </label>
                   </div>
 
                   <input
-                    type="url"
+                    type="text"
                     value={externalUrl}
                     onChange={(e) => setExternalUrl(e.target.value)}
-                    placeholder="https://c-n-b-ng-ph-ng-tr-nh-h-a-h-c-3d.ai.studio"
+                    placeholder="/assets/aistudio/M__ph_ng_3D_m__d_u_v__ph_n_t__trong_c_c_l_p_ch_t_l_u__1__ac609d1f.html hoặc https://..."
                     className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-sky-300 dark:border-sky-700 font-mono text-xs text-slate-900 dark:text-white focus:ring-2 focus:ring-sky-500"
                   />
 
                   <div className="pt-1 flex flex-wrap items-center gap-2">
                     <span className="text-[11px] font-semibold text-slate-500">Mẫu điền nhanh:</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setExternalUrl(
+                          '/assets/aistudio/M__ph_ng_3D_m__d_u_v__ph_n_t__trong_c_c_l_p_ch_t_l_u__1__ac609d1f.html'
+                        );
+                        setTitle('Mô Phỏng 3D Mỏ Dầu & Phân Tử Trong Các Lớp Chất Lưu');
+                        setSlug('mo-phong-3d-mo-dau-va-phan-tu-chat-luu');
+                        setId('sim-oil-reservoir-3d');
+                        setGrade(9);
+                        setDomain('hoa-hoc');
+                        setCategory('Nhiên liệu hóa thạch & Dầu mỏ - Khí thiên nhiên');
+                        setSummary(
+                          'Khám phá trực quan 3D cấu tạo địa chất mỏ dầu (đá chắn, đá chứa, sự phân tầng khí – dầu – nước) và nhấp vào từng lớp chất lưu để quan sát mô hình phân tử 3D chuyển động (CH₄, C₂H₆, C₃H₈, C₄H₁₀, C₈H₁₈, C₆H₁₂, C₆H₆, C₁₀H₈, H₂O, Na⁺, Cl⁻).'
+                        );
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-[11px] font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>Điền mẫu: Mô phỏng 3D Mỏ dầu &amp; Phân tử (.html)</span>
+                    </button>
+
                     <button
                       type="button"
                       onClick={() => {
@@ -530,7 +594,7 @@ const SimulationFormModalContent: React.FC<Omit<SimulationFormModalProps, 'isOpe
                           );
                         }
                       }}
-                      className="px-3 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-[11px] font-bold transition flex items-center gap-1.5 shadow-sm"
+                      className="px-3 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-[11px] font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer"
                     >
                       <Sparkles className="w-3.5 h-3.5" />
                       <span>Điền mẫu: Cân Bằng Phương Trình Hóa Học 3D (.ai.studio)</span>

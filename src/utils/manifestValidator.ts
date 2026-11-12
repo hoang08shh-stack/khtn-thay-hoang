@@ -85,8 +85,16 @@ export function validateSimulationManifest(input: any): ManifestValidationResult
 
   if (input.mode === 'external_embed') {
     const extUrl = String(input.externalUrl || '').trim();
-    if (!extUrl || (!extUrl.startsWith('https://') && !extUrl.startsWith('http://'))) {
-      errors.push('Chế độ Nhúng Web 3D ngoài (external_embed) bắt buộc phải có đường dẫn URL hợp lệ bắt đầu bằng https:// hoặc http://.');
+    const isAllowedEmbedUrl =
+      extUrl.startsWith('https://') ||
+      extUrl.startsWith('http://') ||
+      extUrl.startsWith('/') ||
+      extUrl.startsWith('blob:') ||
+      extUrl.startsWith('data:text/html');
+    if (!extUrl || !isAllowedEmbedUrl) {
+      errors.push(
+        'Chế độ Nhúng Web 3D (external_embed) bắt buộc phải có đường dẫn hợp lệ (https://, /assets/...html hoặc tệp .html tải lên).'
+      );
     }
   }
 

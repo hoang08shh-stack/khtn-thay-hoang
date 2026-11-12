@@ -5,11 +5,14 @@ import {
   GAMES_ARENA_IMAGE,
   GRADE_COVER_IMAGES,
   DOMAINS,
-  LESSONS,
   SIMULATIONS_3D,
-  DOCUMENTS,
-  QUIZ_QUESTIONS,
 } from '../data/mockData.ts';
+import { getPublishedLessonsSync } from '../services/contentService.ts';
+import {
+  getAdminTopicsSync,
+  getAdminQuestionsSync,
+  getAdminCatalogDocsSync,
+} from '../services/adminService.ts';
 import { HeroAtomVisualizer } from '../components/home/HeroAtomVisualizer.tsx';
 import {
   Atom,
@@ -35,6 +38,10 @@ import {
 export const HomePage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const navigate = useNavigate();
+  const liveLessons = getPublishedLessonsSync();
+  const liveTopics = getAdminTopicsSync();
+  const liveQuestions = getAdminQuestionsSync();
+  const liveDocs = getAdminCatalogDocsSync();
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -69,8 +76,8 @@ export const HomePage: React.FC = () => {
       grade: 6,
       title: 'Khoa học tự nhiên 6',
       subtitle: 'Khám phá Tế bào, Chất & Lực trong đời sống',
-      topicsCount: 11,
-      lessonsCount: 42,
+      topicsCount: liveTopics.filter((t) => t.grade === 6).length,
+      lessonsCount: liveLessons.filter((l) => l.grade === 6).length,
       highlight: 'Đo lường, Oxygen & Không khí, Tế bào cơ sở sự sống, Lực & Ma sát',
       accentPill: 'bg-emerald-500 text-white',
       badgeBg: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800',
@@ -81,8 +88,8 @@ export const HomePage: React.FC = () => {
       grade: 7,
       title: 'Khoa học tự nhiên 7',
       subtitle: 'Vi mô Nguyên tử, Quang học & Trao đổi chất',
-      topicsCount: 12,
-      lessonsCount: 45,
+      topicsCount: liveTopics.filter((t) => t.grade === 7).length,
+      lessonsCount: liveLessons.filter((l) => l.grade === 7).length,
       highlight: 'Nguyên tử Rutherford-Bohr, Bảng tuần hoàn IUPAC, Tốc độ, Âm thanh, Quang hợp',
       accentPill: 'bg-sky-500 text-white',
       badgeBg: 'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/60 dark:text-sky-300 dark:border-sky-800',
@@ -93,8 +100,8 @@ export const HomePage: React.FC = () => {
       grade: 8,
       title: 'Khoa học tự nhiên 8',
       subtitle: 'Phản ứng Hóa học, Điện học & Sinh học cơ thể người',
-      topicsCount: 10,
-      lessonsCount: 48,
+      topicsCount: liveTopics.filter((t) => t.grade === 8).length,
+      lessonsCount: liveLessons.filter((l) => l.grade === 8).length,
       highlight: 'Mol, Acid - Base - Oxide - pH, Khối lượng riêng & Áp suất, Mạch điện',
       accentPill: 'bg-teal-600 text-white',
       badgeBg: 'bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/60 dark:text-teal-300 dark:border-teal-800',
@@ -105,8 +112,8 @@ export const HomePage: React.FC = () => {
       grade: 9,
       title: 'Khoa học tự nhiên 9',
       subtitle: 'Khúc xạ ánh sáng, Hợp chất hữu cơ & Di truyền DNA',
-      topicsCount: 12,
-      lessonsCount: 52,
+      topicsCount: liveTopics.filter((t) => t.grade === 9).length,
+      lessonsCount: liveLessons.filter((l) => l.grade === 9).length,
       highlight: 'Thấu kính, Cảm ứng điện từ, Kim loại, Alkane/Ethanol, DNA - RNA - Mendel',
       accentPill: 'bg-indigo-600 text-white',
       badgeBg: 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/60 dark:text-indigo-300 dark:border-indigo-800',
@@ -266,7 +273,7 @@ export const HomePage: React.FC = () => {
             to="/chu-de"
             className="text-sm font-extrabold text-teal-600 dark:text-teal-400 hover:text-teal-700 flex items-center gap-1.5 self-start md:self-auto"
           >
-            <span>Xem toàn bộ 45 chủ đề</span>
+            <span>Xem toàn bộ {liveTopics.length} chủ đề</span>
             <ArrowRight className="w-4 h-4" />
           </Link>
         </div>
@@ -478,13 +485,13 @@ export const HomePage: React.FC = () => {
               to="/chuyen-de"
               className="text-xs sm:text-sm font-extrabold text-teal-600 dark:text-teal-400 hover:underline flex items-center gap-1"
             >
-              <span>Xem tất cả ({LESSONS.length})</span>
+              <span>Xem tất cả ({liveLessons.length})</span>
               <ArrowRight className="w-4 h-4" />
             </Link>
           </div>
 
           <div className="space-y-3.5">
-            {LESSONS.slice(0, 5).map((lesson) => {
+            {liveLessons.slice(0, 5).map((lesson) => {
               const domainObj = DOMAINS.find((d) => d.id === lesson.domain);
               return (
                 <Link
@@ -559,7 +566,7 @@ export const HomePage: React.FC = () => {
           <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border-2 border-slate-200/80 dark:border-slate-800 shadow-sm space-y-4">
             <div className="flex items-center justify-between">
               <span className="px-3 py-1 rounded-full bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 text-xs font-extrabold border border-emerald-200 dark:border-emerald-800">
-                Ngân hàng câu hỏi ({QUIZ_QUESTIONS.length}+ câu)
+                Ngân hàng câu hỏi ({liveQuestions.length}+ câu)
               </span>
               <Award className="w-6 h-6 text-emerald-500" />
             </div>
@@ -582,7 +589,7 @@ export const HomePage: React.FC = () => {
                 className="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-200 text-xs font-bold transition flex items-center gap-1.5"
               >
                 <FileText className="w-4 h-4 text-teal-600" />
-                <span>Tải học liệu ({DOCUMENTS.length})</span>
+                <span>Tải học liệu ({liveDocs.length})</span>
               </Link>
             </div>
           </div>

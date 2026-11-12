@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { VIDEOS } from '../data/mockData.ts';
 import { Grade, VideoResource } from '../types/index.ts';
 import { getAllVideos } from '../services/contentService.ts';
+import { getAdminVideosSync } from '../services/adminService.ts';
 import { Breadcrumbs } from '../components/common/Breadcrumbs.tsx';
 import { Play, Clock, Eye, Sparkles, X, Atom } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -9,10 +9,11 @@ import { Link } from 'react-router-dom';
 export const VideosPage: React.FC = () => {
   const [selectedGrade, setSelectedGrade] = useState<Grade | 'all'>('all');
   const [activeVideoId, setActiveVideoId] = useState<string | null>(null);
-  const [videosList, setVideosList] = useState<VideoResource[]>(VIDEOS);
+  const [videosList, setVideosList] = useState<VideoResource[]>(() => getAdminVideosSync());
 
   useEffect(() => {
     let mounted = true;
+    setVideosList(getAdminVideosSync());
     getAllVideos().then((data) => {
       if (mounted) {
         setVideosList(data);

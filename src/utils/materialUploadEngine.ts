@@ -2,6 +2,10 @@ import { Grade, Lesson, SubjectDomain, Topic } from '../types/index.ts';
 import {
   getAdminTopicsSync,
   getInitialLocalLessons,
+  getDeletedIdsRegistrySync,
+  clearAdminLessonVideo,
+  deleteAdminAsset,
+  deleteAdminCatalogDoc,
   saveAdminTopic,
   saveAdminLesson,
   saveAdminVideo,
@@ -616,13 +620,21 @@ export function validateMaterialFileOrSource(step2: WizardStep2Data): {
  * Lấy danh sách toàn bộ học liệu thống nhất (khởi tạo dữ liệu mẫu thực tế nếu chưa có)
  */
 export function getUnifiedResourcesSync(): UnifiedLearningResource[] {
+  const deletedReg = getDeletedIdsRegistrySync();
+  const deletedLessonSet = new Set(deletedReg.lessons);
+  const clearedVideoSet = new Set(deletedReg.clearedLessonVideoIds);
+
   const existing = readJson<UnifiedLearningResource[] | null>(UNIFIED_RESOURCES_KEY, null);
-  if (existing && Array.isArray(existing) && existing.length > 0) {
-    return existing;
+  if (existing !== null && Array.isArray(existing)) {
+    return existing.filter((r) => {
+      if (deletedLessonSet.has(r.lessonId)) return false;
+      if (r.category === 'video' && clearedVideoSet.has(r.lessonId)) return false;
+      return true;
+    });
   }
 
   const now = new Date().toISOString();
-  const initialSeed: UnifiedLearningResource[] = [
+  const baseSeed: UnifiedLearningResource[] = [
     {
       id: 'res-seed-doc-8',
       subject: 'khtn',
@@ -655,7 +667,7 @@ export function getUnifiedResourcesSync(): UnifiedLearningResource[] {
       category: 'video',
       title: 'Video thí nghiệm: Kim loại Zn tác dụng với dung dịch H₂SO₄ loãng',
       videoSourceType: 'youtube',
-      externalUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+      externalUrl: 'https://www.youtube.com/watch?v=p3St51F4kE8',
       status: 'published',
       createdAt: now,
       updatedAt: now,
@@ -680,6 +692,11 @@ export function getUnifiedResourcesSync(): UnifiedLearningResource[] {
       updatedAt: now,
     },
   ];
+  const initialSeed = baseSeed.filter((r) => {
+    if (deletedLessonSet.has(r.lessonId)) return false;
+    if (r.category === 'video' && clearedVideoSet.has(r.lessonId)) return false;
+    return true;
+  });
 
   writeJson(UNIFIED_RESOURCES_KEY, initialSeed);
   return initialSeed;
@@ -987,8 +1004,18 @@ export function toggleUnifiedResourceStatus(
 
 export function deleteUnifiedResource(resourceId: string): UnifiedLearningResource[] {
   const list = getUnifiedResourcesSync();
+  const target = list.find((item) => item.id === resourceId);
   const next = list.filter((item) => item.id !== resourceId);
   writeJson(UNIFIED_RESOURCES_KEY, next);
+
+  if (target) {
+    if (target.category === 'video' && target.lessonId) {
+      clearAdminLessonVideo(target.lessonId).catch(() => {});
+    } else if (target.category === 'lecture_doc') {
+      deleteAdminAsset(`asset-${resourceId}`).catch(() => {});
+      deleteAdminCatalogDoc(`cat-${resourceId}`).catch(() => {});
+    }
+  }
   return next;
 }
 

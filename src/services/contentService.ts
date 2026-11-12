@@ -5,6 +5,8 @@ import {
   getAdminVideosSync,
   getAdminCatalogDocsSync,
   getInitialLocalLessons,
+  getDeletedIdsRegistrySync,
+  extractYouTubeId,
   normalizeVideoUrl,
   AdminLesson,
 } from './adminService.ts';
@@ -32,35 +34,106 @@ function parseMarkdownSections(content: string, fallbackSections?: LessonSection
     return (
       fallbackSections || [
         {
-          title: 'Nội dung cốt lõi',
+          title: '1. Nội dung kiến thức cốt lõi',
           content: ['Nội dung bài giảng đang được cập nhật.'],
         },
       ]
     );
   }
 
-  // Split by ### headings if present
-  if (/^###\s+/m.test(trimmed)) {
-    const rawBlocks = trimmed.split(/(?=^###\s+)/m).map((b) => b.trim()).filter(Boolean);
+  // Split by ### or ## headings if present
+  if (/^#{2,3}\s+/m.test(trimmed)) {
+    const rawBlocks = trimmed
+      .split(/(?=^#{2,3}\s+)/m)
+      .map((b) => b.trim())
+      .filter(Boolean);
+
     const parsed: LessonSection[] = rawBlocks.map((block, idx) => {
       const lines = block.split(/\r?\n/);
-      const firstLine = lines[0].replace(/^###\s+/, '').trim() || `Mục ${idx + 1}`;
-      const bodyLines = lines
+      const firstLine = lines[0].replace(/^#{2,3}\s+/, '').trim() || `Mục ${idx + 1}`;
+      const rawBodyLines = lines
         .slice(1)
         .map((line) => line.trim())
         .filter(Boolean);
 
-      // Preserve formula/highlightBox from fallback section with matching title if available
-      const matchedFallback = fallbackSections?.find(
-        (fs) => fs.title.trim().toLowerCase() === firstLine.toLowerCase()
+      // Extract inline "Công thức:", "Giải thích:", and "Ý chính:" if teacher wrote them in markdown
+      const extractedFormulas: string[] = [];
+      const extractedKeyPoints: string[] = [];
+      let extractedMeaning = '';
+      const bodyLines: string[] = [];
+
+      rawBodyLines.forEach((line) => {
+        const formulaLineMatch = line.match(/^(?:\*\*)?(?:Công thức|Phương trình)(?:\s*trọng tâm)?\s*:(?:\*\*)?\s*(.+)$/i);
+        const meaningLineMatch = line.match(/^(?:\*\*)?(?:Giải thích(?:\s*kí hiệu)?|Trong đó)\s*:(?:\*\*)?\s*(.+)$/i);
+        const keyPointLineMatch = line.match(/^(?:\*\*)?(?:Ý chính|Ghi nhớ)\s*:(?:\*\*)?\s*(.+)$/i);
+
+        if (formulaLineMatch) {
+          extractedFormulas.push(formulaLineMatch[1].trim());
+        } else if (meaningLineMatch) {
+          extractedMeaning = meaningLineMatch[1].trim();
+        } else if (keyPointLineMatch) {
+          extractedKeyPoints.push(keyPointLineMatch[1].trim());
+        } else {
+          bodyLines.push(line);
+        }
+      });
+
+      // Match fallback section by index or title similarity
+      const cleanFirst = firstLine.replace(/^\d+\.\s*/, '').toLowerCase();
+      const matchedFallback =
+        fallbackSections?.find((fs) => {
+          const cleanFs = fs.title.replace(/^\d+\.\s*/, '').toLowerCase();
+          return (
+            fs.title.trim().toLowerCase() === firstLine.toLowerCase() ||
+            cleanFs === cleanFirst ||
+            cleanFs.includes(cleanFirst.slice(0, 18)) ||
+            cleanFirst.includes(cleanFs.slice(0, 18))
+          );
+        }) || fallbackSections?.[idx];
+
+      // If bodyLines are from an older unformatted cache (no a), b) subheadings or bolding) while matchedFallback has structured a), b) subheadings, prefer matchedFallback.content
+      const bodyHasStructuredSubheadings = bodyLines.some((l) =>
+        /^(?:[a-f]\)|•|\*\*)/i.test(l.trim())
       );
+      const fallbackHasStructuredSubheadings = Boolean(
+        matchedFallback?.content?.some((l) => /^(?:[a-f]\)|•|\*\*)/i.test(l.trim()))
+      );
+
+      const resolvedContent =
+        !bodyHasStructuredSubheadings && fallbackHasStructuredSubheadings && matchedFallback
+          ? matchedFallback.content
+          : bodyLines.length > 0
+          ? bodyLines
+          : matchedFallback?.content || [firstLine];
 
       return {
         ...(matchedFallback || {}),
-        title: firstLine,
-        content: bodyLines.length > 0 ? bodyLines : matchedFallback?.content || [firstLine],
+        title:
+          !bodyHasStructuredSubheadings && fallbackHasStructuredSubheadings && matchedFallback
+            ? matchedFallback.title
+            : firstLine,
+        content: resolvedContent,
+        formula:
+          extractedFormulas.length > 0
+            ? extractedFormulas.join('   |   ')
+            : matchedFallback?.formula,
+        formulaMeaning: extractedMeaning || matchedFallback?.formulaMeaning,
+        keyPoints:
+          extractedKeyPoints.length > 0
+            ? extractedKeyPoints
+            : matchedFallback?.keyPoints,
       };
     });
+
+    // If fallbackSections has more sections than an older 1-section cached markdown (e.g. upgraded from 1 section to 2 sections), append the new fallback sections
+    if (
+      fallbackSections &&
+      fallbackSections.length > parsed.length &&
+      parsed.every((p, i) => p.content === fallbackSections[i]?.content)
+    ) {
+      return fallbackSections;
+    }
+
     if (parsed.length > 0) return parsed;
   }
 
@@ -70,8 +143,11 @@ function parseMarkdownSections(content: string, fallbackSections?: LessonSection
 
   return [
     {
-      title: 'Nội dung cốt lõi',
-      content: trimmed.split(/\r?\n\r?\n/).map((p) => p.trim()).filter(Boolean),
+      title: '1. Nội dung kiến thức cốt lõi',
+      content: trimmed
+        .split(/\r?\n+/)
+        .map((p) => p.trim())
+        .filter(Boolean),
     },
   ];
 }
@@ -79,15 +155,26 @@ function parseMarkdownSections(content: string, fallbackSections?: LessonSection
 function mapAdminLessonToLesson(l: AdminLesson): Lesson {
   const baseMatch = LESSONS.find((m) => m.id === l.id);
   const unifiedForLesson = getUnifiedResourcesForLesson(l.id, l.title);
+  const deletedReg = getDeletedIdsRegistrySync();
+  const isClearedVideo =
+    deletedReg.clearedLessonVideoIds.includes(l.id) ||
+    l.videoUrl === '' ||
+    extractYouTubeId(l.videoUrl || '') === 'dQw4w9WgXcQ';
 
-  // Determine videoUrl: prefer lesson.videoUrl, then latest uploaded video resource, then baseMatch.videoUrl
-  const uploadedVideoRes = unifiedForLesson.find(
-    (r) => r.category === 'video' && (r.externalUrl || r.fileDataUrl)
-  );
-  const resolvedVideoUrl =
-    normalizeVideoUrl(l.videoUrl) ||
-    normalizeVideoUrl(uploadedVideoRes?.externalUrl || uploadedVideoRes?.fileDataUrl) ||
-    normalizeVideoUrl(baseMatch?.videoUrl);
+  // Determine videoUrl: if cleared by admin, never fall back to uploadedVideoRes or baseMatch.videoUrl
+  const uploadedVideoRes = isClearedVideo
+    ? undefined
+    : unifiedForLesson.find(
+        (r) =>
+          r.category === 'video' &&
+          (r.externalUrl || r.fileDataUrl) &&
+          extractYouTubeId(r.externalUrl || '') !== 'dQw4w9WgXcQ'
+      );
+  const resolvedVideoUrl = isClearedVideo
+    ? undefined
+    : normalizeVideoUrl(l.videoUrl) ||
+      normalizeVideoUrl(uploadedVideoRes?.externalUrl || uploadedVideoRes?.fileDataUrl) ||
+      normalizeVideoUrl(baseMatch?.videoUrl);
 
   // Merge real teacher-uploaded assets from AdminLesson + uploaded lecture_doc resources
   const baseAssets: LessonAsset[] = (l.assets || [])
@@ -215,34 +302,43 @@ export async function getTopics(grade?: Grade, domain?: SubjectDomain): Promise<
 }
 
 /**
- * Fetch all published lessons
+ * Synchronously get published lessons (respecting deleted lessons & cleared videos)
  */
-export async function getLessons(grade?: Grade, domain?: SubjectDomain): Promise<Lesson[]> {
+export function getPublishedLessonsSync(grade?: Grade, domain?: SubjectDomain): Lesson[] {
+  const deletedLessonSet = new Set(getDeletedIdsRegistrySync().lessons);
   const localAdminLessons = getInitialLocalLessons();
   const published = localAdminLessons
-    .filter((l) => l.isPublished === true)
+    .filter((l) => l.isPublished === true && !deletedLessonSet.has(l.id))
     .map(mapAdminLessonToLesson);
 
-  const allLessons: Lesson[] = published.length > 0 ? published : LESSONS;
-
-  return allLessons.filter((l) => {
+  return published.filter((l) => {
     if (grade && l.grade !== grade) return false;
     if (domain && l.domain !== domain) return false;
     return true;
   });
 }
 
+/**
+ * Fetch all published lessons
+ */
+export async function getLessons(grade?: Grade, domain?: SubjectDomain): Promise<Lesson[]> {
+  return getPublishedLessonsSync(grade, domain);
+}
+
 export async function getPublishedLessons(): Promise<Lesson[]> {
-  return getLessons();
+  return getPublishedLessonsSync();
 }
 
 export async function getLessonsByGrade(grade: Grade): Promise<Lesson[]> {
-  return getLessons(grade);
+  return getPublishedLessonsSync(grade);
 }
 
 export async function getLessonByIdOrSlug(idOrSlug: string): Promise<Lesson | null> {
   const cleanKey = (idOrSlug || '').trim().toLowerCase();
-  const localAdminLessons = getInitialLocalLessons();
+  const deletedLessonSet = new Set(getDeletedIdsRegistrySync().lessons);
+  const localAdminLessons = getInitialLocalLessons().filter(
+    (l) => !deletedLessonSet.has(l.id)
+  );
   const matchedAdmin = localAdminLessons.find(
     (l) =>
       l.id.toLowerCase() === cleanKey ||
@@ -260,9 +356,7 @@ export async function getLessonByIdOrSlug(idOrSlug: string): Promise<Lesson | nu
         l.id.toLowerCase() === cleanKey ||
         l.code.toLowerCase() === cleanKey
     ) ||
-    LESSONS.find((l) => l.id === idOrSlug) ||
     all[0] ||
-    LESSONS[0] ||
     null
   );
 }

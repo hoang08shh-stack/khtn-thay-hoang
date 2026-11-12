@@ -187,3 +187,44 @@ test('Clamps controlsConfig values to safe defined bounds', () => {
   assert.equal(result.sanitized?.controlsConfig.maxExplodeDistance, 0.5);
   assert.equal(result.sanitized?.controlsConfig.fov, 90);
 });
+
+test('All 4 KHTN 9 Optics 3D simulations in SEED_SIMULATIONS and SIMULATIONS_3D are valid and linked', async () => {
+  const { SEED_SIMULATIONS } = await import('../services/simulationService.ts');
+  const { SIMULATIONS_3D } = await import('../data/mockData.ts');
+
+  const expectedSims = [
+    {
+      id: 'sim-khuc-xa-anh-sang-3d',
+      url: '/assets/aistudio/Kh_c_x___nh_s_ng_3bf52125.html',
+    },
+    {
+      id: 'sim-phan-xa-toan-phan-3d',
+      url: '/assets/aistudio/Ph_n_x__to_n_ph_n_2acb5007.html',
+    },
+    {
+      id: 'sim-lang-kinh-tan-sac-3d',
+      url: '/assets/aistudio/L_ng_k_nh_d88b6c2d.html',
+    },
+    {
+      id: 'sim-thau-kinh-3d',
+      url: '/assets/aistudio/Th_u_k_nh_82cbc246.html',
+    },
+  ];
+
+  for (const exp of expectedSims) {
+    const manifest = SEED_SIMULATIONS.find((m) => m.id === exp.id);
+    assert.ok(manifest, `Manifest ${exp.id} must exist in SEED_SIMULATIONS`);
+    assert.equal(manifest.externalUrl, exp.url);
+    assert.equal(manifest.grade, 9);
+    assert.equal(manifest.domain, 'vat-li');
+
+    const validation = validateSimulationManifest(manifest);
+    assert.equal(validation.isValid, true, `Manifest ${exp.id} must pass validation: ${validation.errors.join(', ')}`);
+
+    const sim3d = SIMULATIONS_3D.find((s) => s.id === exp.id);
+    assert.ok(sim3d, `Simulation3D ${exp.id} must exist in SIMULATIONS_3D`);
+    assert.equal(sim3d.externalUrl, exp.url);
+    assert.equal(sim3d.relatedLessonId, 'khtn-9-bai-4');
+  }
+});
+

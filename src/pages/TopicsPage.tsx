@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { HERO_LAB_IMAGE, TOPICS, LESSONS, DOMAINS } from '../data/mockData.ts';
-import { Grade, SubjectDomain, Lesson } from '../types/index.ts';
-import { getPublishedLessons } from '../services/contentService.ts';
+import { HERO_LAB_IMAGE, DOMAINS } from '../data/mockData.ts';
+import { Grade, SubjectDomain, Lesson, Topic } from '../types/index.ts';
+import { getPublishedLessons, getPublishedLessonsSync } from '../services/contentService.ts';
+import { getAdminTopicsSync } from '../services/adminService.ts';
 import { Breadcrumbs } from '../components/common/Breadcrumbs.tsx';
 import {
   Search,
@@ -27,10 +28,12 @@ export const TopicsPage: React.FC = () => {
       ? initialDomain
       : 'all'
   );
-  const [allLessons, setAllLessons] = useState<Lesson[]>(LESSONS);
+  const [allLessons, setAllLessons] = useState<Lesson[]>(() => getPublishedLessonsSync());
+  const [allTopics, setAllTopics] = useState<Topic[]>(() => getAdminTopicsSync());
 
   useEffect(() => {
     let mounted = true;
+    setAllTopics(getAdminTopicsSync());
     getPublishedLessons().then((data) => {
       if (mounted) {
         setAllLessons(data);
@@ -41,7 +44,7 @@ export const TopicsPage: React.FC = () => {
     };
   }, []);
 
-  const filteredTopics = TOPICS.filter((t) => {
+  const filteredTopics = allTopics.filter((t) => {
     if (selectedGrade !== 'all' && t.grade !== selectedGrade) return false;
     if (selectedDomain !== 'all' && t.domain !== selectedDomain) return false;
     if (searchQuery.trim()) {

@@ -484,10 +484,34 @@ export function formatChemicalAndScientificText(text: string): { text: string; c
     convertHtmlSubSupToUnicode(convertWordOmmlToReadableFormula(text))
   );
 
-  // 0. Unwrap LaTeX \ce{...} and \text{...} wrappers from MathType / ChemDraw / Overleaf
+  // 0. Unwrap LaTeX math delimiters ($...$, $$...$$, \(...\), \[...\]) & \ce{...}, \text{...} wrappers
   current = current
+    .replace(/\$\$([\s\S]*?)\$\$/g, '$1')
+    .replace(/\$([^$\n]+)\$/g, '$1')
+    .replace(/\\\(([\s\S]*?)\\\)/g, '$1')
+    .replace(/\\\[([\s\S]*?)\\\]/g, '$1')
     .replace(/\\ce\{([^{}]+)\}/g, '$1')
-    .replace(/\\(?:text|mathrm)\{([^{}]+)\}/g, '$1');
+    .replace(/\\(?:text|mathrm|mathbf)\{([^{}]+)\}/g, '$1')
+    .replace(/\\cdot\b/g, '·')
+    .replace(/\\times\b/g, '×')
+    .replace(/\\div\b/g, '÷')
+    .replace(/\\pm\b/g, '±')
+    .replace(/\\(?:le|leq)\b/g, '≤')
+    .replace(/\\(?:ge|geq)\b/g, '≥')
+    .replace(/\\(?:ne|neq)\b/g, '≠')
+    .replace(/\\approx\b/g, '≈')
+    .replace(/\\(?:Rightarrow|implies)\b/g, '⇒')
+    .replace(/\\(?:Leftrightarrow|iff)\b/g, '⇔')
+    .replace(/\\Delta\b/g, 'Δ')
+    .replace(/\\Omega\b/g, 'Ω')
+    .replace(/\\alpha\b/g, 'α')
+    .replace(/\\beta\b/g, 'β')
+    .replace(/\\gamma\b/g, 'γ')
+    .replace(/\\pi\b/g, 'π')
+    .replace(/\\lambda\b/g, 'λ')
+    .replace(/\\mu\b/g, 'μ')
+    .replace(/\^\{?\\circ\}?/g, '°')
+    .replace(/\\(?:sin|cos|tan|cot|log)\b/g, (m) => m.slice(1));
 
   // 1. Reaction conditions, LaTeX arrows (\xrightarrow, \to, \rightleftharpoons) & Word arrow extenders
   current = current
@@ -574,7 +598,7 @@ export function formatChemicalAndScientificText(text: string): { text: string; c
       '$1↑'
     )
     .replace(
-      /\b(\d*(?:BaSO[4₄]|AgCl|AgBr|AgI|CaCO[3₃]|BaCO[3₃]|Cu\(OH\)[2₂]|Fe\(OH\)[23₂₃]|Al\(OH\)[3₃]|Mg\(OH\)[2₂]|Zn\(OH\)[2₂]|FeS|CuS|PbS|BaSO[3₃]|CaSO[3₃]))\s*\(\s*kết\s*tủa\s*\)/gi,
+      /\b(\d*(?:BaSO[4₄]|AgCl|AgBr|AgI|CaCO[3₃]|BaCO[3₃]|Cu\(OH\)[2₂]|Fe\(OH\)[23₂₃]|Al\(OH\)[3₃]|Mg\(OH\)[2₂]|Zn\(OH\)[2₂]|FeS|CuS|PbS|BaSO[3₃]|CaSO[3₃]))\s*\(\s*(?:kết\s*tủa|r)\s*\)/gi,
       '$1↓'
     );
 

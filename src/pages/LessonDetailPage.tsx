@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { HERO_LAB_IMAGE, LESSONS, SIMULATIONS_3D, DOMAINS } from '../data/mockData.ts';
 import {
@@ -7,12 +7,13 @@ import {
   LessonReviewQuestionType,
   TrueFalseStatement,
 } from '../types/index.ts';
-import { getLessonByIdOrSlug } from '../services/contentService.ts';
+import { getLessonByIdOrSlug, getPublishedLessonsSync } from '../services/contentService.ts';
 import { getYoutubeEmbedUrl } from '../lib/supabase.ts';
 import {
   updateLessonMiniQuizSync,
   getInitialLocalLessons,
   saveAdminLesson,
+  clearAdminLessonVideo,
   saveUploadedAssetToRepository,
   extractYouTubeId,
   getAdminQuestionsSync,
@@ -21,7 +22,13 @@ import { getUnifiedResourcesForLesson, inferDocumentSubCategory } from '../utils
 import { isRealUploadedFileUrl } from '../services/localFileStore.ts';
 import { Breadcrumbs } from '../components/common/Breadcrumbs.tsx';
 import { SimulationViewer } from '../components/simulations/SimulationViewer.tsx';
-import { renderFormattedMathAndChem } from '../components/common/ScientificSolutionView.tsx';
+import {
+  renderFormattedMathAndChem,
+  renderStructuredTheoryParagraph,
+  wrapSelectionWithBold,
+  autoBoldAllSubheadingsInText,
+} from '../components/common/ScientificSolutionView.tsx';
+import { formatChemicalAndScientificText } from '../utils/wordQuestionParser.ts';
 import { FormulaEditorModal } from '../components/admin/FormulaEditorModal.tsx';
 import { LessonWordReviewConverter } from '../components/admin/LessonWordReviewConverter.tsx';
 import {
@@ -51,6 +58,8 @@ import {
   RotateCcw,
   Eye,
   Upload,
+  Bold,
+  Save,
 } from 'lucide-react';
 import { toggleLessonCompletion, getStudentLessonProgress } from '../services/progressService.ts';
 import { useAuth } from '../hooks/useAuth.ts';
@@ -65,9 +74,15 @@ import { uploadLessonDocument } from '../services/storageService.ts';
 export const LessonDetailPage: React.FC = () => {
   const { lessonId } = useParams<{ lessonId: string }>();
   const { user } = useAuth();
-  const [lesson, setLesson] = useState<Lesson>(
-    () => LESSONS.find((l) => l.id === lessonId) || LESSONS[0]
-  );
+  const [lesson, setLesson] = useState<Lesson>(() => {
+    const published = getPublishedLessonsSync();
+    return (
+      published.find((l) => l.id === lessonId || l.code === lessonId) ||
+      published[0] ||
+      LESSONS.find((l) => l.id === lessonId) ||
+      LESSONS[0]
+    );
+  });
   const [selectedAnswers, setSelectedAnswers] = useState<Record<number, number>>({});
   const [selectedTrueFalse, setSelectedTrueFalse] = useState<
     Record<number, Record<string, boolean>>
@@ -96,8 +111,16 @@ export const LessonDetailPage: React.FC = () => {
   const [draftSampleAnswer, setDraftSampleAnswer] = useState('');
   const [draftExplanation, setDraftExplanation] = useState('');
   const [formulaModalOpen, setFormulaModalOpen] = useState(false);
-  const [formulaTarget, setFormulaTarget] = useState<'question' | 'explanation'>('question');
+  const [formulaTarget, setFormulaTarget] = useState<'question' | 'explanation' | 'core_content'>(
+    'question'
+  );
   const [quizFeedbackMsg, setQuizFeedbackMsg] = useState<string | null>(null);
+
+  // Core Knowledge Content inline editor & Bold function state
+  const [isEditingCoreContent, setIsEditingCoreContent] = useState(false);
+  const [coreContentDraft, setCoreContentDraft] = useState('');
+  const [coreContentFeedback, setCoreContentFeedback] = useState<string | null>(null);
+  const coreTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   // Document viewer & inline upload state for Giáo án điện tử & Phiếu học tập
   const [previewDocData, setPreviewDocData] = useState<GeneratedDocumentData | null>(null);
@@ -142,9 +165,33 @@ export const LessonDetailPage: React.FC = () => {
   };
 
   const domainInfo = DOMAINS.find((d) => d.id === lesson.domain);
-  const relatedSimulation = lesson.simulationId
-    ? SIMULATIONS_3D.find((s) => s.id === lesson.simulationId)
-    : null;
+  const [activeSimIndex, setActiveSimIndex] = useState(0);
+
+  useEffect(() => {
+    setActiveSimIndex(0);
+  }, [lesson.id]);
+
+  const relatedSimulationsList = useMemo(() => {
+    const list: typeof SIMULATIONS_3D = [];
+    const seen = new Set<string>();
+    if (lesson.simulationId) {
+      const primary = SIMULATIONS_3D.find((s) => s.id === lesson.simulationId);
+      if (primary) {
+        seen.add(primary.id);
+        list.push(primary);
+      }
+    }
+    SIMULATIONS_3D.forEach((s) => {
+      if (s.relatedLessonId === lesson.id && !seen.has(s.id)) {
+        seen.add(s.id);
+        list.push(s);
+      }
+    });
+    return list;
+  }, [lesson.id, lesson.simulationId]);
+
+  const relatedSimulation =
+    relatedSimulationsList[activeSimIndex] || relatedSimulationsList[0] || null;
 
   const relatedLessons = LESSONS.filter(
     (l) => l.grade === lesson.grade && l.id !== lesson.id
@@ -364,61 +411,96 @@ export const LessonDetailPage: React.FC = () => {
     }
   };
 
-  // Combine lesson.miniQuiz + any bank questions assigned to lesson.id
+  // Combine lesson.miniQuiz + any bank questions assigned to lesson.id (with fallback to grade/domain if empty)
   const combinedMiniQuiz = useMemo(() => {
+    const normalizeStemKey = (text: string) =>
+      (text || '')
+        .replace(/^\[(tự luận|trắc nghiệm|đúng\/sai)\]\s*/i, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .toLowerCase()
+        .slice(0, 90);
+
     const baseQuiz: LessonMiniQuizItem[] = [...(lesson.miniQuiz || [])];
-    const seenStems = new Set(baseQuiz.map((q) => q.question.trim().toLowerCase()));
+    const seenStems = new Set(baseQuiz.map((q) => normalizeStemKey(q.question)));
+
+    const pushBankQuestion = (bq: any) => {
+      const key = normalizeStemKey(bq.question);
+      if (!seenStems.has(key)) {
+        seenStems.add(key);
+        const mappedType: LessonReviewQuestionType =
+          bq.questionType === 'true_false'
+            ? 'true_false'
+            : bq.questionType === 'essay' || bq.questionType === 'short_answer'
+            ? 'essay'
+            : 'single_choice';
+        baseQuiz.push({
+          id: bq.id,
+          questionType: mappedType,
+          question: bq.question,
+          options:
+            bq.options && bq.options.length >= 2
+              ? bq.options.slice(0, 4)
+              : ['Phương án A', 'Phương án B', 'Phương án C', 'Phương án D'],
+          correctIndex:
+            typeof bq.correctAnswer === 'number' && bq.correctAnswer >= 0
+              ? bq.correctAnswer
+              : 0,
+          trueFalseStatements:
+            mappedType === 'true_false'
+              ? normalizeTrueFalseStatements(bq.trueFalseStatements, bq.options, 0)
+              : undefined,
+          sampleAnswer:
+            mappedType === 'essay'
+              ? bq.sampleAnswer || bq.shortAnswer || bq.explanation
+              : undefined,
+          rubric: bq.rubric,
+          explanation: bq.explanation || 'Xem lại kiến thức trọng tâm trong bài học.',
+        });
+      }
+    };
 
     try {
-      const bankQuestions = getAdminQuestionsSync().filter((q) => q.lessonId === lesson.id);
-      bankQuestions.forEach((bq) => {
-        const key = bq.question.trim().toLowerCase();
-        if (!seenStems.has(key)) {
-          seenStems.add(key);
-          const mappedType: LessonReviewQuestionType =
-            bq.questionType === 'true_false'
-              ? 'true_false'
-              : bq.questionType === 'essay' || bq.questionType === 'short_answer'
-              ? 'essay'
-              : 'single_choice';
-          baseQuiz.push({
-            id: bq.id,
-            questionType: mappedType,
-            question: bq.question,
-            options:
-              bq.options && bq.options.length >= 2
-                ? bq.options.slice(0, 4)
-                : ['Phương án A', 'Phương án B', 'Phương án C', 'Phương án D'],
-            correctIndex:
-              typeof bq.correctAnswer === 'number' && bq.correctAnswer >= 0
-                ? bq.correctAnswer
-                : 0,
-            trueFalseStatements:
-              mappedType === 'true_false'
-                ? normalizeTrueFalseStatements(bq.trueFalseStatements, bq.options, 0)
-                : undefined,
-            sampleAnswer:
-              mappedType === 'essay'
-                ? bq.sampleAnswer || bq.shortAnswer || bq.explanation
-                : undefined,
-            rubric: bq.rubric,
-            explanation: bq.explanation || 'Xem lại kiến thức trọng tâm trong bài học.',
-          });
-        }
-      });
+      const allBank = getAdminQuestionsSync();
+      const lessonMatched = allBank.filter(
+        (q) =>
+          q.lessonId === lesson.id ||
+          (lesson.code && q.lessonId?.toLowerCase() === lesson.code.toLowerCase())
+      );
+      lessonMatched.forEach(pushBankQuestion);
+
+      // If a newly created custom lesson still has 0 review questions, fallback to same grade & domain
+      if (baseQuiz.length === 0) {
+        const gradeDomainMatched = allBank
+          .filter((q) => q.grade === lesson.grade && q.domain === lesson.domain)
+          .slice(0, 4);
+        gradeDomainMatched.forEach(pushBankQuestion);
+      }
     } catch {
       // ignore
     }
     return baseQuiz;
-  }, [lesson.miniQuiz, lesson.id]);
+  }, [lesson.miniQuiz, lesson.id, lesson.code, lesson.grade, lesson.domain]);
 
   const currentVideo = videoPlaylist[activeVideoIndex] || videoPlaylist[0] || null;
   const currentYoutubeEmbed = currentVideo ? getYoutubeEmbedUrl(currentVideo.url) : null;
 
   const handleSaveQuickVideoUrl = async () => {
     const raw = quickVideoInput.trim();
+    if (!raw) {
+      await clearAdminLessonVideo(lesson.id);
+      setLesson((prev) => ({
+        ...prev,
+        videoUrl: undefined,
+      }));
+      setDocRefreshKey((k) => k + 1);
+      setIsEditingVideoUrl(false);
+      setActiveVideoIndex(0);
+      return;
+    }
+
     const ytId = extractYouTubeId(raw);
-    const normalizedUrl = ytId ? `https://www.youtube.com/watch?v=${ytId}` : raw || undefined;
+    const normalizedUrl = ytId ? `https://www.youtube.com/watch?v=${ytId}` : raw || '';
 
     const allLocal = getInitialLocalLessons();
     const found = allLocal.find((l) => l.id === lesson.id || l.code === lesson.code);
@@ -435,10 +517,105 @@ export const LessonDetailPage: React.FC = () => {
     }
     setLesson((prev) => ({
       ...prev,
-      videoUrl: normalizedUrl,
+      videoUrl: normalizedUrl || undefined,
     }));
+    setDocRefreshKey((k) => k + 1);
     setIsEditingVideoUrl(false);
     setActiveVideoIndex(0);
+  };
+
+  const handleClearLessonVideo = async () => {
+    await clearAdminLessonVideo(lesson.id);
+    setQuickVideoInput('');
+    setLesson((prev) => ({
+      ...prev,
+      videoUrl: undefined,
+    }));
+    setDocRefreshKey((k) => k + 1);
+    setIsEditingVideoUrl(false);
+    setActiveVideoIndex(0);
+  };
+
+  const serializeSectionsToMarkdown = (targetLesson: Lesson): string => {
+    return (targetLesson.sections || [])
+      .map((s) => {
+        const lines: string[] = [`### ${s.title}`];
+        (s.content || []).forEach((p) => lines.push(p));
+        if (s.formula) lines.push(`Công thức: ${s.formula}`);
+        if (s.formulaMeaning) lines.push(`Giải thích: ${s.formulaMeaning}`);
+        (s.keyPoints || []).forEach((kp) => lines.push(`Ý chính: ${kp}`));
+        return lines.join('\n');
+      })
+      .join('\n\n');
+  };
+
+  const persistCoreContentMarkdown = async (markdownText: string, feedbackText: string) => {
+    const allLocal = getInitialLocalLessons();
+    const found = allLocal.find((l) => l.id === lesson.id || l.code === lesson.code);
+    if (found) {
+      await saveAdminLesson(
+        {
+          ...found,
+          content: markdownText,
+        },
+        found.assets || [],
+        found.simulationIds || [],
+        found.miniQuiz || lesson.miniQuiz || []
+      );
+    }
+    const refreshed = await getLessonByIdOrSlug(lesson.id);
+    if (refreshed) {
+      setLesson(refreshed);
+    }
+    setCoreContentFeedback(feedbackText);
+    setTimeout(() => setCoreContentFeedback(null), 4000);
+  };
+
+  const handleApplyBoldToCoreTextarea = () => {
+    const el = coreTextareaRef.current;
+    if (!el) return;
+    const { nextText, nextCursorStart, nextCursorEnd } = wrapSelectionWithBold(
+      coreContentDraft,
+      el.selectionStart ?? coreContentDraft.length,
+      el.selectionEnd ?? coreContentDraft.length
+    );
+    setCoreContentDraft(nextText);
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(nextCursorStart, nextCursorEnd);
+    });
+  };
+
+  const handleHeaderBoldButtonClick = async () => {
+    // 1. If the inline textarea editor is currently open, apply bold to the textarea selection
+    if (isEditingCoreContent) {
+      handleApplyBoldToCoreTextarea();
+      return;
+    }
+
+    // 2. If user highlighted text directly inside the Core Knowledge section on the page, bold that text immediately!
+    const selectionText = window.getSelection()?.toString().trim() || '';
+    if (selectionText && selectionText.length >= 2 && selectionText.length <= 160) {
+      const currentMd = serializeSectionsToMarkdown(lesson);
+      if (currentMd.includes(selectionText) && !currentMd.includes(`**${selectionText}**`)) {
+        const updatedMd = currentMd.replace(selectionText, `**${selectionText}**`);
+        setCoreContentDraft(updatedMd);
+        await persistCoreContentMarkdown(
+          updatedMd,
+          `Đã in đậm cụm từ "${selectionText.slice(0, 45)}${selectionText.length > 45 ? '...' : ''}"!`
+        );
+        window.getSelection()?.removeAllRanges();
+        return;
+      }
+    }
+
+    // 3. Otherwise open the inline editor with all subheadings bolded and focus the textarea
+    const initialMd = autoBoldAllSubheadingsInText(serializeSectionsToMarkdown(lesson));
+    setCoreContentDraft(initialMd);
+    setIsEditingCoreContent(true);
+    setTimeout(() => {
+      coreTextareaRef.current?.focus();
+    }, 50);
   };
 
   const resetQuizDraft = () => {
@@ -608,7 +785,7 @@ export const LessonDetailPage: React.FC = () => {
               </h1>
 
               <p className="text-slate-600 dark:text-slate-300 text-sm sm:text-base leading-relaxed">
-                {lesson.summary}
+                {renderFormattedMathAndChem(lesson.summary)}
               </p>
 
               <div className="flex flex-wrap items-center gap-3 pt-1">
@@ -657,72 +834,338 @@ export const LessonDetailPage: React.FC = () => {
                     <span className="w-5 h-5 rounded-full bg-teal-600 text-white font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">
                       ✓
                     </span>
-                    <span className="leading-relaxed font-medium">{obj}</span>
+                    <span className="leading-relaxed font-medium">
+                      {renderFormattedMathAndChem(obj)}
+                    </span>
                   </li>
                 ))}
               </ul>
             </div>
 
             {/* Theory Sections with Visual Illustrations */}
-            <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 border-2 border-slate-100 dark:border-slate-800 shadow-sm space-y-8">
-              <div className="flex items-center gap-2 pb-4 border-b border-slate-100 dark:border-slate-800">
-                <BookOpen className="w-5 h-5 text-teal-600" />
-                <h2 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white">
-                  Nội Dung Kiến Thức Trọng Tâm
-                </h2>
+            <div
+              id="lesson-core-knowledge-section"
+              className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 border-2 border-slate-100 dark:border-slate-800 shadow-sm space-y-6"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b-2 border-teal-100 dark:border-slate-800">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-teal-600 text-white flex items-center justify-center shadow-sm">
+                    <BookOpen className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white">
+                      Nội Dung Kiến Thức Trọng Tâm
+                    </h2>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                      Trình bày chuẩn Sách giáo khoa Kết nối tri thức với cuộc sống • Đề mục nhỏ in đậm &amp; Công thức chuẩn
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    data-testid="btn-bold-core-content"
+                    onClick={handleHeaderBoldButtonClick}
+                    title="Bôi đen văn bản bất kỳ rồi bấm In đậm (hoặc mở trình chỉnh sửa in đậm đề mục)"
+                    className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-teal-600 dark:hover:bg-teal-500 text-white text-xs font-black flex items-center gap-1.5 shadow-xs transition cursor-pointer"
+                  >
+                    <Bold className="w-3.5 h-3.5 stroke-[3]" />
+                    <span>In đậm (B)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    data-testid="btn-edit-core-content"
+                    onClick={() => {
+                      if (!isEditingCoreContent) {
+                        setCoreContentDraft(serializeSectionsToMarkdown(lesson));
+                      }
+                      setIsEditingCoreContent((v) => !v);
+                    }}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1.5 border transition cursor-pointer ${
+                      isEditingCoreContent
+                        ? 'bg-teal-600 text-white border-teal-600 shadow-xs'
+                        : 'bg-teal-50 dark:bg-slate-800 text-teal-800 dark:text-teal-300 border-teal-200 dark:border-slate-700 hover:bg-teal-100'
+                    }`}
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                    <span>{isEditingCoreContent ? 'Đóng khung sửa' : 'Sửa & Định dạng đề mục'}</span>
+                  </button>
+                </div>
               </div>
 
-              {lesson.sections.map((sec, idx) => (
-                <div key={idx} className="space-y-4">
-                  <h3 className="text-base sm:text-lg font-extrabold text-teal-800 dark:text-teal-300">
-                    {sec.title}
-                  </h3>
-                  <div className="space-y-3 text-slate-700 dark:text-slate-300 text-sm sm:text-base leading-relaxed">
-                    {sec.content.map((p, pIdx) => (
-                      <p key={pIdx}>{renderFormattedMathAndChem(p)}</p>
-                    ))}
+              {coreContentFeedback && (
+                <div className="p-3 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 text-xs font-bold flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+                  <span>{coreContentFeedback}</span>
+                </div>
+              )}
+
+              {/* Inline Core Knowledge Editor with Bold Button & Formatting Toolbar */}
+              {isEditingCoreContent && (
+                <div className="p-4 sm:p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border-2 border-teal-300 dark:border-teal-700 space-y-3 animate-fadeIn">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-xs font-black text-teal-900 dark:text-teal-300">
+                      Thanh công cụ Định dạng &amp; In đậm Đề mục kiến thức trọng tâm:
+                    </span>
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                      Mẹo: Bôi đen chữ trong ô rồi bấm <strong>B In đậm</strong> (hoặc nhấn <code>Ctrl + B</code>)
+                    </span>
                   </div>
 
-                  {sec.imageUrl && (
-                    <figure className="my-4 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
-                      <img
-                        src={sec.imageUrl}
-                        alt={sec.imageCaption || sec.title}
-                        className="w-full max-h-72 object-cover"
-                      />
-                      {sec.imageCaption && (
-                        <figcaption className="px-4 py-2.5 text-xs font-semibold text-slate-600 dark:text-slate-400 text-center">
-                          Hình minh họa: {sec.imageCaption}
-                        </figcaption>
-                      )}
-                    </figure>
-                  )}
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={handleApplyBoldToCoreTextarea}
+                      className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-black flex items-center gap-1 shadow-xs cursor-pointer"
+                      title="In đậm đoạn văn bản đang bôi đen (Ctrl+B)"
+                    >
+                      <Bold className="w-3.5 h-3.5 stroke-[3]" />
+                      <span>B In đậm</span>
+                    </button>
 
-                  {sec.highlightBox && (
-                    <div className="p-4 sm:p-5 rounded-2xl bg-amber-50/90 dark:bg-amber-950/40 border border-amber-200/90 dark:border-amber-800 flex items-start gap-3">
-                      <Lightbulb className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                      <div className="space-y-1">
-                        <span className="text-xs font-extrabold uppercase tracking-wider text-amber-800 dark:text-amber-300">
-                          {sec.highlightBox.title}
-                        </span>
-                        <p className="text-xs sm:text-sm text-amber-950 dark:text-amber-100 font-medium leading-relaxed">
-                          {sec.highlightBox.text}
-                        </p>
-                      </div>
-                    </div>
-                  )}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setCoreContentDraft((prev) => autoBoldAllSubheadingsInText(prev))
+                      }
+                      className="px-2.5 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-xs font-extrabold flex items-center gap-1 shadow-xs cursor-pointer"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>In đậm tất cả đề mục nhỏ (a, b, c)</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setCoreContentDraft((prev) =>
+                          `${prev}${prev ? '\n\n' : ''}### ${lesson.sections.length + 1}. Đề mục lớn mới\n`
+                        )
+                      }
+                      className="px-2.5 py-1.5 rounded-xl bg-white dark:bg-slate-900 hover:bg-teal-50 text-slate-700 dark:text-slate-200 text-xs font-bold border border-slate-200 dark:border-slate-700 cursor-pointer"
+                    >
+                      + Đề mục lớn (###)
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setCoreContentDraft((prev) =>
+                          `${prev}${prev ? '\n' : ''}**a) Tên đề mục nhỏ in đậm:** Nội dung chi tiết...`
+                        )
+                      }
+                      className="px-2.5 py-1.5 rounded-xl bg-white dark:bg-slate-900 hover:bg-teal-50 text-slate-700 dark:text-slate-200 text-xs font-bold border border-slate-200 dark:border-slate-700 cursor-pointer"
+                    >
+                      + Đề mục nhỏ in đậm (a, b)
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setCoreContentDraft((prev) =>
+                          `${prev}${prev ? '\n' : ''}Công thức: I = \\frac{U}{R}`
+                        )
+                      }
+                      className="px-2.5 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-300 text-xs font-bold border border-indigo-200 dark:border-indigo-800 cursor-pointer"
+                    >
+                      + Hộp Công thức (\frac)
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFormulaTarget('core_content');
+                        setFormulaModalOpen(true);
+                      }}
+                      className="px-2.5 py-1.5 rounded-xl bg-teal-50 dark:bg-teal-950/60 hover:bg-teal-100 text-teal-700 dark:text-teal-300 text-xs font-bold border border-teal-200 dark:border-teal-800 flex items-center gap-1 cursor-pointer"
+                    >
+                      <Sigma className="w-3.5 h-3.5" /> Chèn Công thức
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setCoreContentDraft((prev) =>
+                          autoBoldAllSubheadingsInText(formatChemicalAndScientificText(prev).text)
+                        )
+                      }
+                      className="px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold shadow-xs cursor-pointer"
+                    >
+                      Chuẩn hóa Công thức &amp; Đề mục
+                    </button>
+                  </div>
+
+                  <textarea
+                    ref={coreTextareaRef}
+                    rows={10}
+                    value={coreContentDraft}
+                    onChange={(e) => setCoreContentDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
+                        e.preventDefault();
+                        handleApplyBoldToCoreTextarea();
+                      }
+                    }}
+                    placeholder="Sử dụng **...** để in đậm đề mục hoặc từ khóa quan trọng..."
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 text-xs sm:text-sm font-mono leading-relaxed focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  />
+
+                  <div className="flex items-center justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingCoreContent(false)}
+                      className="px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-300 cursor-pointer"
+                    >
+                      Hủy
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await persistCoreContentMarkdown(
+                          coreContentDraft,
+                          'Đã lưu nội dung kiến thức trọng tâm và định dạng in đậm!'
+                        );
+                        setIsEditingCoreContent(false);
+                      }}
+                      className="px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-sm cursor-pointer"
+                    >
+                      <Save className="w-3.5 h-3.5" />
+                      <span>Lưu nội dung trọng tâm</span>
+                    </button>
+                  </div>
                 </div>
-              ))}
+              )}
+
+              <div className="space-y-6">
+                {lesson.sections.map((sec, idx) => {
+                  const cleanTitle = sec.title.replace(/^\d+\.\s*/, '').trim();
+                  const formulaItems = sec.formula
+                    ? sec.formula
+                        .split(/\s*\|\s*/)
+                        .map((f) => f.trim())
+                        .filter(Boolean)
+                    : [];
+
+                  return (
+                    <section
+                      key={idx}
+                      className="rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-gradient-to-b from-slate-50/70 to-white dark:from-slate-900/90 dark:to-slate-900 p-5 sm:p-6 shadow-xs space-y-4"
+                    >
+                      {/* Section Heading with Numbered Badge */}
+                      <div className="flex items-start gap-3 pb-3 border-b border-slate-200/80 dark:border-slate-800">
+                        <span className="px-2.5 py-1 rounded-xl bg-teal-700 text-white font-mono font-black text-xs sm:text-sm shrink-0 shadow-xs mt-0.5">
+                          Mục {idx + 1}
+                        </span>
+                        <h3 className="text-base sm:text-lg font-black text-teal-950 dark:text-teal-300 leading-snug">
+                          {renderFormattedMathAndChem(cleanTitle || sec.title)}
+                        </h3>
+                      </div>
+
+                      {/* Structured Paragraphs with Bold Subheadings & Bullet Points */}
+                      <div className="space-y-3 text-slate-700 dark:text-slate-200 text-sm sm:text-base leading-relaxed">
+                        {sec.content.map((p, pIdx) => renderStructuredTheoryParagraph(p, pIdx))}
+                      </div>
+
+                      {/* Core Formula & Chemical Equation Callout Card */}
+                      {formulaItems.length > 0 && (
+                        <div className="rounded-2xl bg-gradient-to-r from-indigo-50/90 via-sky-50/80 to-teal-50/80 dark:from-indigo-950/40 dark:via-slate-900 dark:to-teal-950/40 border-2 border-indigo-200/80 dark:border-indigo-800/70 p-4 sm:p-5 space-y-3">
+                          <div className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-wider text-indigo-800 dark:text-indigo-300">
+                            <Sigma className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                            <span>Công Thức &amp; Phương Trình Trọng Tâm</span>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-3">
+                            {formulaItems.map((fItem, fIdx) => (
+                              <div
+                                key={fIdx}
+                                className="px-4 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-800 shadow-xs text-sm sm:text-base font-extrabold text-indigo-950 dark:text-indigo-200 tracking-wide"
+                              >
+                                {renderFormattedMathAndChem(fItem)}
+                              </div>
+                            ))}
+                          </div>
+
+                          {sec.formulaMeaning && (
+                            <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 leading-relaxed pt-1 border-t border-indigo-200/60 dark:border-indigo-800/50">
+                              <strong className="font-extrabold text-indigo-900 dark:text-indigo-300">
+                                Giải thích kí hiệu &amp; Ý nghĩa:{' '}
+                              </strong>
+                              {renderFormattedMathAndChem(sec.formulaMeaning)}
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Key Points Summary Box inside Section */}
+                      {sec.keyPoints && sec.keyPoints.length > 0 && (
+                        <div className="rounded-2xl bg-emerald-50/75 dark:bg-emerald-950/30 border border-emerald-200/90 dark:border-emerald-800/70 p-4 sm:p-5 space-y-2.5">
+                          <div className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-wider text-emerald-800 dark:text-emerald-300">
+                            <Sparkles className="w-4 h-4 text-emerald-600 shrink-0" />
+                            <span>Ý Chính Cần Ghi Nhớ</span>
+                          </div>
+                          <ul className="space-y-2">
+                            {sec.keyPoints.map((kp, kpIdx) => (
+                              <li
+                                key={kpIdx}
+                                className="flex items-start gap-2.5 text-xs sm:text-sm text-slate-800 dark:text-slate-200 leading-relaxed"
+                              >
+                                <span className="w-5 h-5 rounded-full bg-emerald-600 text-white font-extrabold text-[11px] flex items-center justify-center shrink-0 mt-0.5">
+                                  {kpIdx + 1}
+                                </span>
+                                <div className="flex-1 font-medium">
+                                  {renderFormattedMathAndChem(kp)}
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {/* Visual Figure Illustration */}
+                      {sec.imageUrl && (
+                        <figure className="my-2 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
+                          <img
+                            src={sec.imageUrl}
+                            alt={sec.imageCaption || sec.title}
+                            className="w-full max-h-72 object-cover"
+                          />
+                          {sec.imageCaption && (
+                            <figcaption className="px-4 py-2.5 text-xs font-semibold text-slate-600 dark:text-slate-400 text-center">
+                              Hình minh họa: {renderFormattedMathAndChem(sec.imageCaption)}
+                            </figcaption>
+                          )}
+                        </figure>
+                      )}
+
+                      {/* Highlight Note Box */}
+                      {sec.highlightBox && (
+                        <div className="p-4 sm:p-5 rounded-2xl bg-amber-50/90 dark:bg-amber-950/40 border border-amber-200/90 dark:border-amber-800 flex items-start gap-3">
+                          <Lightbulb className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                          <div className="space-y-1">
+                            <span className="text-xs font-extrabold uppercase tracking-wider text-amber-800 dark:text-amber-300">
+                              {renderFormattedMathAndChem(sec.highlightBox.title)}
+                            </span>
+                            <p className="text-xs sm:text-sm text-amber-950 dark:text-amber-100 font-medium leading-relaxed">
+                              {renderFormattedMathAndChem(sec.highlightBox.text)}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </section>
+                  );
+                })}
+              </div>
             </div>
 
             {/* Embedded 3D Interactive Lab (if available) */}
             {relatedSimulation && (
               <div className="space-y-4">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <Atom className="w-5 h-5 text-teal-600" />
                     <h2 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white">
-                      Thực Hành KHOA HỌC SỐ KHTN 3D Ngay Trong Bài Học
+                      Thực Hành KHOA HỌC SỐ KHTN 3D Ngay Trong Bài Học ({relatedSimulationsList.length} mô phỏng)
                     </h2>
                   </div>
                   <Link
@@ -734,7 +1177,27 @@ export const LessonDetailPage: React.FC = () => {
                   </Link>
                 </div>
 
-                <SimulationViewer simulation={relatedSimulation} />
+                {relatedSimulationsList.length > 1 && (
+                  <div className="flex flex-wrap gap-2 p-2.5 rounded-2xl bg-teal-50/80 dark:bg-slate-900 border border-teal-200/80 dark:border-slate-800">
+                    {relatedSimulationsList.map((simItem, idx) => (
+                      <button
+                        key={simItem.id}
+                        type="button"
+                        onClick={() => setActiveSimIndex(idx)}
+                        className={`px-3.5 py-2 rounded-xl text-xs font-extrabold transition cursor-pointer flex items-center gap-1.5 ${
+                          activeSimIndex === idx
+                            ? 'bg-gradient-to-r from-teal-600 to-sky-600 text-white shadow-sm'
+                            : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-teal-100/70 border border-slate-200 dark:border-slate-700'
+                        }`}
+                      >
+                        <Atom className="w-3.5 h-3.5 shrink-0" />
+                        <span>{idx + 1}. {simItem.title}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                <SimulationViewer key={relatedSimulation.id} simulation={relatedSimulation} />
               </div>
             )}
 
@@ -813,6 +1276,17 @@ export const LessonDetailPage: React.FC = () => {
                     <Edit3 className="w-3.5 h-3.5" />
                     <span>{currentVideo ? 'Đổi link Video' : '+ Nhúng link YouTube'}</span>
                   </button>
+                  {currentVideo && (
+                    <button
+                      type="button"
+                      onClick={handleClearLessonVideo}
+                      className="text-xs px-3 py-1.5 rounded-xl bg-red-50 dark:bg-red-950/60 text-red-600 dark:text-red-300 border border-red-200 dark:border-red-800 font-bold flex items-center gap-1 hover:bg-red-100 transition cursor-pointer"
+                      title="Xóa liên kết video khỏi bài giảng này"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Xóa Video</span>
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -820,17 +1294,27 @@ export const LessonDetailPage: React.FC = () => {
               {isEditingVideoUrl && (
                 <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/70 border border-teal-200 dark:border-teal-800 space-y-2.5">
                   <label className="block text-xs font-bold text-slate-700 dark:text-slate-200">
-                    Dán liên kết Video YouTube (hoặc URL tệp .mp4 / .webm) cho bài giảng này:
+                    Dán liên kết Video YouTube (hoặc xóa trống rồi bấm Lưu để gỡ video):
                   </label>
                   <div className="flex flex-col sm:flex-row gap-2">
                     <input
                       type="text"
                       value={quickVideoInput}
                       onChange={(e) => setQuickVideoInput(e.target.value)}
-                      placeholder="VD: https://www.youtube.com/watch?v=dQw4w9WgXcQ hoặc https://youtu.be/..."
+                      placeholder="VD: https://www.youtube.com/watch?v=... hoặc https://youtu.be/..."
                       className="flex-1 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500"
                     />
                     <div className="flex items-center gap-2">
+                      {quickVideoInput.trim() && (
+                        <button
+                          type="button"
+                          onClick={handleClearLessonVideo}
+                          className="px-3.5 py-2 rounded-xl bg-red-50 dark:bg-red-950/60 text-red-600 dark:text-red-300 border border-red-200 dark:border-red-800 text-xs font-bold flex items-center gap-1 cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Xóa link</span>
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => setIsEditingVideoUrl(false)}
@@ -843,7 +1327,7 @@ export const LessonDetailPage: React.FC = () => {
                         onClick={handleSaveQuickVideoUrl}
                         className="px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-xs font-extrabold shadow-sm cursor-pointer"
                       >
-                        Lưu & Phát Video
+                        {quickVideoInput.trim() ? 'Lưu & Phát Video' : 'Lưu (Gỡ Video)'}
                       </button>
                     </div>
                   </div>
@@ -1327,8 +1811,7 @@ export const LessonDetailPage: React.FC = () => {
                     Chưa có câu hỏi ôn tập cuối bài cho bài giảng này.
                   </p>
                   <p className="text-xs text-slate-400">
-                    Bấm nút <strong>&quot;Chuyển câu hỏi từ File Word (.docx)&quot;</strong> hoặc{' '}
-                    <strong>&quot;+ Thêm câu hỏi củng cố&quot;</strong> ở trên để thêm câu hỏi.
+                    Giáo viên có thể cập nhật câu hỏi ôn tập cuối bài trong trang Quản trị (/quan-tri).
                   </p>
                 </div>
               ) : (
@@ -1610,30 +2093,45 @@ export const LessonDetailPage: React.FC = () => {
                     className="flex items-start gap-2.5 pb-2.5 border-b border-white/10 last:border-none last:pb-0"
                   >
                     <span className="text-amber-300 font-extrabold font-mono">0{index + 1}.</span>
-                    <span className="leading-relaxed">{item}</span>
+                    <span className="leading-relaxed">{renderFormattedMathAndChem(item)}</span>
                   </li>
                 ))}
               </ul>
             </div>
 
             {/* Key Formulas Card */}
-            {lesson.keyFormulas && lesson.keyFormulas.length > 0 && (
-              <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border-2 border-slate-100 dark:border-slate-800 shadow-sm space-y-3">
-                <h3 className="font-extrabold text-slate-900 dark:text-white text-sm uppercase tracking-wider">
-                  Công thức & Phương trình cần nhớ
-                </h3>
-                <div className="space-y-2">
-                  {lesson.keyFormulas.map((f, i) => (
-                    <div
-                      key={i}
-                      className="p-3 rounded-xl bg-teal-50/70 dark:bg-slate-800 border border-teal-200/80 dark:border-slate-700 font-mono text-xs sm:text-sm font-bold text-teal-900 dark:text-teal-300 text-center"
-                    >
-                      {renderFormattedMathAndChem(f)}
-                    </div>
-                  ))}
+            {(() => {
+              const sidebarFormulas =
+                lesson.keyFormulas && lesson.keyFormulas.length > 0
+                  ? lesson.keyFormulas
+                  : lesson.sections.flatMap((s) =>
+                      s.formula
+                        ? s.formula
+                            .split(/\s*\|\s*/)
+                            .map((f) => f.trim())
+                            .filter(Boolean)
+                        : []
+                    );
+              if (sidebarFormulas.length === 0) return null;
+              return (
+                <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border-2 border-slate-100 dark:border-slate-800 shadow-sm space-y-3">
+                  <h3 className="font-extrabold text-slate-900 dark:text-white text-sm uppercase tracking-wider flex items-center gap-2">
+                    <Sigma className="w-4 h-4 text-teal-600" />
+                    <span>Công thức &amp; Phương trình cần nhớ</span>
+                  </h3>
+                  <div className="space-y-2">
+                    {sidebarFormulas.map((f, i) => (
+                      <div
+                        key={i}
+                        className="p-3 rounded-xl bg-teal-50/70 dark:bg-slate-800 border border-teal-200/80 dark:border-slate-700 text-xs sm:text-sm font-bold text-teal-950 dark:text-teal-300 text-center"
+                      >
+                        {renderFormattedMathAndChem(f)}
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             {/* Quick Links to Resources */}
             <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border-2 border-slate-100 dark:border-slate-800 shadow-sm space-y-3">
@@ -1716,6 +2214,8 @@ export const LessonDetailPage: React.FC = () => {
         onInsertFormula={(formulaText: string) => {
           if (formulaTarget === 'question') {
             setDraftQuestion((prev) => `${prev}${prev ? ' ' : ''}${formulaText}`);
+          } else if (formulaTarget === 'core_content') {
+            setCoreContentDraft((prev) => `${prev}${prev ? '\n' : ''}${formulaText}`);
           } else {
             setDraftExplanation((prev) => `${prev}${prev ? ' ' : ''}${formulaText}`);
           }
