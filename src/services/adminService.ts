@@ -98,6 +98,7 @@ export const STORAGE_KEYS = {
   USERS: 'khtn_admin_users_v2',
   SETTINGS: 'khtn_admin_site_settings_v2',
   DELETED_IDS: 'khtn_admin_deleted_ids_v1',
+  SNAPSHOT_APPLIED_AT: 'khtn_cms_snapshot_applied_at_v1',
 } as const;
 
 export interface DeletedIdsRegistry {
@@ -211,6 +212,9 @@ function safeWriteLocal<T>(key: string, data: T): void {
   }
 }
 
+const snapshotUpdatedAt: string =
+  typeof (cmsSnapshot as any)?.updatedAt === 'string' ? (cmsSnapshot as any).updatedAt : '';
+
 const snapshotLessons: AdminLesson[] = Array.isArray((cmsSnapshot as any)?.lessons)
   ? ((cmsSnapshot as any).lessons as AdminLesson[])
   : [];
@@ -218,6 +222,29 @@ const snapshotLessons: AdminLesson[] = Array.isArray((cmsSnapshot as any)?.lesso
 const snapshotQuestions: QuizQuestion[] = Array.isArray((cmsSnapshot as any)?.questions)
   ? ((cmsSnapshot as any).questions as QuizQuestion[])
   : [];
+
+const snapshotQuizzes: QuizMeta[] = Array.isArray((cmsSnapshot as any)?.quizzes)
+  ? ((cmsSnapshot as any).quizzes as QuizMeta[])
+  : [];
+
+const snapshotVideos: VideoLesson[] | undefined = Array.isArray((cmsSnapshot as any)?.videos)
+  ? ((cmsSnapshot as any).videos as VideoLesson[])
+  : undefined;
+
+const snapshotTopics: Topic[] | undefined = Array.isArray((cmsSnapshot as any)?.topics)
+  ? ((cmsSnapshot as any).topics as Topic[])
+  : undefined;
+
+const snapshotCatalogDocs: DocumentItem[] | undefined = Array.isArray(
+  (cmsSnapshot as any)?.catalogDocs
+)
+  ? ((cmsSnapshot as any).catalogDocs as DocumentItem[])
+  : undefined;
+
+const snapshotSiteSettings: SiteSettings | undefined =
+  (cmsSnapshot as any)?.siteSettings && typeof (cmsSnapshot as any).siteSettings === 'object'
+    ? ((cmsSnapshot as any).siteSettings as SiteSettings)
+    : undefined;
 
 const snapshotDeletedIds: Partial<DeletedIdsRegistry> =
   (cmsSnapshot as any)?.deletedIds && typeof (cmsSnapshot as any).deletedIds === 'object'
@@ -234,22 +261,24 @@ const DEFAULT_DELETED_IDS: DeletedIdsRegistry = {
   clearedLessonVideoIds: [],
 };
 
+function mergeUniqueIds(a?: string[], b?: string[]): string[] {
+  return Array.from(new Set([...(Array.isArray(a) ? a : []), ...(Array.isArray(b) ? b : [])]));
+}
+
 export function getDeletedIdsRegistrySync(): DeletedIdsRegistry {
   const local = safeReadLocal<Partial<DeletedIdsRegistry>>(
     STORAGE_KEYS.DELETED_IDS,
     DEFAULT_DELETED_IDS
   );
-  const mergeUnique = (a?: string[], b?: string[]) =>
-    Array.from(new Set([...(Array.isArray(a) ? a : []), ...(Array.isArray(b) ? b : [])]));
 
   return {
-    lessons: mergeUnique(local.lessons, snapshotDeletedIds.lessons),
-    videos: mergeUnique(local.videos, snapshotDeletedIds.videos),
-    topics: mergeUnique(local.topics, snapshotDeletedIds.topics),
-    catalogDocs: mergeUnique(local.catalogDocs, snapshotDeletedIds.catalogDocs),
-    questions: mergeUnique(local.questions, snapshotDeletedIds.questions),
-    quizzes: mergeUnique(local.quizzes, snapshotDeletedIds.quizzes),
-    clearedLessonVideoIds: mergeUnique(
+    lessons: mergeUniqueIds(local.lessons, snapshotDeletedIds.lessons),
+    videos: mergeUniqueIds(local.videos, snapshotDeletedIds.videos),
+    topics: mergeUniqueIds(local.topics, snapshotDeletedIds.topics),
+    catalogDocs: mergeUniqueIds(local.catalogDocs, snapshotDeletedIds.catalogDocs),
+    questions: mergeUniqueIds(local.questions, snapshotDeletedIds.questions),
+    quizzes: mergeUniqueIds(local.quizzes, snapshotDeletedIds.quizzes),
+    clearedLessonVideoIds: mergeUniqueIds(
       local.clearedLessonVideoIds,
       snapshotDeletedIds.clearedLessonVideoIds
     ),
@@ -279,41 +308,240 @@ function isLegacyPlaceholderVideoUrl(url?: string): boolean {
   return extractYouTubeId(url) === 'dQw4w9WgXcQ';
 }
 
-export function syncCmsSnapshotToRepo(): void {
+/**
+ * Applies a CMS snapshot (either bundled in src/data/cmsSnapshot.json or imported via JSON)
+ * into localStorage so that browsers with stale localStorage caches on GitHub/Vercel/Cloudflare
+ * immediately reflect the latest deployed lessons, deleted items, cleared videos, and settings.
+ */
+export function applyCmsSnapshotToLocalStorage(snapshotObj: any, force = false): boolean {
+  if (!snapshotObj || typeof snapshotObj !== 'object') return false;
+  const snapStamp = typeof snapshotObj.updatedAt === 'string' ? snapshotObj.updatedAt : '';
+  const lastApplied = safeReadLocal<string>(STORAGE_KEYS.SNAPSHOT_APPLIED_AT, '');
+  if (!force && (!snapStamp || snapStamp === lastApplied)) {
+    return false;
+  }
+
+  const snapDel: Partial<DeletedIdsRegistry> =
+    snapshotObj.deletedIds && typeof snapshotObj.deletedIds === 'object'
+      ? snapshotObj.deletedIds
+      : {};
+  const hasMeaningfulSnapshotData =
+    force ||
+    (Array.isArray(snapshotObj.lessons) && snapshotObj.lessons.length > 0) ||
+    Array.isArray(snapshotObj.videos) ||
+    Array.isArray(snapshotObj.topics) ||
+    Array.isArray(snapshotObj.catalogDocs) ||
+    Boolean(snapshotObj.siteSettings) ||
+    Object.values(snapDel).some((arr) => Array.isArray(arr) && arr.length > 0);
+
+  if (!hasMeaningfulSnapshotData) {
+    if (snapStamp) {
+      safeWriteLocal(STORAGE_KEYS.SNAPSHOT_APPLIED_AT, snapStamp);
+    }
+    return false;
+  }
+
+  const currentDel = safeReadLocal<Partial<DeletedIdsRegistry>>(
+    STORAGE_KEYS.DELETED_IDS,
+    DEFAULT_DELETED_IDS
+  );
+  const mergedDel: DeletedIdsRegistry = {
+    lessons: mergeUniqueIds(currentDel.lessons, snapDel.lessons),
+    videos: mergeUniqueIds(currentDel.videos, snapDel.videos),
+    topics: mergeUniqueIds(currentDel.topics, snapDel.topics),
+    catalogDocs: mergeUniqueIds(currentDel.catalogDocs, snapDel.catalogDocs),
+    questions: mergeUniqueIds(currentDel.questions, snapDel.questions),
+    quizzes: mergeUniqueIds(currentDel.quizzes, snapDel.quizzes),
+    clearedLessonVideoIds: mergeUniqueIds(
+      currentDel.clearedLessonVideoIds,
+      snapshotDeletedIds.clearedLessonVideoIds
+    ),
+  };
+  safeWriteLocal(STORAGE_KEYS.DELETED_IDS, mergedDel);
+
+  const deletedLessonSet = new Set(mergedDel.lessons);
+  const clearedVideoSet = new Set(mergedDel.clearedLessonVideoIds);
+
+  if (Array.isArray(snapshotObj.lessons) && snapshotObj.lessons.length > 0) {
+    const cleanedSnapLessons = (snapshotObj.lessons as AdminLesson[])
+      .filter((l) => l && l.id && !deletedLessonSet.has(l.id))
+      .map((l) => ({
+        ...l,
+        videoUrl:
+          clearedVideoSet.has(l.id) || isLegacyPlaceholderVideoUrl(l.videoUrl)
+            ? ''
+            : normalizeVideoUrl(l.videoUrl) || '',
+      }));
+    safeWriteLocal(STORAGE_KEYS.LESSONS, cleanedSnapLessons);
+  } else {
+    const cachedLessons = safeReadLocal<AdminLesson[] | null>(STORAGE_KEYS.LESSONS, null);
+    if (cachedLessons && Array.isArray(cachedLessons)) {
+      const updatedCached = cachedLessons
+        .filter((l) => l && l.id && !deletedLessonSet.has(l.id))
+        .map((l) => ({
+          ...l,
+          videoUrl:
+            clearedVideoSet.has(l.id) || isLegacyPlaceholderVideoUrl(l.videoUrl)
+              ? ''
+              : l.videoUrl,
+        }));
+      safeWriteLocal(STORAGE_KEYS.LESSONS, updatedCached);
+    }
+  }
+
+  if (Array.isArray(snapshotObj.videos)) {
+    const delVidSet = new Set(mergedDel.videos);
+    safeWriteLocal(
+      STORAGE_KEYS.VIDEOS,
+      (snapshotObj.videos as VideoLesson[]).filter((v) => v && !delVidSet.has(v.id))
+    );
+  }
+
+  if (Array.isArray(snapshotObj.topics)) {
+    const delTopicSet = new Set(mergedDel.topics);
+    safeWriteLocal(
+      STORAGE_KEYS.TOPICS,
+      (snapshotObj.topics as Topic[]).filter((t) => t && !delTopicSet.has(t.id))
+    );
+  }
+
+  if (Array.isArray(snapshotObj.catalogDocs)) {
+    const delDocSet = new Set(mergedDel.catalogDocs);
+    safeWriteLocal(
+      STORAGE_KEYS.CATALOG_DOCS,
+      (snapshotObj.catalogDocs as DocumentItem[]).filter((d) => d && !delDocSet.has(d.id))
+    );
+  }
+
+  if (Array.isArray(snapshotObj.questions) && snapshotObj.questions.length > 0) {
+    const delQSet = new Set(mergedDel.questions);
+    safeWriteLocal(
+      STORAGE_KEYS.QUESTIONS,
+      (snapshotObj.questions as QuizQuestion[]).filter((q) => q && !delQSet.has(q.id))
+    );
+  }
+
+  if (Array.isArray(snapshotObj.quizzes) && snapshotObj.quizzes.length > 0) {
+    const delQuizSet = new Set(mergedDel.quizzes);
+    safeWriteLocal(
+      STORAGE_KEYS.QUIZZES,
+      (snapshotObj.quizzes as QuizMeta[]).filter((q) => q && !delQuizSet.has(q.id))
+    );
+  }
+
+  if (snapshotObj.siteSettings && typeof snapshotObj.siteSettings === 'object') {
+    safeWriteLocal(STORAGE_KEYS.SETTINGS, {
+      ...DEFAULT_SITE_SETTINGS,
+      ...snapshotObj.siteSettings,
+    });
+  }
+
+  if (snapStamp) {
+    safeWriteLocal(STORAGE_KEYS.SNAPSHOT_APPLIED_AT, snapStamp);
+  }
+  return true;
+}
+
+function ensureBundledSnapshotSynced(): void {
+  if (!snapshotUpdatedAt) return;
+  applyCmsSnapshotToLocalStorage(cmsSnapshot, false);
+}
+
+export function buildCmsSnapshotPayload() {
+  const rawLessons = getInitialLocalLessons();
+  const rawQuestions = getAdminQuestionsSync();
+  const rawQuizzes = getAdminQuizzesSync();
+  const rawVideos = getAdminVideosSync();
+  const rawTopics = getAdminTopicsSync();
+  const rawCatalogDocs = getAdminCatalogDocsSync();
+  const siteSettings = getSiteSettingsSync();
+  const deletedIds = getDeletedIdsRegistrySync();
+
+  const cleanLessons = rawLessons.map((l) => ({
+    ...l,
+    assets: (l.assets || []).map((a) => ({
+      ...a,
+      fileUrl: a.fileUrl && a.fileUrl.length > 150000 ? '#' : a.fileUrl,
+    })),
+  }));
+
+  return {
+    updatedAt: new Date().toISOString(),
+    lessons: cleanLessons,
+    questions: rawQuestions,
+    quizzes: rawQuizzes,
+    videos: rawVideos,
+    topics: rawTopics,
+    catalogDocs: rawCatalogDocs,
+    siteSettings,
+    deletedIds,
+  };
+}
+
+export function importCmsSnapshotFromJson(rawJson: any): { ok: boolean; message: string } {
   try {
-    if (typeof window === 'undefined' || typeof fetch === 'undefined') return;
-    const rawLessons = safeReadLocal<AdminLesson[]>(STORAGE_KEYS.LESSONS, []);
-    const rawQuestions = safeReadLocal<QuizQuestion[]>(STORAGE_KEYS.QUESTIONS, []);
-    const rawQuizzes = safeReadLocal<QuizMeta[]>(STORAGE_KEYS.QUIZZES, []);
-    const rawVideos = safeReadLocal<VideoLesson[] | null>(STORAGE_KEYS.VIDEOS, null);
-    const rawTopics = safeReadLocal<Topic[] | null>(STORAGE_KEYS.TOPICS, null);
-    const rawCatalogDocs = safeReadLocal<DocumentItem[] | null>(STORAGE_KEYS.CATALOG_DOCS, null);
-    const deletedIds = getDeletedIdsRegistrySync();
+    const parsed = typeof rawJson === 'string' ? JSON.parse(rawJson) : rawJson;
+    if (!parsed || typeof parsed !== 'object') {
+      return { ok: false, message: 'Dữ liệu JSON không hợp lệ.' };
+    }
+    const stamped = {
+      ...parsed,
+      updatedAt: new Date().toISOString(),
+    };
+    applyCmsSnapshotToLocalStorage(stamped, true);
+    if (parsed.games && typeof parsed.games === 'object') {
+      if (Array.isArray(parsed.games.pairs)) {
+        safeWriteLocal(STORAGE_KEYS.GAME_PAIRS, parsed.games.pairs);
+      }
+      if (Array.isArray(parsed.games.crosswords)) {
+        safeWriteLocal(STORAGE_KEYS.GAME_CROSSWORDS, parsed.games.crosswords);
+      }
+      if (Array.isArray(parsed.games.detectivePuzzles)) {
+        safeWriteLocal(STORAGE_KEYS.GAME_DETECTIVE, parsed.games.detectivePuzzles);
+      }
+    }
+    if (Array.isArray(parsed.users)) {
+      safeWriteLocal(STORAGE_KEYS.USERS, parsed.users);
+    }
+    syncCmsSnapshotToRepo(true);
+    return {
+      ok: true,
+      message: 'Đã khôi phục và đồng bộ toàn bộ dữ liệu thiết kế vào hệ thống!',
+    };
+  } catch (err: any) {
+    return {
+      ok: false,
+      message: err?.message || 'Không thể đọc tệp JSON.',
+    };
+  }
+}
 
-    // Keep assets lightweight in git snapshot (strip huge base64 data URLs > 150KB)
-    const cleanLessons = rawLessons.map((l) => ({
-      ...l,
-      assets: (l.assets || []).map((a) => ({
-        ...a,
-        fileUrl: a.fileUrl && a.fileUrl.length > 150000 ? '#' : a.fileUrl,
-      })),
-    }));
+export async function syncCmsSnapshotToRepo(rebuildZip = false): Promise<boolean> {
+  try {
+    if (typeof window === 'undefined' || typeof fetch === 'undefined') return false;
+    const payload = {
+      ...buildCmsSnapshotPayload(),
+      rebuildZip,
+    };
 
-    fetch('/api/sync-cms-snapshot', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        lessons: cleanLessons,
-        questions: rawQuestions,
-        quizzes: rawQuizzes,
-        videos: rawVideos ?? undefined,
-        topics: rawTopics ?? undefined,
-        catalogDocs: rawCatalogDocs ?? undefined,
-        deletedIds,
-      }),
-    }).catch(() => {});
+    const res = await fetch(
+      rebuildZip ? '/api/sync-cms-snapshot?rebuildZip=1' : '/api/sync-cms-snapshot',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }
+    );
+    if (res.ok) {
+      const data = await res.json().catch(() => null);
+      if (data?.updatedAt) {
+        safeWriteLocal(STORAGE_KEYS.SNAPSHOT_APPLIED_AT, data.updatedAt);
+      }
+      return true;
+    }
+    return false;
   } catch {
-    // ignore in static environments
+    return false;
   }
 }
 
@@ -323,6 +551,7 @@ export function syncCmsSnapshotToRepo(): void {
  * ============================================================================
  */
 export function getInitialLocalLessons(): AdminLesson[] {
+  ensureBundledSnapshotSynced();
   const deletedReg = getDeletedIdsRegistrySync();
   const deletedLessonSet = new Set(deletedReg.lessons);
   const clearedVideoSet = new Set(deletedReg.clearedLessonVideoIds);
@@ -994,12 +1223,14 @@ export async function updateAssetMetadata(
  * ============================================================================
  */
 export function getAdminTopicsSync(): Topic[] {
+  ensureBundledSnapshotSynced();
   const deletedTopicSet = new Set(getDeletedIdsRegistrySync().topics);
   const cached = safeReadLocal<Topic[] | null>(STORAGE_KEYS.TOPICS, null);
   if (cached !== null && Array.isArray(cached)) {
     return cached.filter((t) => !deletedTopicSet.has(t.id));
   }
-  const initial = TOPICS.filter((t) => !deletedTopicSet.has(t.id));
+  const sourceTopics = Array.isArray(snapshotTopics) ? snapshotTopics : TOPICS;
+  const initial = sourceTopics.filter((t) => !deletedTopicSet.has(t.id));
   safeWriteLocal(STORAGE_KEYS.TOPICS, initial);
   return [...initial];
 }
@@ -1051,6 +1282,7 @@ export async function deleteAdminTopic(topicId: string): Promise<boolean> {
  * ============================================================================
  */
 export function getAdminQuestionsSync(): QuizQuestion[] {
+  ensureBundledSnapshotSynced();
   const deletedQuestionSet = new Set(getDeletedIdsRegistrySync().questions);
   const allBuiltIns = [...snapshotQuestions, ...QUIZ_QUESTIONS].filter(
     (q) => !deletedQuestionSet.has(q.id)
@@ -1329,12 +1561,17 @@ export async function deleteAdminQuestion(questionId: string): Promise<boolean> 
 }
 
 export function getAdminQuizzesSync(): QuizMeta[] {
+  ensureBundledSnapshotSynced();
   const deletedQuizSet = new Set(getDeletedIdsRegistrySync().quizzes);
   const cached = safeReadLocal<QuizMeta[] | null>(STORAGE_KEYS.QUIZZES, null);
   if (cached !== null && Array.isArray(cached)) {
     return cached.filter((q) => !deletedQuizSet.has(q.id));
   }
-  const initial = LESSON_QUIZZES.filter((q) => !deletedQuizSet.has(q.id));
+  const sourceQuizzes =
+    Array.isArray(snapshotQuizzes) && snapshotQuizzes.length > 0
+      ? snapshotQuizzes
+      : LESSON_QUIZZES;
+  const initial = sourceQuizzes.filter((q) => !deletedQuizSet.has(q.id));
   safeWriteLocal(STORAGE_KEYS.QUIZZES, initial);
   return [...initial];
 }
@@ -1386,12 +1623,14 @@ export async function deleteAdminQuiz(quizId: string): Promise<boolean> {
  * ============================================================================
  */
 export function getAdminVideosSync(): VideoLesson[] {
+  ensureBundledSnapshotSynced();
   const deletedVideoSet = new Set(getDeletedIdsRegistrySync().videos);
   const cached = safeReadLocal<VideoLesson[] | null>(STORAGE_KEYS.VIDEOS, null);
   if (cached !== null && Array.isArray(cached)) {
     return cached.filter((v) => !deletedVideoSet.has(v.id));
   }
-  const initial = VIDEOS.filter((v) => !deletedVideoSet.has(v.id));
+  const sourceVideos = Array.isArray(snapshotVideos) ? snapshotVideos : VIDEOS;
+  const initial = sourceVideos.filter((v) => !deletedVideoSet.has(v.id));
   safeWriteLocal(STORAGE_KEYS.VIDEOS, initial);
   return [...initial];
 }
@@ -1488,6 +1727,7 @@ export async function deleteAdminVideo(videoId: string): Promise<boolean> {
  * ============================================================================
  */
 export function getAdminCatalogDocsSync(): DocumentItem[] {
+  ensureBundledSnapshotSynced();
   const deletedDocSet = new Set(getDeletedIdsRegistrySync().catalogDocs);
   const cached = safeReadLocal<DocumentItem[] | null>(STORAGE_KEYS.CATALOG_DOCS, null);
   if (cached !== null && Array.isArray(cached)) {
@@ -1503,7 +1743,14 @@ export function getAdminCatalogDocsSync(): DocumentItem[] {
     }
     return activeCached;
   }
-  const initial = DOCUMENTS.filter((d) => !deletedDocSet.has(d.id));
+  const sourceDocs = Array.isArray(snapshotCatalogDocs) ? snapshotCatalogDocs : DOCUMENTS;
+  const initial = sourceDocs.filter((d) => !deletedDocSet.has(d.id));
+  const initialIds = new Set(initial.map((d) => d.id));
+  DOCUMENTS.forEach((d) => {
+    if (!initialIds.has(d.id) && !deletedDocSet.has(d.id)) {
+      initial.push(d);
+    }
+  });
   safeWriteLocal(STORAGE_KEYS.CATALOG_DOCS, initial);
   return [...initial];
 }
@@ -1736,11 +1983,16 @@ export async function deleteAdminUser(userId: string): Promise<boolean> {
  * ============================================================================
  */
 export function getSiteSettingsSync(): SiteSettings {
-  return safeReadLocal<SiteSettings>(STORAGE_KEYS.SETTINGS, DEFAULT_SITE_SETTINGS);
+  ensureBundledSnapshotSynced();
+  return safeReadLocal<SiteSettings>(
+    STORAGE_KEYS.SETTINGS,
+    snapshotSiteSettings ? { ...DEFAULT_SITE_SETTINGS, ...snapshotSiteSettings } : DEFAULT_SITE_SETTINGS
+  );
 }
 
 export function saveSiteSettingsSync(settings: SiteSettings): SiteSettings {
   safeWriteLocal(STORAGE_KEYS.SETTINGS, settings);
+  syncCmsSnapshotToRepo();
   return settings;
 }
 
