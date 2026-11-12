@@ -1,5 +1,5 @@
 import { supabase, isSupabaseConfigured, getInitialProgress, saveUserProgress } from '../lib/supabase.ts';
-import { LESSONS } from '../data/mockData.ts';
+import { getPublishedLessonsSync } from './contentService.ts';
 import { Grade, SubjectDomain, UserProgress } from '../types/index.ts';
 
 export interface LessonProgressRecord {
@@ -21,6 +21,7 @@ export async function getStudentLessonProgress(userId: string): Promise<LessonPr
   const progress = getInitialProgress(userId);
   const completedSet = new Set(progress?.completedLessons || []);
   const quizScores = progress?.quizScores || {};
+  const liveLessons = getPublishedLessonsSync();
 
   // If Supabase is connected
   if (isSupabaseConfigured && supabase) {
@@ -36,7 +37,7 @@ export async function getStudentLessonProgress(userId: string): Promise<LessonPr
           dbMap.set(row.lesson_id, row);
         }
 
-        return LESSONS.map((lesson) => {
+        return liveLessons.map((lesson) => {
           const dbRow = dbMap.get(lesson.id);
           const isCompleted = dbRow ? Boolean(dbRow.completed) : completedSet.has(lesson.id);
           const quizScore = dbRow?.quiz_score ?? quizScores[`quiz-for-${lesson.id}`]?.score;
@@ -60,7 +61,7 @@ export async function getStudentLessonProgress(userId: string): Promise<LessonPr
   }
 
   // Fallback using local progress
-  return LESSONS.map((lesson) => {
+  return liveLessons.map((lesson) => {
     const isCompleted = completedSet.has(lesson.id);
     const quizKey = Object.keys(quizScores).find(
       (k) => k.includes(lesson.id) || k === `quiz-for-${lesson.id}`

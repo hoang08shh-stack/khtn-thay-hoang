@@ -546,3 +546,62 @@ test('Deleting built-in lessons, clearing lesson video links, and deleting grade
   resetAllAdminDataToDefault();
 });
 
+test('CMS Snapshot synchronization overrides stale browser localStorage cache on deployed GitHub web', async () => {
+  const {
+    getInitialLocalLessons,
+    deleteAdminLesson,
+    clearAdminLessonVideo,
+    buildCmsSnapshotPayload,
+    applyCmsSnapshotToLocalStorage,
+    resetAllAdminDataToDefault,
+  } = await import('../services/adminService.ts');
+  const { getPublishedLessonsSync, getLessonByIdOrSlug } = await import(
+    '../services/contentService.ts'
+  );
+
+  resetAllAdminDataToDefault();
+
+  // 1. Teacher deletes a lesson and clears another lesson's video in Admin
+  const initialLessons = getInitialLocalLessons();
+  const deletedLessonId = initialLessons[0].id;
+  const videoClearedLessonId = initialLessons[1].id;
+
+  await deleteAdminLesson(deletedLessonId);
+  await clearAdminLessonVideo(videoClearedLessonId);
+
+  // 2. Build the cmsSnapshot.json payload that gets committed to GitHub
+  const exportedSnapshot = buildCmsSnapshotPayload();
+  assert.ok(exportedSnapshot.deletedIds.lessons.includes(deletedLessonId));
+  assert.ok(exportedSnapshot.deletedIds.clearedLessonVideoIds.includes(videoClearedLessonId));
+
+  // 3. Simulate a visitor's browser on GitHub that has STALE localStorage from an older visit
+  // (where deletedLessonId still exists and videoClearedLessonId still has a videoUrl)
+  resetAllAdminDataToDefault();
+  const staleBrowserLessons = getInitialLocalLessons();
+  assert.equal(staleBrowserLessons.some((l) => l.id === deletedLessonId), true);
+
+  // 4. Apply the new cmsSnapshot (with newer updatedAt timestamp) to the visitor's browser
+  const applied = applyCmsSnapshotToLocalStorage({
+    ...exportedSnapshot,
+    updatedAt: '2026-12-31T23:59:59.000Z',
+  });
+  assert.equal(applied, true, 'New cmsSnapshot timestamp must be applied over stale localStorage');
+
+  // 5. Verify visitor's browser now matches the teacher's design
+  const syncedPublished = getPublishedLessonsSync();
+  assert.equal(
+    syncedPublished.some((l) => l.id === deletedLessonId),
+    false,
+    'Deleted lesson from cmsSnapshot must be removed from stale browser localStorage'
+  );
+  const syncedVideoCleared = await getLessonByIdOrSlug(videoClearedLessonId);
+  assert.equal(
+    syncedVideoCleared?.videoUrl,
+    undefined,
+    'Cleared videoUrl from cmsSnapshot must be cleared in stale browser localStorage'
+  );
+
+  resetAllAdminDataToDefault();
+});
+
+

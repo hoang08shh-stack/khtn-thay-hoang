@@ -9,6 +9,7 @@ import { SearchModal } from './components/common/SearchModal.tsx';
 import { NotFoundPage } from './components/common/NotFoundPage.tsx';
 import { HomePage } from './pages/HomePage.tsx';
 import { fetchUserProgress } from './services/progressService.ts';
+import { syncCmsSnapshotToRepo, STORAGE_KEYS } from './services/adminService.ts';
 import { UserProgress } from './types/index.ts';
 import { NotificationProvider, useNotification } from './context/NotificationContext.tsx';
 import { PushNotificationToast } from './components/notifications/PushNotificationToast.tsx';
@@ -52,6 +53,20 @@ function AppContent() {
   const { activePushToast, dismissPushToast } = useNotification();
   const [progress, setProgress] = useState<UserProgress | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
+
+  useEffect(() => {
+    try {
+      if (
+        typeof localStorage !== 'undefined' &&
+        (localStorage.getItem(STORAGE_KEYS.LESSONS) ||
+          localStorage.getItem(STORAGE_KEYS.DELETED_IDS))
+      ) {
+        syncCmsSnapshotToRepo(false);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
 
   useEffect(() => {
     if (user) {

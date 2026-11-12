@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { SIMULATIONS_3D, LESSONS, QUIZ_QUESTIONS } from '../data/mockData.ts';
+import { SIMULATIONS_3D } from '../data/mockData.ts';
+import { getPublishedLessonsSync } from '../services/contentService.ts';
+import { getAdminQuestionsSync } from '../services/adminService.ts';
 import { Breadcrumbs } from '../components/common/Breadcrumbs.tsx';
 import { SimulationViewer } from '../components/simulations/SimulationViewer.tsx';
 import {
@@ -76,11 +78,12 @@ export const SimulationDetailPage: React.FC = () => {
       }
     : legacySim || SIMULATIONS_3D[0];
 
+  const liveLessons = getPublishedLessonsSync();
   const relatedLesson = simulation.relatedLessonId
-    ? LESSONS.find((l) => l.id === simulation.relatedLessonId)
+    ? liveLessons.find((l) => l.id === simulation.relatedLessonId)
     : null;
 
-  const relevantQuizzes = QUIZ_QUESTIONS.filter(
+  const relevantQuizzes = getAdminQuestionsSync().filter(
     (q) => q.grade === simulation.grade && q.domain === simulation.domain
   ).slice(0, 2);
 

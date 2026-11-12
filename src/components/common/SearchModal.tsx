@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, X, Atom, BookOpen, Video, FileText, ArrowRight } from 'lucide-react';
-import { LESSONS, SIMULATIONS_3D, VIDEOS, DOCUMENTS } from '../../data/mockData.ts';
+import { Search, X, Atom, BookOpen, Video, ArrowRight } from 'lucide-react';
+import { SIMULATIONS_3D } from '../../data/mockData.ts';
+import { getPublishedLessonsSync } from '../../services/contentService.ts';
+import { getAdminVideosSync } from '../../services/adminService.ts';
 
 interface SearchModalProps {
   isOpen: boolean;
@@ -30,6 +32,8 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => 
   if (!isOpen) return null;
 
   const q = query.trim().toLowerCase();
+  const liveLessons = getPublishedLessonsSync();
+  const liveVideos = getAdminVideosSync();
 
   const filteredSims = q
     ? SIMULATIONS_3D.filter(
@@ -41,16 +45,16 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => 
     : SIMULATIONS_3D.slice(0, 3);
 
   const filteredLessons = q
-    ? LESSONS.filter(
+    ? liveLessons.filter(
         (l) =>
           l.title.toLowerCase().includes(q) ||
           l.summary.toLowerCase().includes(q) ||
           l.code.toLowerCase().includes(q)
       )
-    : LESSONS.slice(0, 3);
+    : liveLessons.slice(0, 3);
 
   const filteredVideos = q
-    ? VIDEOS.filter((v) => v.title.toLowerCase().includes(q) || v.description.toLowerCase().includes(q))
+    ? liveVideos.filter((v) => v.title.toLowerCase().includes(q) || v.description.toLowerCase().includes(q))
     : [];
 
   const handleSelect = (url: string) => {

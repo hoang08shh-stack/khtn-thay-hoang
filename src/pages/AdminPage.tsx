@@ -61,6 +61,9 @@ import {
   saveSiteSettingsSync,
   resetAllAdminDataToDefault,
   saveUploadedAssetToRepository,
+  buildCmsSnapshotPayload,
+  syncCmsSnapshotToRepo,
+  importCmsSnapshotFromJson,
 } from '../services/adminService.ts';
 import { uploadLessonDocument } from '../services/storageService.ts';
 import {
@@ -266,7 +269,9 @@ export const AdminPage: React.FC = () => {
   };
 
   useEffect(() => {
-    loadAllData();
+    loadAllData().then(() => {
+      syncCmsSnapshotToRepo(false);
+    });
   }, []);
 
   // Lesson handlers
@@ -331,17 +336,36 @@ export const AdminPage: React.FC = () => {
     }
   };
 
-  // Export System Data as JSON
-  const handleExportAllData = () => {
+  const [isPackingSourceZip, setIsPackingSourceZip] = useState(false);
+
+  // Sync current browser CMS state to src/data/cmsSnapshot.json, rebuild public/khtn-source-code.zip, and download
+  const handleDownloadSourceZip = async () => {
+    setIsPackingSourceZip(true);
+    try {
+      await syncCmsSnapshotToRepo(true);
+      const a = document.createElement('a');
+      a.href = `/khtn-source-code.zip?t=${Date.now()}`;
+      a.download = 'KHTN-Khoa-Hoc-So-Source-Code.zip';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      showToast(
+        'Đã đồng bộ dữ liệu thiết kế mới nhất vào src/data/cmsSnapshot.json và tải gói mã nguồn (.ZIP)!'
+      );
+    } catch {
+      showToast('Không thể đóng gói mã nguồn, đang tải bản dự phòng.', 'error');
+    } finally {
+      setIsPackingSourceZip(false);
+    }
+  };
+
+  // Export System Data as cmsSnapshot.json
+  const handleExportAllData = async () => {
+    await syncCmsSnapshotToRepo(true);
+    const snapshotBase = buildCmsSnapshotPayload();
     const payload = {
-      exportedAt: new Date().toISOString(),
-      siteSettings,
-      topics,
-      lessons,
-      questions,
-      quizzes,
-      videos,
-      catalogDocs,
+      ...snapshotBase,
+      exportedAt: snapshotBase.updatedAt,
       games: {
         pairs: gamePairs,
         crosswords,
@@ -353,10 +377,29 @@ export const AdminPage: React.FC = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `khtn-cms-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = 'cmsSnapshot.json';
     a.click();
     URL.revokeObjectURL(url);
-    showToast('Đã xuất tệp sao lưu toàn bộ dữ liệu hệ thống (.JSON)!');
+    showToast(
+      'Đã đồng bộ và xuất tệp cmsSnapshot.json! Bạn có thể dùng trực tiếp cho GitHub (src/data/cmsSnapshot.json).'
+    );
+  };
+
+  const handleImportJsonBackup = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = importCmsSnapshotFromJson(String(reader.result || ''));
+      if (result.ok) {
+        loadAllData();
+        showToast(result.message);
+      } else {
+        showToast(result.message, 'error');
+      }
+      e.target.value = '';
+    };
+    reader.readAsText(file, 'utf-8');
   };
 
   const handleResetAllToDefault = () => {
@@ -498,24 +541,50 @@ export const AdminPage: React.FC = () => {
                 <span>Xem trang học sinh</span>
               </Link>
 
-              <a
-                href="/khtn-source-code.zip"
-                download="KHTN-Khoa-Hoc-So-Source-Code.zip"
-                className="px-3.5 py-2 rounded-xl bg-amber-500/90 hover:bg-amber-400 text-slate-950 font-extrabold text-xs transition flex items-center gap-1.5 shadow-sm"
-                title="Tải toàn bộ mã nguồn dự án về máy (.ZIP)"
+              <button
+                type="button"
+                onClick={handleDownloadSourceZip}
+                disabled={isPackingSourceZip}
+                data-testid="sync-and-download-source-zip-btn"
+                className="px-3.5 py-2 rounded-xl bg-amber-500/90 hover:bg-amber-400 disabled:opacity-60 text-slate-950 font-extrabold text-xs transition flex items-center gap-1.5 shadow-sm cursor-pointer"
+                title="Đồng bộ toàn bộ thay đổi hiện tại vào mã nguồn và tải gói .ZIP chuẩn để đẩy lên GitHub"
               >
-                <Download className="w-3.5 h-3.5 stroke-[2.5]" />
-                <span>Tải mã nguồn (.ZIP)</span>
-              </a>
+                {isPackingSourceZip ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin stroke-[2.5]" />
+                ) : (
+                  <Download className="w-3.5 h-3.5 stroke-[2.5]" />
+                )}
+                <span>
+                  {isPackingSourceZip
+                    ? 'Đang đóng gói (.ZIP)...'
+                    : 'Đồng bộ & Tải mã nguồn (.ZIP)'}
+                </span>
+              </button>
 
               <button
+                type="button"
                 onClick={handleExportAllData}
+                data-testid="export-cms-snapshot-json-btn"
                 className="px-3.5 py-2 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-100 font-bold text-xs border border-slate-600/80 transition flex items-center gap-1.5 cursor-pointer"
-                title="Tải xuống toàn bộ dữ liệu dạng JSON"
+                title="Tải xuống tệp cmsSnapshot.json chứa toàn bộ dữ liệu hiện tại"
               >
                 <Database className="w-3.5 h-3.5 text-sky-400" />
-                <span>Sao lưu JSON</span>
+                <span>Xuất cmsSnapshot.json</span>
               </button>
+
+              <label
+                className="px-3.5 py-2 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-100 font-bold text-xs border border-slate-600/80 transition flex items-center gap-1.5 cursor-pointer"
+                title="Khôi phục dữ liệu thiết kế từ tệp cmsSnapshot.json hoặc bản sao lưu .JSON"
+              >
+                <FileUp className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Nhập JSON</span>
+                <input
+                  type="file"
+                  accept=".json,application/json"
+                  onChange={handleImportJsonBackup}
+                  className="hidden"
+                />
+              </label>
             </div>
           </div>
 
