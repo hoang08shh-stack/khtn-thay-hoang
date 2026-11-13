@@ -23,6 +23,13 @@ import {
   AdminLesson,
   LessonAssetItem,
   SiteSettings,
+  getInitialLocalLessons,
+  getGeneralUploadedAssetsSync,
+  getAdminTopicsSync,
+  getAdminQuestionsSync,
+  getAdminQuizzesSync,
+  getAdminVideosSync,
+  getAdminCatalogDocsSync,
   fetchAdminLessons,
   toggleLessonPublish,
   deleteAdminLesson,
@@ -140,23 +147,23 @@ export const AdminPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<AdminTabId>('overview');
 
   // 1. Lessons State
-  const [lessons, setLessons] = useState<AdminLesson[]>([]);
-  const [isLoadingLessons, setIsLoadingLessons] = useState(true);
+  const [lessons, setLessons] = useState<AdminLesson[]>(() => getInitialLocalLessons());
+  const [isLoadingLessons, setIsLoadingLessons] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedGrade, setSelectedGrade] = useState<Grade | 'all'>('all');
   const [selectedDomain, setSelectedDomain] = useState<SubjectDomain | 'all'>('all');
   const [selectedStatus, setSelectedStatus] = useState<'all' | 'published' | 'draft'>('all');
 
   // 2. Topics State
-  const [topics, setTopics] = useState<Topic[]>([]);
+  const [topics, setTopics] = useState<Topic[]>(() => getAdminTopicsSync());
   const [topicFilterGrade, setTopicFilterGrade] = useState<Grade | 'all'>('all');
   const [topicFilterDomain, setTopicFilterDomain] = useState<SubjectDomain | 'all'>('all');
   const [editingTopic, setEditingTopic] = useState<Partial<Topic> | null>(null);
 
   // 3. Quizzes & Questions State
   const [quizSubTab, setQuizSubTab] = useState<'questions' | 'exams'>('questions');
-  const [questions, setQuestions] = useState<QuizQuestion[]>([]);
-  const [quizzes, setQuizzes] = useState<QuizMeta[]>([]);
+  const [questions, setQuestions] = useState<QuizQuestion[]>(() => getAdminQuestionsSync());
+  const [quizzes, setQuizzes] = useState<QuizMeta[]>(() => getAdminQuizzesSync());
   const [questionFilterGrade, setQuestionFilterGrade] = useState<Grade | 'all'>('all');
   const [questionFilterDomain, setQuestionFilterDomain] = useState<SubjectDomain | 'all'>('all');
   const [editingQuestion, setEditingQuestion] = useState<Partial<QuizQuestion> | null>(null);
@@ -170,27 +177,29 @@ export const AdminPage: React.FC = () => {
 
   // 4. Games State
   const [gameSubTab, setGameSubTab] = useState<'pairs' | 'crosswords' | 'detective'>('pairs');
-  const [gamePairs, setGamePairs] = useState<SciencePairItem[]>([]);
-  const [crosswords, setCrosswords] = useState<CrosswordRowItem[]>([]);
-  const [detectivePuzzles, setDetectivePuzzles] = useState<DetectivePuzzleItem[]>([]);
+  const [gamePairs, setGamePairs] = useState<SciencePairItem[]>(() => getAdminGamePairsSync());
+  const [crosswords, setCrosswords] = useState<CrosswordRowItem[]>(() => getAdminCrosswordsSync());
+  const [detectivePuzzles, setDetectivePuzzles] = useState<DetectivePuzzleItem[]>(() =>
+    getAdminDetectivePuzzlesSync()
+  );
   const [editingPair, setEditingPair] = useState<Partial<SciencePairItem> | null>(null);
   const [editingCrossword, setEditingCrossword] = useState<Partial<CrosswordRowItem> | null>(null);
   const [editingDetective, setEditingDetective] = useState<Partial<DetectivePuzzleItem> | null>(null);
 
   // 5. Videos State
-  const [videos, setVideos] = useState<VideoLesson[]>([]);
+  const [videos, setVideos] = useState<VideoLesson[]>(() => getAdminVideosSync());
   const [videoFilterGrade, setVideoFilterGrade] = useState<Grade | 'all'>('all');
   const [editingVideo, setEditingVideo] = useState<Partial<VideoLesson> | null>(null);
 
   // 6. Documents State (Catalog + Storage)
   const [docSubTab, setDocSubTab] = useState<'catalog' | 'storage'>('catalog');
-  const [catalogDocs, setCatalogDocs] = useState<DocumentItem[]>([]);
-  const [documents, setDocuments] = useState<LessonAssetItem[]>([]);
+  const [catalogDocs, setCatalogDocs] = useState<DocumentItem[]>(() => getAdminCatalogDocsSync());
+  const [documents, setDocuments] = useState<LessonAssetItem[]>(() => getGeneralUploadedAssetsSync());
   const [docFormatFilter, setDocFormatFilter] = useState<'all' | 'pptx' | 'pdf' | 'docx' | 'image'>('all');
   const [editingCatalogDoc, setEditingCatalogDoc] = useState<Partial<DocumentItem> | null>(null);
 
   // 7. Users State
-  const [usersList, setUsersList] = useState<AppUser[]>([]);
+  const [usersList, setUsersList] = useState<AppUser[]>(() => getAdminUsersSync());
   const [editingUser, setEditingUser] = useState<Partial<AppUser> | null>(null);
 
   // 8. Site Settings & Reset Confirmation
@@ -271,11 +280,12 @@ export const AdminPage: React.FC = () => {
   };
 
   useEffect(() => {
+    loadAllData();
     fetchAndApplyRemoteCmsSnapshot()
-      .catch(() => {})
-      .finally(() => {
-        loadAllData();
-      });
+      .then((applied) => {
+        if (applied) loadAllData();
+      })
+      .catch(() => {});
 
     const handleCmsUpdate = () => {
       loadAllData();

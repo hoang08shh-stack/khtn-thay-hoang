@@ -27,7 +27,7 @@ import {
   SubjectDomain,
   LessonMiniQuizItem,
 } from '../../types/index.ts';
-import { TOPICS, DOMAINS, SIMULATIONS_3D, LESSONS } from '../../data/mockData.ts';
+import { DOMAINS, SIMULATIONS_3D, LESSONS } from '../../data/mockData.ts';
 import {
   AdminLesson,
   LessonAssetItem,
@@ -35,6 +35,7 @@ import {
   checkSlugAvailable,
   extractYouTubeId,
   saveAdminLesson,
+  getAdminTopicsSync,
 } from '../../services/adminService.ts';
 import { AssetUploader } from './AssetUploader.tsx';
 import { FormulaEditorModal } from './FormulaEditorModal.tsx';
@@ -138,8 +139,8 @@ const LessonFormModalContent: React.FC<Omit<LessonFormModalProps, 'isOpen'>> = (
     message?: string;
   }>({ checking: false });
 
-  // Filter topics based on selected grade and domain
-  const availableTopics = TOPICS.filter(
+  // Filter topics based on selected grade and domain (including custom topics created in Admin or Upload Wizard)
+  const availableTopics = getAdminTopicsSync().filter(
     (t) => t.grade === grade && t.domain === domain
   );
 
@@ -212,6 +213,10 @@ const LessonFormModalContent: React.FC<Omit<LessonFormModalProps, 'isOpen'>> = (
       setErrorMessage('Vui lòng nhập nội dung câu hỏi ôn tập cuối bài.');
       return;
     }
+    const existingItemId =
+      editingQuizIdx !== null && miniQuiz[editingQuizIdx]?.id
+        ? miniQuiz[editingQuizIdx].id
+        : `q-lesson-${lesson?.id || 'draft'}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     let newItem: LessonMiniQuizItem;
     if (quizType === 'true_false') {
       const normalizedStmts = normalizeTrueFalseStatements(quizTfStatements, quizOptions);
@@ -219,6 +224,7 @@ const LessonFormModalContent: React.FC<Omit<LessonFormModalProps, 'isOpen'>> = (
         .map((s) => `${s.label}) ${s.isTrue ? 'Đúng' : 'Sai'}`)
         .join(' | ');
       newItem = {
+        id: existingItemId,
         questionType: 'true_false',
         question: quizQuestion.trim(),
         options: normalizedStmts.map((s) => s.text),
@@ -232,6 +238,7 @@ const LessonFormModalContent: React.FC<Omit<LessonFormModalProps, 'isOpen'>> = (
         quizExplanation.trim() ||
         'Học sinh trình bày lập luận khoa học, viết phương trình / công thức và kết luận.';
       newItem = {
+        id: existingItemId,
         questionType: 'essay',
         question: quizQuestion.trim(),
         options: [],
@@ -246,6 +253,7 @@ const LessonFormModalContent: React.FC<Omit<LessonFormModalProps, 'isOpen'>> = (
         (o, i) => o.trim() || `Phương án ${String.fromCharCode(65 + i)}`
       );
       newItem = {
+        id: existingItemId,
         questionType: 'single_choice',
         question: quizQuestion.trim(),
         options: cleanOptions,

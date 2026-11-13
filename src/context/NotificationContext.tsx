@@ -174,7 +174,8 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     // Trigger Native Browser Web Notification if allowed
     if (dailyGoal.browserPushEnabled && browserPermission === 'granted') {
       await triggerBrowserPushNotification(item, (url) => {
-        window.location.href = url;
+        window.location.href =
+          url.startsWith('/') && !url.startsWith('/#') ? `/#${url}` : url;
       });
     }
 

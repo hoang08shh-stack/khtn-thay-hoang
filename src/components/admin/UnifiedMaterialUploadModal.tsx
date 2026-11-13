@@ -36,6 +36,8 @@ import {
 } from '../../utils/materialUploadEngine.ts';
 import { uploadLessonDocument } from '../../services/storageService.ts';
 import { isSupabaseConfigured } from '../../lib/supabase.ts';
+import { LessonMiniQuizItem } from '../../types/index.ts';
+import { parseWordToLessonReviewQuestions } from '../../utils/lessonReviewQuizConverter.ts';
 import {
   buildEducationalDocumentData,
   triggerEducationalDocumentDownload,
@@ -154,6 +156,14 @@ export const UnifiedMaterialUploadModal: React.FC<UnifiedMaterialUploadModalProp
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [previewResource, setPreviewResource] = useState<UnifiedLearningResource | null>(null);
 
+  // Optional lesson content & end-of-lesson review questions in Step 2
+  const [showExtraLessonFields, setShowExtraLessonFields] = useState(false);
+  const [quickQuestionText, setQuickQuestionText] = useState('');
+  const [quickOptions, setQuickOptions] = useState<string[]>(['', '', '', '']);
+  const [quickCorrectIdx, setQuickCorrectIdx] = useState<number>(0);
+  const [quickExplanation, setQuickExplanation] = useState('');
+  const [quickWordPaste, setQuickWordPaste] = useState('');
+
   // Dynamic lists for Step 1
   const availableTopics = getTopicsForSubjectAndGrade(step1.subject, step1.grade);
   const availableLessons = getLessonsForTopic(
@@ -170,9 +180,10 @@ export const UnifiedMaterialUploadModal: React.FC<UnifiedMaterialUploadModalProp
 
   useEffect(() => {
     if (isOpen) {
+      setActiveTab(initialTab);
       setResources(getUnifiedResourcesSync());
     }
-  }, [isOpen]);
+  }, [isOpen, initialTab]);
 
   if (!isOpen) return null;
 
@@ -432,6 +443,23 @@ export const UnifiedMaterialUploadModal: React.FC<UnifiedMaterialUploadModalProp
     const updatedList = getUnifiedResourcesSync();
     setResources(updatedList);
     clearWizardAutoDraft();
+    setStep2((prev) => ({
+      ...prev,
+      title: '',
+      description: '',
+      fileName: '',
+      fileType: '',
+      fileSize: 0,
+      fileDataUrl: undefined,
+      externalUrl: '',
+      simulationHtml: '',
+      uploadProgress: 0,
+      uploadStatus: 'idle',
+      lessonSummary: '',
+      lessonContent: '',
+      reviewQuestions: [],
+    }));
+    setCurrentStep(1);
 
     if (onSavedResource) {
       onSavedResource(saved);
@@ -440,11 +468,62 @@ export const UnifiedMaterialUploadModal: React.FC<UnifiedMaterialUploadModalProp
     setWizardToast(
       status === 'published'
         ? isSupabaseConfigured
-          ? `Đã xuất bản học liệu "${saved.title}" vào "${saved.lessonTitle}" và đồng bộ lên Supabase!`
-          : `Đã lưu học liệu "${saved.title}" vào "${saved.lessonTitle}" trên máy này. Để tự động cập nhật cho mọi máy khác, cần gắn Supabase lên Hosting hoặc dùng Đồng bộ / Nhập JSON.`
+          ? `Đã xuất bản học liệu "${saved.title}" vào "${saved.lessonTitle}" (Lớp ${saved.grade}) và đồng bộ lên Supabase!`
+          : `Đã xuất bản "${saved.title}" vào "${saved.lessonTitle}" (Lớp ${saved.grade}). Nội dung và câu hỏi ôn tập đã cập nhật ngay vào mục Khối lớp ${saved.grade}.`
         : `Đã lưu bản nháp học liệu "${saved.title}"!`
     );
     setActiveTab('manager');
+  };
+
+  const handleAddQuickReviewQuestion = () => {
+    if (!quickQuestionText.trim()) {
+      setWizardError('Vui lòng nhập nội dung câu hỏi ôn tập trước khi thêm.');
+      return;
+    }
+    const cleanOpts = quickOptions.map(
+      (o, i) => o.trim() || `Phương án ${String.fromCharCode(65 + i)}`
+    );
+    const newQ: LessonMiniQuizItem = {
+      id: `q-lesson-${step1.lessonId || 'new'}-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+      questionType: 'single_choice',
+      question: quickQuestionText.trim(),
+      options: cleanOpts,
+      correctIndex: quickCorrectIdx,
+      explanation:
+        quickExplanation.trim() ||
+        `Đáp án đúng là ${String.fromCharCode(65 + quickCorrectIdx)}: ${cleanOpts[quickCorrectIdx]}.`,
+    };
+    setStep2((prev) => ({
+      ...prev,
+      reviewQuestions: [...(prev.reviewQuestions || []), newQ],
+    }));
+    setQuickQuestionText('');
+    setQuickOptions(['', '', '', '']);
+    setQuickCorrectIdx(0);
+    setQuickExplanation('');
+    setWizardError(null);
+  };
+
+  const handleParseQuickWordQuestions = () => {
+    if (!quickWordPaste.trim()) return;
+    const parsed = parseWordToLessonReviewQuestions(quickWordPaste, {
+      defaultGrade: (step1.grade >= 6 && step1.grade <= 9 ? step1.grade : 8) as 6 | 7 | 8 | 9,
+    });
+    if (parsed.items.length === 0) {
+      setWizardError('Chưa nhận diện được câu hỏi nào. Hãy đảm bảo có "Câu 1: ...", "A. B. C. D." và "Đáp án: ...".');
+      return;
+    }
+    const withIds: LessonMiniQuizItem[] = parsed.items.map((q, idx) => ({
+      ...q,
+      id: q.id || `q-lesson-${step1.lessonId || 'new'}-${Date.now()}-${idx + 1}`,
+    }));
+    setStep2((prev) => ({
+      ...prev,
+      reviewQuestions: [...(prev.reviewQuestions || []), ...withIds],
+    }));
+    setQuickWordPaste('');
+    setWizardError(null);
+    setWizardToast(`Đã tách thêm ${withIds.length} câu hỏi ôn tập vào bài học!`);
   };
 
   // Post-Upload Manager Handlers
@@ -514,7 +593,7 @@ export const UnifiedMaterialUploadModal: React.FC<UnifiedMaterialUploadModalProp
   const handleCopyLink = (res: UnifiedLearningResource) => {
     const link =
       res.externalUrl ||
-      `${window.location.origin}/bai-giang?grade=${res.grade}&lesson=${res.lessonId}`;
+      `${window.location.origin}/#/bai-hoc/${res.lessonId}`;
     navigator.clipboard?.writeText(link).catch(() => {});
     setWizardToast(`Đã sao chép liên kết học liệu: ${res.title}`);
   };
@@ -1513,6 +1592,167 @@ export const UnifiedMaterialUploadModal: React.FC<UnifiedMaterialUploadModalProp
                       </div>
                     </div>
                   )}
+
+                  {/* Optional Lesson Summary/Content & End-of-lesson Review Questions */}
+                  <div className="rounded-2xl border border-indigo-200 dark:border-indigo-900 bg-indigo-50/40 dark:bg-indigo-950/20 p-4 space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <div className="text-xs font-extrabold text-indigo-950 dark:text-indigo-200">
+                          Nội dung lý thuyết &amp; Câu hỏi ôn tập cuối bài (Khối lớp {step1.grade})
+                        </div>
+                        <p className="text-[11px] text-slate-600 dark:text-slate-400">
+                          Tùy chọn: bổ sung tóm tắt bài giảng và câu hỏi ôn tập để học sinh vào Khối lớp {step1.grade} thấy đầy đủ ngay.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        data-testid="step2-toggle-review-builder-btn"
+                        onClick={() => setShowExtraLessonFields((v) => !v)}
+                        className="px-3 py-1.5 rounded-xl bg-indigo-700 hover:bg-indigo-600 text-white font-bold text-xs cursor-pointer"
+                      >
+                        {showExtraLessonFields
+                          ? 'Thu gọn'
+                          : `+ Thêm nội dung & câu hỏi ôn tập (${step2.reviewQuestions?.length || 0})`}
+                      </button>
+                    </div>
+
+                    {showExtraLessonFields && (
+                      <div className="space-y-4 pt-2 border-t border-indigo-200/70 dark:border-indigo-800/60">
+                        <div>
+                          <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                            Nội dung trọng tâm bài học (tùy chọn):
+                          </label>
+                          <textarea
+                            rows={3}
+                            data-testid="step2-lesson-content-input"
+                            value={step2.lessonContent || ''}
+                            onChange={(e) =>
+                              setStep2((prev) => ({
+                                ...prev,
+                                lessonContent: e.target.value,
+                                lessonSummary:
+                                  prev.lessonSummary ||
+                                  e.target.value.split('\n')[0]?.slice(0, 180) ||
+                                  '',
+                              }))
+                            }
+                            placeholder="VD: ### 1. Định nghĩa\nNhập tóm tắt kiến thức trọng tâm, công thức của bài học..."
+                            className="w-full p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-xs"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                          <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 space-y-2">
+                            <div className="text-xs font-extrabold text-slate-800 dark:text-white">
+                              Thêm nhanh 1 câu hỏi trắc nghiệm ôn tập
+                            </div>
+                            <input
+                              type="text"
+                              data-testid="step2-quick-question-input"
+                              value={quickQuestionText}
+                              onChange={(e) => setQuickQuestionText(e.target.value)}
+                              placeholder="Nhập nội dung câu hỏi..."
+                              className="w-full px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs"
+                            />
+                            <div className="grid grid-cols-2 gap-1.5">
+                              {['A', 'B', 'C', 'D'].map((lbl, i) => (
+                                <div key={lbl} className="flex items-center gap-1">
+                                  <input
+                                    type="radio"
+                                    name="wizard-quick-correct"
+                                    checked={quickCorrectIdx === i}
+                                    onChange={() => setQuickCorrectIdx(i)}
+                                    title={`Chọn ${lbl} làm đáp án đúng`}
+                                    className="accent-teal-600"
+                                  />
+                                  <input
+                                    type="text"
+                                    data-testid={`step2-quick-option-${lbl}`}
+                                    value={quickOptions[i]}
+                                    onChange={(e) => {
+                                      const next = [...quickOptions];
+                                      next[i] = e.target.value;
+                                      setQuickOptions(next);
+                                    }}
+                                    placeholder={`Đáp án ${lbl}`}
+                                    className="w-full px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs"
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                            <input
+                              type="text"
+                              value={quickExplanation}
+                              onChange={(e) => setQuickExplanation(e.target.value)}
+                              placeholder="Giải thích ngắn gọn (tùy chọn)..."
+                              className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs"
+                            />
+                            <button
+                              type="button"
+                              data-testid="step2-add-quick-question-btn"
+                              onClick={handleAddQuickReviewQuestion}
+                              className="px-3 py-1.5 rounded-lg bg-teal-700 hover:bg-teal-600 text-white font-bold text-xs inline-flex items-center gap-1 cursor-pointer"
+                            >
+                              <Plus className="w-3.5 h-3.5" /> Thêm câu hỏi vào bài
+                            </button>
+                          </div>
+
+                          <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 space-y-2">
+                            <div className="text-xs font-extrabold text-slate-800 dark:text-white">
+                              Hoặc dán hàng loạt câu hỏi từ Word
+                            </div>
+                            <textarea
+                              rows={4}
+                              value={quickWordPaste}
+                              onChange={(e) => setQuickWordPaste(e.target.value)}
+                              placeholder={`Câu 1: Nội dung câu hỏi...\nA. ... B. ... C. ... D. ...\nĐáp án: A`}
+                              className="w-full p-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-mono text-[11px]"
+                            />
+                            <button
+                              type="button"
+                              onClick={handleParseQuickWordQuestions}
+                              className="px-3 py-1.5 rounded-lg bg-indigo-700 hover:bg-indigo-600 text-white font-bold text-xs cursor-pointer"
+                            >
+                              Tách &amp; Nạp câu hỏi ôn tập
+                            </button>
+                          </div>
+                        </div>
+
+                        {(step2.reviewQuestions?.length || 0) > 0 && (
+                          <div className="space-y-1.5">
+                            <div className="text-[11px] font-extrabold text-teal-800 dark:text-teal-300">
+                              Đã gắn {step2.reviewQuestions?.length} câu hỏi ôn tập cho bài này:
+                            </div>
+                            {(step2.reviewQuestions || []).map((rq, idx) => (
+                              <div
+                                key={rq.id || idx}
+                                className="flex items-center justify-between gap-2 px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs"
+                              >
+                                <span className="truncate font-semibold">
+                                  <strong>Câu {idx + 1}:</strong> {rq.question}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setStep2((prev) => ({
+                                      ...prev,
+                                      reviewQuestions: (prev.reviewQuestions || []).filter(
+                                        (_, i) => i !== idx
+                                      ),
+                                    }))
+                                  }
+                                  className="text-red-500 hover:text-red-700 shrink-0 cursor-pointer"
+                                  title="Xóa câu hỏi"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -1575,6 +1815,11 @@ export const UnifiedMaterialUploadModal: React.FC<UnifiedMaterialUploadModalProp
                         {step2.fileName || step2.externalUrl || 'Mã HTML/JS tương tác'}
                       </span>
                     </div>
+                    {(step2.reviewQuestions?.length || 0) > 0 && (
+                      <div className="sm:col-span-2 lg:col-span-4 pt-1 border-t border-slate-200 dark:border-slate-700 text-teal-700 dark:text-teal-300 font-bold">
+                        ✓ Kèm {step2.reviewQuestions?.length} câu hỏi ôn tập cuối bài (tự động cập nhật vào Khối lớp {step1.grade})
+                      </div>
+                    )}
                   </div>
 
                   {/* Live Preview Section */}

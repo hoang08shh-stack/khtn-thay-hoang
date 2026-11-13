@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Breadcrumbs } from '../components/common/Breadcrumbs.tsx';
-import { DEMO_USERS } from '../lib/supabase.ts';
 import { useAuth } from '../hooks/useAuth.ts';
 import { AppUser, Grade } from '../types/index.ts';
 import {
@@ -85,18 +84,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
       setErrorMsg(err.message || 'Xác thực không thành công. Vui lòng kiểm tra lại thông tin.');
     } finally {
       setIsSubmitting(false);
-    }
-  };
-
-  const quickTeacherDemoLogin = async () => {
-    const demoUser = DEMO_USERS.teacher;
-    try {
-      const user = await login(demoUser.email, 'password123');
-      if (onLoginSuccess) onLoginSuccess(user);
-      navigate('/quan-tri');
-    } catch {
-      if (onLoginSuccess) onLoginSuccess(demoUser);
-      navigate('/quan-tri');
     }
   };
 
@@ -291,28 +278,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
                     <span>{isSubmitting ? 'Đang xác thực...' : 'Đăng Nhập Quản Trị Giáo Viên'}</span>
                   </button>
                 </form>
-
-                <div className="pt-4 border-t border-slate-100 dark:border-slate-800 space-y-2.5">
-                  <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                    Truy cập nhanh cho Giáo viên phụ trách:
-                  </p>
-                  <button
-                    type="button"
-                    onClick={quickTeacherDemoLogin}
-                    className="w-full p-3.5 rounded-2xl bg-indigo-50/80 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100/80 text-left transition flex items-center justify-between"
-                  >
-                    <div>
-                      <div className="flex items-center gap-1.5 text-xs font-extrabold text-indigo-800 dark:text-indigo-300">
-                        <ShieldCheck className="w-4 h-4 text-indigo-600" />
-                        <span>Giáo viên Quản trị (Thầy Hoàng KHTN)</span>
-                      </div>
-                      <div className="text-[11px] font-mono text-indigo-700/80 dark:text-indigo-400">
-                        hoang08shh@gmail.com
-                      </div>
-                    </div>
-                    <ArrowRight className="w-4 h-4 text-indigo-600" />
-                  </button>
-                </div>
               </div>
             )}
           </div>

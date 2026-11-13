@@ -1256,9 +1256,20 @@ export function getInitialLocalLessons(): AdminLesson[] {
   return baseSeeded;
 }
 
+export function dispatchCmsUpdatedEvent(): void {
+  try {
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+      window.dispatchEvent(new CustomEvent('khtn-cms-updated'));
+    }
+  } catch {
+    // ignore in non-DOM test environments
+  }
+}
+
 function saveLocalLessons(lessons: AdminLesson[]) {
   safeWriteLocal(STORAGE_KEYS.LESSONS, lessons);
   syncCmsSnapshotToRepo();
+  dispatchCmsUpdatedEvent();
 }
 
 export async function fetchAdminLessons(): Promise<AdminLesson[]> {
@@ -1416,6 +1427,13 @@ export async function saveAdminLesson(
     unmarkIdAsDeleted('clearedLessonVideoIds', id);
   }
 
+  const normalizedMiniQuiz: LessonMiniQuizItem[] = (
+    miniQuiz ?? lessonData.miniQuiz ?? existing?.miniQuiz ?? []
+  ).map((mq, idx) => ({
+    ...mq,
+    id: mq.id && mq.id.trim() ? mq.id.trim() : `q-lesson-${id}-${idx + 1}`,
+  }));
+
   const savedLesson: AdminLesson = {
     id,
     topicId: lessonData.topicId,
@@ -1440,7 +1458,7 @@ export async function saveAdminLesson(
       lessonId: id,
     })),
     simulationIds,
-    miniQuiz: miniQuiz ?? lessonData.miniQuiz ?? existing?.miniQuiz ?? [],
+    miniQuiz: normalizedMiniQuiz,
   };
 
   const existingIndex = local.findIndex((l) => l.id === id);
@@ -1450,6 +1468,7 @@ export async function saveAdminLesson(
     local.unshift(savedLesson);
   }
 
+  syncLessonMiniQuizToQuestionBank(savedLesson);
   saveLocalLessons(local);
   return savedLesson;
 }
@@ -1524,12 +1543,18 @@ export function updateLessonMiniQuizSync(
   );
   if (idx < 0) return null;
 
+  const normalizedMiniQuiz: LessonMiniQuizItem[] = miniQuiz.map((mq, idx) => ({
+    ...mq,
+    id: mq.id && mq.id.trim() ? mq.id.trim() : `q-lesson-${local[idx].id}-${idx + 1}`,
+  }));
+
   const updated: AdminLesson = {
     ...local[idx],
-    miniQuiz: [...miniQuiz],
+    miniQuiz: normalizedMiniQuiz,
     updatedAt: new Date().toISOString(),
   };
   local[idx] = updated;
+  syncLessonMiniQuizToQuestionBank(updated);
   saveLocalLessons(local);
   return updated;
 }
@@ -1557,7 +1582,7 @@ export async function deleteAdminLesson(lessonId: string): Promise<boolean> {
   const filtered = local.filter((l) => l.id !== lessonId);
   saveLocalLessons(filtered);
 
-  // Also remove any unified learning resources linked to this deleted lesson
+  // Also remove any unified learning resources and lesson-owned bank questions linked to this deleted lesson
   try {
     const uniKey = 'khtn_unified_learning_resources_v2';
     const rawUni = safeReadLocal<any[] | null>(uniKey, null);
@@ -1566,6 +1591,13 @@ export async function deleteAdminLesson(lessonId: string): Promise<boolean> {
         (r) => r.lessonId !== lessonId && (!target || r.lessonTitle !== target.title)
       );
       safeWriteLocal(uniKey, filteredUni);
+    }
+    const existingQs = safeReadLocal<QuizQuestion[] | null>(STORAGE_KEYS.QUESTIONS, null);
+    if (existingQs && Array.isArray(existingQs)) {
+      const remainingQs = existingQs.filter((q) => q.lessonId !== lessonId);
+      if (remainingQs.length !== existingQs.length) {
+        safeWriteLocal(STORAGE_KEYS.QUESTIONS, remainingQs);
+      }
     }
   } catch {
     // ignore
@@ -1701,12 +1733,52 @@ export async function updateAssetMetadata(
 export function getAdminTopicsSync(): Topic[] {
   ensureBundledSnapshotSynced();
   const deletedTopicSet = new Set(getDeletedIdsRegistrySync().topics);
+  const customWizardTopics = safeReadLocal<any[]>('khtn_wizard_custom_topics_v1', []);
+
+  const mergeWithCustomTopics = (baseList: Topic[]): Topic[] => {
+    const map = new Map<string, Topic>();
+    baseList.forEach((t) => {
+      if (t && t.id && !deletedTopicSet.has(t.id) && !map.has(t.id)) {
+        map.set(t.id, t);
+      }
+    });
+    if (Array.isArray(customWizardTopics)) {
+      customWizardTopics.forEach((ct) => {
+        if (
+          ct &&
+          ct.id &&
+          ct.grade <= 9 &&
+          !deletedTopicSet.has(ct.id) &&
+          !map.has(ct.id)
+        ) {
+          map.set(ct.id, {
+            id: ct.id,
+            grade: ct.grade as Grade,
+            domain: ct.domain as SubjectDomain,
+            code: ct.code || `CD${ct.grade}`,
+            title: ct.title,
+            description: ct.description || 'Chuyên đề Khoa học tự nhiên bộ sách Kết nối tri thức với cuộc sống.',
+            lessonCount: 1,
+            experimentCount: 1,
+            icon: ct.domain === 'hoa-hoc' ? 'FlaskConical' : ct.domain === 'vat-li' ? 'Zap' : 'Dna',
+            order: map.size + 1,
+          });
+        }
+      });
+    }
+    return Array.from(map.values());
+  };
+
   const cached = safeReadLocal<Topic[] | null>(STORAGE_KEYS.TOPICS, null);
   if (cached !== null && Array.isArray(cached)) {
-    return cached.filter((t) => !deletedTopicSet.has(t.id));
+    const merged = mergeWithCustomTopics(cached);
+    if (merged.length !== cached.length) {
+      safeWriteLocal(STORAGE_KEYS.TOPICS, merged);
+    }
+    return merged;
   }
   const sourceTopics = Array.isArray(snapshotTopics) ? snapshotTopics : TOPICS;
-  const initial = sourceTopics.filter((t) => !deletedTopicSet.has(t.id));
+  const initial = mergeWithCustomTopics(sourceTopics);
   safeWriteLocal(STORAGE_KEYS.TOPICS, initial);
   return [...initial];
 }
@@ -1741,6 +1813,7 @@ export async function saveAdminTopic(topicInput: Partial<Topic> & { title: strin
   }
   safeWriteLocal(STORAGE_KEYS.TOPICS, all);
   syncCmsSnapshotToRepo();
+  dispatchCmsUpdatedEvent();
   return saved;
 }
 
@@ -1749,6 +1822,7 @@ export async function deleteAdminTopic(topicId: string): Promise<boolean> {
   const all = getAdminTopicsSync().filter((t) => t.id !== topicId);
   safeWriteLocal(STORAGE_KEYS.TOPICS, all);
   syncCmsSnapshotToRepo();
+  dispatchCmsUpdatedEvent();
   return true;
 }
 
@@ -1757,15 +1831,27 @@ export async function deleteAdminTopic(topicId: string): Promise<boolean> {
  * 3. QUIZ QUESTIONS & EXAMS MANAGEMENT
  * ============================================================================
  */
+function deduplicateQuestionsById(list: QuizQuestion[]): QuizQuestion[] {
+  const seen = new Map<string, QuizQuestion>();
+  list.forEach((q) => {
+    if (q && q.id && !seen.has(q.id)) {
+      seen.set(q.id, q);
+    }
+  });
+  return Array.from(seen.values());
+}
+
 export function getAdminQuestionsSync(): QuizQuestion[] {
   ensureBundledSnapshotSynced();
   const deletedQuestionSet = new Set(getDeletedIdsRegistrySync().questions);
-  const allBuiltIns = [...snapshotQuestions, ...QUIZ_QUESTIONS].filter(
-    (q) => !deletedQuestionSet.has(q.id)
+  const allBuiltIns = deduplicateQuestionsById(
+    [...snapshotQuestions, ...QUIZ_QUESTIONS].filter((q) => !deletedQuestionSet.has(q.id))
   );
   const cached = safeReadLocal<QuizQuestion[] | null>(STORAGE_KEYS.QUESTIONS, null);
   if (cached !== null && Array.isArray(cached)) {
-    const activeCached = cached.filter((q) => !deletedQuestionSet.has(q.id));
+    const activeCached = deduplicateQuestionsById(
+      cached.filter((q) => !deletedQuestionSet.has(q.id))
+    );
     const builtInMap = new Map(allBuiltIns.map((q) => [q.id, q]));
     const existingIds = new Set(activeCached.map((q) => q.id));
 
@@ -1824,7 +1910,9 @@ export function getAdminQuestionsSync(): QuizQuestion[] {
     const missingBuiltIns = allBuiltIns.filter(
       (q) => !existingIds.has(q.id) && !deletedQuestionSet.has(q.id)
     );
-    const merged = missingBuiltIns.length > 0 ? [...upgraded, ...missingBuiltIns] : upgraded;
+    const merged = deduplicateQuestionsById(
+      missingBuiltIns.length > 0 ? [...upgraded, ...missingBuiltIns] : upgraded
+    );
     safeWriteLocal(STORAGE_KEYS.QUESTIONS, merged);
     return merged;
   }
@@ -1895,7 +1983,83 @@ function syncQuestionsToLessonsMiniQuiz(questions: QuizQuestion[]): void {
 
   if (modified) {
     safeWriteLocal(STORAGE_KEYS.LESSONS, localLessons);
+    dispatchCmsUpdatedEvent();
   }
+}
+
+function syncLessonMiniQuizToQuestionBank(lesson: AdminLesson): void {
+  const miniQuiz = Array.isArray(lesson.miniQuiz) ? lesson.miniQuiz : [];
+  const allQuestions = getAdminQuestionsSync();
+  const now = new Date().toISOString();
+
+  const desiredItems = miniQuiz.map((mq, idx) => {
+    const qId = mq.id && mq.id.trim() ? mq.id.trim() : `q-lesson-${lesson.id}-${idx + 1}`;
+    const qType: QuizQuestion['questionType'] =
+      mq.questionType === 'true_false'
+        ? 'true_false'
+        : mq.questionType === 'essay'
+        ? 'essay'
+        : 'single_choice';
+
+    const normStem = (mq.question || '').trim().toLowerCase();
+    const existingMatch = allQuestions.find(
+      (q) =>
+        q.id === qId ||
+        (q.lessonId === lesson.id && q.question.trim().toLowerCase() === normStem)
+    );
+
+    const options =
+      qType === 'essay'
+        ? []
+        : qType === 'true_false' && Array.isArray(mq.trueFalseStatements) && mq.trueFalseStatements.length > 0
+        ? mq.trueFalseStatements.map((st) => `${st.label}) ${st.text}`)
+        : Array.isArray(mq.options) && mq.options.length >= 2
+        ? mq.options
+        : ['Phương án A', 'Phương án B', 'Phương án C', 'Phương án D'];
+
+    const mapped: QuizQuestion = {
+      ...(existingMatch || {}),
+      id: existingMatch?.id || qId,
+      lessonId: lesson.id,
+      topicId: lesson.topicId || existingMatch?.topicId,
+      grade: lesson.grade,
+      domain: lesson.domain,
+      question: mq.question.trim(),
+      questionType: qType,
+      options,
+      correctAnswer: typeof mq.correctIndex === 'number' ? mq.correctIndex : 0,
+      trueFalseStatements: mq.trueFalseStatements,
+      sampleAnswer: qType === 'essay' ? mq.sampleAnswer || mq.explanation : existingMatch?.sampleAnswer,
+      rubric: mq.rubric || existingMatch?.rubric,
+      allowImageUpload: qType === 'essay' ? true : existingMatch?.allowImageUpload,
+      explanation: mq.explanation || existingMatch?.explanation || 'Xem lại kiến thức trọng tâm trong bài học.',
+      difficulty: existingMatch?.difficulty || 'Thông hiểu',
+      approvalStatus: 'approved',
+      createdAt: existingMatch?.createdAt || now,
+      updatedAt: now,
+      points: existingMatch?.points || (qType === 'essay' ? 2.5 : qType === 'true_false' ? 1.0 : 0.25),
+    };
+    return mapped;
+  });
+
+  const desiredIds = new Set(desiredItems.map((d) => d.id));
+  const desiredStems = new Set(desiredItems.map((d) => d.question.trim().toLowerCase()));
+
+  // Remove stale miniQuiz-generated questions for this lesson that are no longer in miniQuiz
+  const filteredExisting = allQuestions.filter((q) => {
+    if (desiredIds.has(q.id)) return false;
+    if (
+      q.lessonId === lesson.id &&
+      (q.id.startsWith(`q-lesson-${lesson.id}-`) || q.id.startsWith('review-')) &&
+      !desiredStems.has(q.question.trim().toLowerCase())
+    ) {
+      return false;
+    }
+    return true;
+  });
+
+  const nextBank = deduplicateQuestionsById([...desiredItems, ...filteredExisting]);
+  safeWriteLocal(STORAGE_KEYS.QUESTIONS, nextBank);
 }
 
 export async function fetchAdminQuestions(): Promise<QuizQuestion[]> {
@@ -1959,6 +2123,7 @@ export async function saveAdminQuestion(qInput: Partial<QuizQuestion> & { questi
   safeWriteLocal(STORAGE_KEYS.QUESTIONS, all);
   syncQuestionsToLessonsMiniQuiz([saved]);
   syncCmsSnapshotToRepo();
+  dispatchCmsUpdatedEvent();
   return saved;
 }
 
@@ -2025,6 +2190,7 @@ export async function saveAdminQuestionsBulk(
   safeWriteLocal(STORAGE_KEYS.QUESTIONS, merged);
   syncQuestionsToLessonsMiniQuiz(savedItems);
   syncCmsSnapshotToRepo();
+  dispatchCmsUpdatedEvent();
   return savedItems;
 }
 
@@ -2033,6 +2199,7 @@ export async function deleteAdminQuestion(questionId: string): Promise<boolean> 
   const all = getAdminQuestionsSync().filter((q) => q.id !== questionId);
   safeWriteLocal(STORAGE_KEYS.QUESTIONS, all);
   syncCmsSnapshotToRepo();
+  dispatchCmsUpdatedEvent();
   return true;
 }
 
@@ -2149,6 +2316,7 @@ export async function saveAdminVideo(vInput: Partial<VideoLesson> & { title: str
   }
   safeWriteLocal(STORAGE_KEYS.VIDEOS, all);
   syncCmsSnapshotToRepo();
+  dispatchCmsUpdatedEvent();
   return saved;
 }
 
@@ -2194,6 +2362,7 @@ export async function deleteAdminVideo(videoId: string): Promise<boolean> {
   }
 
   syncCmsSnapshotToRepo();
+  dispatchCmsUpdatedEvent();
   return true;
 }
 
@@ -2274,6 +2443,7 @@ export async function saveAdminCatalogDoc(docInput: Partial<DocumentItem> & { ti
   }
   safeWriteLocal(STORAGE_KEYS.CATALOG_DOCS, all);
   syncCmsSnapshotToRepo();
+  dispatchCmsUpdatedEvent();
   return saved;
 }
 
@@ -2282,6 +2452,7 @@ export async function deleteAdminCatalogDoc(docId: string): Promise<boolean> {
   const all = getAdminCatalogDocsSync().filter((d) => d.id !== docId);
   safeWriteLocal(STORAGE_KEYS.CATALOG_DOCS, all);
   syncCmsSnapshotToRepo();
+  dispatchCmsUpdatedEvent();
   return true;
 }
 

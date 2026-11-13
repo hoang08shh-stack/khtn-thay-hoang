@@ -211,12 +211,15 @@ export const WordQuestionImportModal: React.FC<WordQuestionImportModalProps> = (
 
   // Option to also create a new QuizMeta exam & attach to a Lesson's end-of-lesson review section
   const availableLessons = getInitialLocalLessons();
-  const [targetLessonId, setTargetLessonId] = useState<string>(() => {
-    const match = availableLessons.find(
-      (l) => l.grade === defaultGrade && l.domain === defaultDomain
-    );
-    return match?.id || availableLessons[0]?.id || '';
-  });
+  const findMatchingLessonId = (g: Grade, d: SubjectDomain): string => {
+    const exact = availableLessons.find((l) => l.grade === g && l.domain === d);
+    if (exact) return exact.id;
+    const byGrade = availableLessons.find((l) => l.grade === g);
+    return byGrade?.id || availableLessons[0]?.id || '';
+  };
+  const [targetLessonId, setTargetLessonId] = useState<string>(() =>
+    findMatchingLessonId(defaultGrade, defaultDomain)
+  );
   const [createNewExam, setCreateNewExam] = useState(true);
   const [newExamTitle, setNewExamTitle] = useState('Đề kiểm tra KHTN (Nhập từ Word)');
   const [newExamDuration, setNewExamDuration] = useState(15);
@@ -1979,6 +1982,11 @@ export const WordQuestionImportModal: React.FC<WordQuestionImportModalProps> = (
                       onChange={(e) => {
                         const g = Number(e.target.value) as Grade;
                         setFallbackGrade(g);
+                        setTargetLessonId((currId) => {
+                          const curr = availableLessons.find((l) => l.id === currId);
+                          if (curr && curr.grade === g) return currId;
+                          return findMatchingLessonId(g, fallbackDomain);
+                        });
                         if (rawText.trim())
                           runParse(rawText, htmlContent, g, fallbackDomain, autoStandardizeIupac);
                       }}
@@ -2000,6 +2008,11 @@ export const WordQuestionImportModal: React.FC<WordQuestionImportModalProps> = (
                       onChange={(e) => {
                         const d = e.target.value as SubjectDomain;
                         setFallbackDomain(d);
+                        setTargetLessonId((currId) => {
+                          const curr = availableLessons.find((l) => l.id === currId);
+                          if (curr && curr.grade === fallbackGrade && curr.domain === d) return currId;
+                          return findMatchingLessonId(fallbackGrade, d);
+                        });
                         if (rawText.trim())
                           runParse(rawText, htmlContent, fallbackGrade, d, autoStandardizeIupac);
                       }}
@@ -2310,11 +2323,18 @@ export const WordQuestionImportModal: React.FC<WordQuestionImportModalProps> = (
                     className="px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-teal-300 dark:border-teal-700 font-bold text-xs text-slate-800 dark:text-slate-100 max-w-full md:w-96"
                   >
                     <option value="">-- Chỉ lưu vào Ngân hàng câu hỏi chung --</option>
-                    {availableLessons.map((les) => (
-                      <option key={les.id} value={les.id}>
-                        [Lớp {les.grade}] {les.title}
-                      </option>
-                    ))}
+                    {[...availableLessons]
+                      .sort((a, b) => {
+                        const aMatch = a.grade === fallbackGrade ? 0 : 1;
+                        const bMatch = b.grade === fallbackGrade ? 0 : 1;
+                        if (aMatch !== bMatch) return aMatch - bMatch;
+                        return a.grade - b.grade;
+                      })
+                      .map((les) => (
+                        <option key={les.id} value={les.id}>
+                          [Lớp {les.grade}] {les.title}
+                        </option>
+                      ))}
                   </select>
                 </div>
 

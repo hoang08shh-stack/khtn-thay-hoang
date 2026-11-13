@@ -76,10 +76,15 @@ export const LessonDetailPage: React.FC = () => {
   const { user } = useAuth();
   const [lesson, setLesson] = useState<Lesson>(() => {
     const published = getPublishedLessonsSync();
+    const key = (lessonId || '').trim().toLowerCase();
     return (
-      published.find((l) => l.id === lessonId || l.code === lessonId) ||
+      published.find(
+        (l) =>
+          l.id.toLowerCase() === key ||
+          l.code.toLowerCase() === key
+      ) ||
       published[0] ||
-      LESSONS.find((l) => l.id === lessonId) ||
+      LESSONS.find((l) => l.id.toLowerCase() === key) ||
       LESSONS[0]
     );
   });

@@ -1,4 +1,4 @@
-import { Grade, Lesson, SubjectDomain, Topic } from '../types/index.ts';
+import { Grade, Lesson, LessonMiniQuizItem, SubjectDomain, Topic } from '../types/index.ts';
 import cmsSnapshot from '../data/cmsSnapshot.json';
 import {
   getAdminTopicsSync,
@@ -7,6 +7,7 @@ import {
   clearAdminLessonVideo,
   deleteAdminAsset,
   deleteAdminCatalogDoc,
+  dispatchCmsUpdatedEvent,
   saveAdminTopic,
   saveAdminLesson,
   saveAdminVideo,
@@ -130,6 +131,9 @@ export interface WizardStep2Data {
   uploadProgress: number;
   uploadStatus: 'idle' | 'uploading' | 'ready' | 'error';
   errorMessage?: string;
+  lessonSummary?: string;
+  lessonContent?: string;
+  reviewQuestions?: LessonMiniQuizItem[];
 }
 
 export interface UnifiedLearningResource {
@@ -398,6 +402,7 @@ export function createInlineTopicForGrade(
     }).catch(() => {});
   }
 
+  dispatchCmsUpdatedEvent();
   return newTopic;
 }
 
@@ -411,7 +416,11 @@ export function createInlineLessonForTopic(
   subject: MaterialSubject = 'khtn'
 ): LessonOptionItem {
   const cleanTitle = title.trim();
-  const domain = resolveDomainFromSubject(subject);
+  const matchedTopic = getTopicsForSubjectAndGrade(subject, grade).find((t) => t.id === topicId);
+  const domain =
+    subject === 'khtn' && matchedTopic?.domain
+      ? matchedTopic.domain
+      : resolveDomainFromSubject(subject, matchedTopic?.domain || 'hoa-hoc');
   const newLesson: LessonOptionItem = {
     id: `lesson-inline-${Date.now()}`,
     topicId,
@@ -445,6 +454,7 @@ export function createInlineLessonForTopic(
     ).catch(() => {});
   }
 
+  dispatchCmsUpdatedEvent();
   return newLesson;
 }
 
@@ -743,7 +753,13 @@ export function saveUnifiedLearningResource(
 ): UnifiedLearningResource {
   const list = getUnifiedResourcesSync();
   const now = new Date().toISOString();
-  const domain = resolveDomainFromSubject(step1.subject);
+  const matchedStep1Topic = getTopicsForSubjectAndGrade(step1.subject, step1.grade).find(
+    (t) => t.id === step1.topicId
+  );
+  const domain =
+    step1.subject === 'khtn' && matchedStep1Topic?.domain
+      ? matchedStep1Topic.domain
+      : resolveDomainFromSubject(step1.subject, matchedStep1Topic?.domain || 'hoa-hoc');
 
   const sanitizedSim = step2.simulationHtml
     ? validateSimulationHtmlSafety(step2.simulationHtml).sanitizedHtml
@@ -755,6 +771,7 @@ export function saveUnifiedLearningResource(
       : undefined;
 
   // Smartly resolve target lesson if step2.title explicitly specifies a different "Bài <N>" than the preselected step1 lesson
+  // (Skip reassignment if teacher explicitly created a brand new inline lesson in Step 1)
   const safeGrade = (step1.grade <= 9 ? step1.grade : 9) as Grade;
   const adminLessons = getInitialLocalLessons();
   const extractBaiNum = (text?: string): number | null => {
@@ -763,11 +780,14 @@ export function saveUnifiedLearningResource(
   };
   const step1BaiNum = extractBaiNum(step1.lessonTitle);
   const step2BaiNum = extractBaiNum(step2.title);
+  const isExplicitInlineLesson = Boolean(
+    step1.lessonId && step1.lessonId.startsWith('lesson-inline-')
+  );
 
   let resolvedLessonId = step1.lessonId;
   let resolvedLessonTitle = step1.lessonTitle;
 
-  if (step2BaiNum !== null && step1BaiNum !== step2BaiNum) {
+  if (!isExplicitInlineLesson && step2BaiNum !== null && step1BaiNum !== step2BaiNum) {
     const matchByBaiNum = adminLessons.find(
       (l) => l.grade === safeGrade && extractBaiNum(l.title) === step2BaiNum
     );
@@ -778,7 +798,11 @@ export function saveUnifiedLearningResource(
       resolvedLessonId = `lesson-upload-g${safeGrade}-b${step2BaiNum}-${Date.now()}`;
       resolvedLessonTitle = step2.title.trim();
     }
-  } else if (/bảo toàn khối lượng/i.test(step2.title) && !/bảo toàn khối lượng/i.test(step1.lessonTitle)) {
+  } else if (
+    !isExplicitInlineLesson &&
+    /bảo toàn khối lượng/i.test(step2.title) &&
+    !/bảo toàn khối lượng/i.test(step1.lessonTitle)
+  ) {
     const btkl = adminLessons.find(
       (l) => l.id === 'khtn-8-bai-5-btkl' || /bảo toàn khối lượng/i.test(l.title)
     );
@@ -864,11 +888,70 @@ export function saveUnifiedLearningResource(
       saveUploadedAssetToRepository(assetObj).catch(() => {});
     }
 
+    const mergeMiniQuizItems = (
+      existingItems: LessonMiniQuizItem[] = [],
+      incomingItems: LessonMiniQuizItem[] = [],
+      targetId: string
+    ): LessonMiniQuizItem[] => {
+      if (!incomingItems || incomingItems.length === 0) return existingItems;
+      const next = [...existingItems];
+      const seenStems = new Set(next.map((q) => q.question.trim().toLowerCase()));
+      incomingItems.forEach((item, idx) => {
+        const stem = (item.question || '').trim();
+        if (!stem) return;
+        const norm = stem.toLowerCase();
+        const withId: LessonMiniQuizItem = {
+          ...item,
+          id: item.id && item.id.trim() ? item.id.trim() : `q-lesson-${targetId}-${next.length + idx + 1}`,
+        };
+        if (seenStems.has(norm)) {
+          const matchIdx = next.findIndex((x) => x.question.trim().toLowerCase() === norm);
+          if (matchIdx >= 0) next[matchIdx] = withId;
+        } else {
+          seenStems.add(norm);
+          next.push(withId);
+        }
+      });
+      return next;
+    };
+
+    const incomingQuestions = Array.isArray(step2.reviewQuestions) ? step2.reviewQuestions : [];
+    const customSummary = step2.lessonSummary?.trim();
+    const customContent = step2.lessonContent?.trim();
+    const derivePlainSummary = (rawContent?: string): string => {
+      if (!rawContent) return '';
+      const lines = rawContent
+        .split(/\r?\n/)
+        .map((l) => l.replace(/^#{1,6}\s*/, '').replace(/\*\*/g, '').trim())
+        .filter(Boolean);
+      if (lines.length === 0) return '';
+      return lines.length > 1 ? `${lines[0]}: ${lines[1]}` : lines[0];
+    };
+
     if (matchedLesson) {
       const finalLessonTitle =
         step1.lessonId === matchedLesson.id && step1.lessonTitle?.trim()
           ? step1.lessonTitle.trim()
           : matchedLesson.title;
+      const mergedMiniQuiz = mergeMiniQuizItems(
+        matchedLesson.miniQuiz || [],
+        incomingQuestions,
+        matchedLesson.id
+      );
+      const nextContent = customContent
+        ? matchedLesson.content && !matchedLesson.content.startsWith(`### ${finalLessonTitle}`)
+          ? `${matchedLesson.content}\n\n${customContent}`
+          : customContent
+        : matchedLesson.content || `### ${finalLessonTitle}`;
+      const existingSummaryIsGeneric =
+        !matchedLesson.summary ||
+        /^Bài học thuộc chương trình Lớp \d+\.?$/i.test(matchedLesson.summary.trim());
+      const resolvedSummary =
+        customSummary ||
+        (!existingSummaryIsGeneric ? matchedLesson.summary : '') ||
+        step2.description ||
+        derivePlainSummary(customContent) ||
+        finalLessonTitle;
       saveAdminLesson(
         {
           id: matchedLesson.id,
@@ -878,19 +961,21 @@ export function saveUnifiedLearningResource(
           code: matchedLesson.code || `B${safeGrade}-01`,
           slug: matchedLesson.slug || generateSlug(finalLessonTitle),
           title: finalLessonTitle,
-          summary: matchedLesson.summary || step2.description || finalLessonTitle,
-          content: matchedLesson.content || `### ${finalLessonTitle}`,
+          summary: resolvedSummary,
+          content: nextContent,
           durationMinutes: matchedLesson.durationMinutes || 45,
           orderIndex: matchedLesson.orderIndex || 1,
-          isPublished: true,
+          isPublished: status === 'published' ? true : matchedLesson.isPublished,
           thumbnailUrl: matchedLesson.thumbnailUrl,
           videoUrl: updatedVideoUrl,
-          miniQuiz: matchedLesson.miniQuiz,
+          miniQuiz: mergedMiniQuiz,
         },
         existingAssets,
-        matchedLesson.simulationIds || []
+        matchedLesson.simulationIds || [],
+        mergedMiniQuiz
       ).catch(() => {});
     } else if (resolvedLessonId && resolvedLessonTitle) {
+      const mergedMiniQuiz = mergeMiniQuizItems([], incomingQuestions, resolvedLessonId);
       saveAdminLesson(
         {
           id: resolvedLessonId,
@@ -901,16 +986,21 @@ export function saveUnifiedLearningResource(
           slug: generateSlug(resolvedLessonTitle),
           title: resolvedLessonTitle,
           summary:
+            customSummary ||
             step2.description ||
             `${resolvedLessonTitle} – Chương trình ${SUBJECT_LABELS[step1.subject]} Lớp ${step1.grade}.`,
-          content: `### ${resolvedLessonTitle}\n${step2.description || newRes.title}`,
+          content:
+            customContent ||
+            `### ${resolvedLessonTitle}\n${step2.description || newRes.title}`,
           durationMinutes: 45,
           orderIndex: step2BaiNum || 1,
           isPublished: true,
           videoUrl: updatedVideoUrl,
+          miniQuiz: mergedMiniQuiz,
         },
         existingAssets,
-        []
+        [],
+        mergedMiniQuiz
       ).catch(() => {});
     }
   } catch {
@@ -949,6 +1039,7 @@ export function saveUnifiedLearningResource(
   }
 
   syncCmsSnapshotToRepo(false).catch(() => {});
+  dispatchCmsUpdatedEvent();
   return newRes;
 }
 

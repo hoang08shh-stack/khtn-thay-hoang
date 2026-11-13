@@ -1,5 +1,5 @@
-import React, { useState, useEffect, Suspense } from 'react';
-import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
+import React, { useState, useEffect, Suspense, Component, ErrorInfo, ReactNode } from 'react';
+import { HashRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { ThemeProvider } from './context/ThemeContext.tsx';
 import { AuthProvider, useAuth } from './context/AuthContext.tsx';
 import { ProtectedRoute } from './components/auth/ProtectedRoute.tsx';
@@ -38,6 +38,84 @@ function PageLoadingFallback() {
       </p>
     </div>
   );
+}
+
+// Normalize legacy non-hash routes (e.g. /lop-9 -> /#/lop-9) synchronously before HashRouter mounts
+function normalizeLegacyHashRoute() {
+  try {
+    if (typeof window === 'undefined') return;
+    const { pathname, search, hash } = window.location;
+    if (
+      pathname &&
+      pathname !== '/' &&
+      pathname !== '/index.html' &&
+      !pathname.startsWith('/assets/') &&
+      !pathname.startsWith('/api/') &&
+      (!hash || !hash.startsWith('#/'))
+    ) {
+      const normalizedPath = pathname.startsWith('/') ? pathname : `/${pathname}`;
+      window.history.replaceState(null, '', `/#${normalizedPath}${search || ''}`);
+    }
+  } catch {
+    // ignore history errors
+  }
+}
+
+normalizeLegacyHashRoute();
+
+class AppErrorBoundary extends Component<
+  { children: ReactNode },
+  { hasError: boolean; message: string }
+> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { hasError: false, message: '' };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, message: error?.message || 'Lỗi hiển thị trang' };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error('AppErrorBoundary caught error:', error, info);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 p-6">
+          <div className="max-w-md w-full bg-white dark:bg-slate-900 rounded-3xl p-8 border border-slate-200 dark:border-slate-800 shadow-xl text-center space-y-4">
+            <h2 className="text-xl font-extrabold text-slate-900 dark:text-white">
+              Trang vừa gặp sự cố tạm thời
+            </h2>
+            <p className="text-xs text-slate-600 dark:text-slate-400">
+              Vui lòng bấm tải lại hoặc quay về Trang chủ để tiếp tục học tập.
+            </p>
+            <div className="flex items-center justify-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => window.location.reload()}
+                className="px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-xs font-extrabold cursor-pointer"
+              >
+                Tải lại trang
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  this.setState({ hasError: false, message: '' });
+                  window.location.hash = '#/';
+                }}
+                className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-bold cursor-pointer"
+              >
+                Về Trang chủ
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
 }
 
 // Scroll to top on route change
@@ -162,15 +240,17 @@ function AppContent() {
 
 export default function App() {
   return (
-    <ThemeProvider>
-      <AuthProvider>
-        <NotificationProvider>
-          <BrowserRouter>
-            <ScrollToTop />
-            <AppContent />
-          </BrowserRouter>
-        </NotificationProvider>
-      </AuthProvider>
-    </ThemeProvider>
+    <AppErrorBoundary>
+      <ThemeProvider>
+        <AuthProvider>
+          <NotificationProvider>
+            <HashRouter>
+              <ScrollToTop />
+              <AppContent />
+            </HashRouter>
+          </NotificationProvider>
+        </AuthProvider>
+      </ThemeProvider>
+    </AppErrorBoundary>
   );
 }

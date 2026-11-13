@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Grade, SubjectDomain, Lesson, Simulation3D, DocumentResource, VideoResource } from '../types/index.ts';
+import { Grade, SubjectDomain, Lesson, Simulation3D, DocumentResource, VideoResource, Topic, QuizQuestion } from '../types/index.ts';
 import {
   HERO_LAB_IMAGE,
   GRADE_COVER_IMAGES,
@@ -40,6 +40,7 @@ import {
   ExternalLink,
   Layers,
   Eye,
+  HelpCircle,
 } from 'lucide-react';
 
 interface GradeTemplatePageProps {
@@ -133,6 +134,12 @@ export const GradeTemplatePage: React.FC<GradeTemplatePageProps> = ({ grade }) =
   const [gradeVideos, setGradeVideos] = useState<VideoResource[]>(() =>
     getAdminVideosSync().filter((v) => v.grade === grade)
   );
+  const [allGradeTopics, setAllGradeTopics] = useState<Topic[]>(() =>
+    getAdminTopicsSync().filter((t) => t.grade === grade)
+  );
+  const [allGradeBankQuestions, setAllGradeBankQuestions] = useState<QuizQuestion[]>(() =>
+    getAdminQuestionsSync().filter((q) => q.grade === grade)
+  );
 
   useEffect(() => {
     let mounted = true;
@@ -141,6 +148,8 @@ export const GradeTemplatePage: React.FC<GradeTemplatePageProps> = ({ grade }) =
       setGradeLessons(getPublishedLessonsSync(grade));
       setGradeDocuments(getAllDocumentsSync(grade));
       setGradeVideos(getAdminVideosSync().filter((v) => v.grade === grade));
+      setAllGradeTopics(getAdminTopicsSync().filter((t) => t.grade === grade));
+      setAllGradeBankQuestions(getAdminQuestionsSync().filter((q) => q.grade === grade));
 
       Promise.all([
         getLessonsByGrade(grade),
@@ -151,6 +160,8 @@ export const GradeTemplatePage: React.FC<GradeTemplatePageProps> = ({ grade }) =
           setGradeLessons(lessonsData);
           setGradeDocuments(docsData);
           setGradeVideos(videosData);
+          setAllGradeTopics(getAdminTopicsSync().filter((t) => t.grade === grade));
+          setAllGradeBankQuestions(getAdminQuestionsSync().filter((q) => q.grade === grade));
         }
       });
     };
@@ -166,7 +177,6 @@ export const GradeTemplatePage: React.FC<GradeTemplatePageProps> = ({ grade }) =
 
   const info = GRADE_INFO[grade];
 
-  const allGradeTopics = getAdminTopicsSync().filter((t) => t.grade === grade);
   const gradeTopics = allGradeTopics.filter(
     (t) => selectedDomain === 'all' || t.domain === selectedDomain
   );
@@ -182,9 +192,67 @@ export const GradeTemplatePage: React.FC<GradeTemplatePageProps> = ({ grade }) =
   const filteredVideos = gradeVideos.filter(
     (v) => selectedDomain === 'all' || v.domain === selectedDomain
   );
-  const gradeQuizzes = getAdminQuestionsSync().filter(
-    (q) => q.grade === grade && (selectedDomain === 'all' || q.domain === selectedDomain)
-  );
+
+  const gradeQuizzes = useMemo(() => {
+    const map = new Map<string, QuizQuestion & { _lessonTitle?: string }>();
+    const seenStems = new Set<string>();
+    const lessonTitleMap = new Map(gradeLessons.map((l) => [l.id, l.title]));
+
+    allGradeBankQuestions
+      .filter((q) => selectedDomain === 'all' || q.domain === selectedDomain)
+      .forEach((q) => {
+        if (!map.has(q.id)) {
+          const normStem = (q.question || '').trim().toLowerCase();
+          if (normStem) seenStems.add(`${q.lessonId || 'bank'}::${normStem}`);
+          map.set(q.id, {
+            ...q,
+            _lessonTitle: q.lessonId ? lessonTitleMap.get(q.lessonId) : undefined,
+          });
+        }
+      });
+
+    filteredLessons.forEach((lesson) => {
+      (lesson.miniQuiz || []).forEach((mq, idx) => {
+        const stem = (mq.question || '').trim();
+        if (!stem) return;
+        const normKey = `${lesson.id}::${stem.toLowerCase()}`;
+        if (seenStems.has(normKey)) return;
+        const qId = mq.id || `lesson-mq-${lesson.id}-${idx + 1}`;
+        if (map.has(qId)) return;
+        seenStems.add(normKey);
+        const qType =
+          mq.questionType === 'true_false'
+            ? 'true_false'
+            : mq.questionType === 'essay'
+            ? 'essay'
+            : 'single_choice';
+        map.set(qId, {
+          id: qId,
+          lessonId: lesson.id,
+          topicId: lesson.topicId,
+          grade: lesson.grade,
+          domain: lesson.domain,
+          question: stem,
+          questionType: qType,
+          options:
+            qType === 'essay'
+              ? []
+              : qType === 'true_false' && mq.trueFalseStatements?.length
+              ? mq.trueFalseStatements.map((st) => `${st.label}) ${st.text}`)
+              : mq.options || [],
+          correctAnswer: mq.correctIndex ?? 0,
+          trueFalseStatements: mq.trueFalseStatements,
+          sampleAnswer: mq.sampleAnswer,
+          rubric: mq.rubric,
+          explanation: mq.explanation || 'Xem lại kiến thức trọng tâm trong bài học.',
+          difficulty: 'Thông hiểu',
+          _lessonTitle: lesson.title,
+        });
+      });
+    });
+
+    return Array.from(map.values());
+  }, [allGradeBankQuestions, filteredLessons, gradeLessons, selectedDomain]);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-sky-50/60 via-white to-teal-50/40 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 py-8">
@@ -362,6 +430,9 @@ export const GradeTemplatePage: React.FC<GradeTemplatePageProps> = ({ grade }) =
               <div className="space-y-3">
                 {gradeTopics.map((topic) => {
                   const domainObj = DOMAINS.find((d) => d.id === topic.domain);
+                  const liveTopicLessonsCount = gradeLessons.filter(
+                    (l) => l.topicId === topic.id
+                  ).length;
                   return (
                     <div
                       key={topic.id}
@@ -375,10 +446,10 @@ export const GradeTemplatePage: React.FC<GradeTemplatePageProps> = ({ grade }) =
                       <div className="space-y-1 flex-1">
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-[11px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-md bg-teal-50 text-teal-700">
-                            {topic.chapterNumber} • {domainObj?.shortName}
+                            {topic.chapterNumber || topic.code || `KHTN ${grade}`} • {domainObj?.shortName}
                           </span>
-                          <span className="text-xs text-slate-400 font-semibold">
-                            {topic.lessonsCount} bài
+                          <span className="text-xs text-slate-500 font-semibold">
+                            {liveTopicLessonsCount} bài
                           </span>
                         </div>
                         <h4 className="font-extrabold text-slate-900 dark:text-white text-sm">
@@ -414,6 +485,14 @@ export const GradeTemplatePage: React.FC<GradeTemplatePageProps> = ({ grade }) =
                 ) : (
                   filteredLessons.map((lesson) => {
                     const domainObj = DOMAINS.find((d) => d.id === lesson.domain);
+                    const lessonAssetsCount = lesson.assets?.length || 0;
+                    const linkedBankCount = allGradeBankQuestions.filter(
+                      (q) => q.lessonId === lesson.id
+                    ).length;
+                    const lessonReviewCount = Math.max(
+                      lesson.miniQuiz?.length || 0,
+                      linkedBankCount
+                    );
                     return (
                       <Link
                         key={lesson.id}
@@ -441,6 +520,21 @@ export const GradeTemplatePage: React.FC<GradeTemplatePageProps> = ({ grade }) =
                                 {lesson.simulationId && (
                                   <span className="text-[11px] font-extrabold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 flex items-center gap-1">
                                     <Atom className="w-3 h-3" /> Có mô phỏng 3D
+                                  </span>
+                                )}
+                                {lesson.videoUrl && (
+                                  <span className="text-[11px] font-extrabold px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 flex items-center gap-1">
+                                    <Play className="w-3 h-3" /> Có video
+                                  </span>
+                                )}
+                                {lessonAssetsCount > 0 && (
+                                  <span className="text-[11px] font-extrabold px-2 py-0.5 rounded-full bg-sky-100 text-sky-800 flex items-center gap-1">
+                                    <FileText className="w-3 h-3" /> {lessonAssetsCount} tài liệu
+                                  </span>
+                                )}
+                                {lessonReviewCount > 0 && (
+                                  <span className="text-[11px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 flex items-center gap-1">
+                                    <HelpCircle className="w-3 h-3" /> {lessonReviewCount} câu ôn tập
                                   </span>
                                 )}
                               </div>
@@ -632,26 +726,54 @@ export const GradeTemplatePage: React.FC<GradeTemplatePageProps> = ({ grade }) =
             <div className="space-y-4">
               {gradeQuizzes.map((q, idx) => (
                 <div
-                  key={q.id}
+                  key={`${q.id}-${idx}`}
                   className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200/80 dark:border-slate-700 space-y-2"
                 >
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span className="text-xs font-extrabold text-teal-700 bg-teal-100 px-2 py-0.5 rounded">
                       Câu {idx + 1}
                     </span>
-                    <span className="text-xs text-slate-500 font-semibold">Mức độ: {q.difficulty}</span>
+                    <span className="text-xs text-slate-500 font-semibold">
+                      Mức độ: {q.difficulty}
+                    </span>
+                    {q._lessonTitle && (
+                      <Link
+                        to={`/bai-hoc/${q.lessonId}`}
+                        className="text-[11px] font-bold text-sky-700 dark:text-sky-300 bg-sky-50 dark:bg-sky-950/60 px-2 py-0.5 rounded-md border border-sky-200 dark:border-sky-800 hover:underline"
+                      >
+                        Bài: {q._lessonTitle}
+                      </Link>
+                    )}
                   </div>
                   <p className="font-bold text-sm text-slate-800 dark:text-slate-100">{q.question}</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                    {q.options.map((opt, optIdx) => (
-                      <div
-                        key={optIdx}
-                        className="text-xs px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300"
-                      >
-                        {String.fromCharCode(65 + optIdx)}. {opt}
-                      </div>
-                    ))}
-                  </div>
+                  {q.questionType === 'true_false' && q.trueFalseStatements?.length ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                      {q.trueFalseStatements.map((stmt) => (
+                        <div
+                          key={stmt.label}
+                          className="text-xs px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-800 text-slate-700 dark:text-slate-300"
+                        >
+                          <strong>{stmt.label})</strong> {stmt.text}
+                        </div>
+                      ))}
+                    </div>
+                  ) : q.questionType === 'essay' || q.questionType === 'short_answer' ? (
+                    <div className="text-xs px-3 py-2 rounded-xl bg-purple-50/60 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 text-purple-900 dark:text-purple-200">
+                      <strong>Gợi ý / Đáp án tham khảo:</strong>{' '}
+                      {q.sampleAnswer || q.shortAnswer || q.explanation}
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                      {(q.options || []).map((opt, optIdx) => (
+                        <div
+                          key={optIdx}
+                          className="text-xs px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300"
+                        >
+                          {String.fromCharCode(65 + optIdx)}. {opt}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

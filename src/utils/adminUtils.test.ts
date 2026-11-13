@@ -745,6 +745,158 @@ test('Supabase sync diagnostics clearly report unconfigured state and video uplo
   assert.equal(mp4Validation.valid, true);
 });
 
+test('Grade 9 lesson creation and 3-step upload sync lessons, documents, and review questions cleanly with zero duplicate question IDs', async () => {
+  const {
+    resetAllAdminDataToDefault,
+    getAdminQuestionsSync,
+    saveAdminLesson,
+    getAdminTopicsSync,
+  } = await import('../services/adminService.ts');
+  const {
+    getPublishedLessonsSync,
+    getAllDocumentsSync,
+    getLessonByIdOrSlug,
+  } = await import('../services/contentService.ts');
+  const {
+    createInlineTopicForGrade,
+    createInlineLessonForTopic,
+    saveUnifiedLearningResource,
+  } = await import('./materialUploadEngine.ts');
+
+  resetAllAdminDataToDefault();
+
+  // 1. Verify getAdminQuestionsSync never returns duplicate IDs
+  const initialQs = getAdminQuestionsSync();
+  const uniqueIds = new Set(initialQs.map((q) => q.id));
+  assert.equal(
+    initialQs.length,
+    uniqueIds.size,
+    'getAdminQuestionsSync() must deduplicate all built-in & snapshot question IDs'
+  );
+
+  // 2. Create a Grade 9 lesson via saveAdminLesson with miniQuiz -> syncs to Grade 9 lessons AND question bank
+  const createdG9 = await saveAdminLesson(
+    {
+      id: 'lesson-g9-custom-sync-1',
+      topicId: 'cd9-1',
+      grade: 9,
+      domain: 'vat-li',
+      code: 'KHTN9-VL-99',
+      title: 'Bài kiểm tra đồng bộ Lớp 9 (Năng lượng cơ học)',
+      summary: 'Bài giảng đồng bộ đầy đủ vào khối lớp 9.',
+      content: '### 1. Động năng\nCông thức: $W_d = \\frac{1}{2} m v^2$.',
+      durationMinutes: 45,
+      orderIndex: 99,
+      isPublished: true,
+      miniQuiz: [
+        {
+          questionType: 'single_choice',
+          question: 'Đơn vị của động năng trong hệ SI là gì?',
+          options: ['Newton (N)', 'Joule (J)', 'Watt (W)', 'Pascal (Pa)'],
+          correctIndex: 1,
+          explanation: 'Động năng là một dạng năng lượng nên có đơn vị là Joule (J).',
+        },
+      ],
+    },
+    [],
+    []
+  );
+
+  assert.ok(
+    getPublishedLessonsSync(9).some((l) => l.id === createdG9.id),
+    'Created Grade 9 lesson must appear in Grade 9 published lessons'
+  );
+  assert.ok(
+    getAdminQuestionsSync().some(
+      (q) => q.grade === 9 && q.lessonId === createdG9.id && q.question.includes('động năng')
+    ),
+    'Lesson miniQuiz created via LessonFormModal must sync into Grade 9 question bank'
+  );
+
+  // 3. Create inline Topic & Lesson in Grade 9 via 3-step Wizard and upload document + review questions
+  const inlineTopic = createInlineTopicForGrade('khtn', 9, 'Chủ đề Quang học Lớp 9 (Test)');
+  assert.ok(
+    getAdminTopicsSync().some((t) => t.id === inlineTopic.id && t.grade === 9),
+    'Inline topic must appear in getAdminTopicsSync() for Grade 9'
+  );
+
+  const inlineLesson = createInlineLessonForTopic(
+    inlineTopic.id,
+    9,
+    'Bài 10. Kính lúp và sự tạo ảnh',
+    'khtn'
+  );
+
+  const savedRes = saveUnifiedLearningResource(
+    {
+      subject: 'khtn',
+      grade: 9,
+      textbook: 'ket-noi-tri-thuc',
+      topicId: inlineTopic.id,
+      topicTitle: inlineTopic.title,
+      lessonId: inlineLesson.id,
+      lessonTitle: inlineLesson.title,
+    },
+    {
+      category: 'lecture_doc',
+      title: 'Bài 5. Phiếu thực hành Kính lúp',
+      fileName: 'Phieu_thuc_hanh_Kinh_lup_9.pdf',
+      fileType: 'application/pdf',
+      fileSize: 512000,
+      fileDataUrl: 'data:application/pdf;base64,JVBERi0xLjQK',
+      uploadProgress: 100,
+      uploadStatus: 'ready',
+      lessonSummary: 'Tìm hiểu tiêu cự và số bội giác của kính lúp.',
+      lessonContent: '### 1. Cấu tạo kính lúp\nKính lúp là thấu kính hội tụ có tiêu cự ngắn.',
+      reviewQuestions: [
+        {
+          questionType: 'single_choice',
+          question: 'Kính lúp thực chất là loại thấu kính nào?',
+          options: [
+            'Thấu kính phân kì có tiêu cự ngắn',
+            'Thấu kính hội tụ có tiêu cự ngắn',
+            'Gương cầu lồi',
+            'Lăng kính tam giác',
+          ],
+          correctIndex: 1,
+          explanation: 'Kính lúp là thấu kính hội tụ có tiêu cự ngắn (f cỡ vài cm đến vài chục cm).',
+        },
+      ],
+    },
+    'published'
+  );
+
+  assert.equal(
+    savedRes.lessonId,
+    inlineLesson.id,
+    'Inline-created lesson ID must be preserved even if resource title starts with Bài 5'
+  );
+
+  const g9LessonLoaded = await getLessonByIdOrSlug(inlineLesson.id);
+  assert.ok(g9LessonLoaded, 'Uploaded Grade 9 lesson must load cleanly');
+  assert.ok(
+    (g9LessonLoaded.assets || []).some((a) => a.fileName === 'Phieu_thuc_hanh_Kinh_lup_9.pdf'),
+    'Uploaded document must attach to the inline Grade 9 lesson'
+  );
+  assert.ok(
+    (g9LessonLoaded.miniQuiz || []).some((q) => q.question.includes('Kính lúp thực chất')),
+    'Review questions added in 3-step Wizard must appear in lesson miniQuiz'
+  );
+  assert.ok(
+    getAllDocumentsSync(9).some((d) => d.lessonId === inlineLesson.id),
+    'Uploaded Grade 9 document must appear in Grade 9 documents'
+  );
+  assert.ok(
+    getAdminQuestionsSync().some(
+      (q) => q.grade === 9 && q.lessonId === inlineLesson.id && q.question.includes('Kính lúp')
+    ),
+    'Review questions added in 3-step Wizard must sync to Grade 9 question bank'
+  );
+
+  resetAllAdminDataToDefault();
+});
+
+
 
 
 
