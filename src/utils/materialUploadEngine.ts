@@ -1,4 +1,5 @@
 import { Grade, Lesson, SubjectDomain, Topic } from '../types/index.ts';
+import cmsSnapshot from '../data/cmsSnapshot.json';
 import {
   getAdminTopicsSync,
   getInitialLocalLessons,
@@ -11,6 +12,9 @@ import {
   saveAdminVideo,
   saveAdminCatalogDoc,
   saveUploadedAssetToRepository,
+  syncCmsSnapshotToRepo,
+  safeReadLocal,
+  safeWriteLocal,
   extractYouTubeId,
   generateSlug,
 } from '../services/adminService.ts';
@@ -179,28 +183,11 @@ const WIZARD_DRAFT_KEY = 'khtn_material_wizard_draft_v2';
 const memoryStore = new Map<string, string>();
 
 function readJson<T>(key: string, fallback: T): T {
-  try {
-    if (typeof localStorage !== 'undefined') {
-      const raw = localStorage.getItem(key);
-      if (raw) return JSON.parse(raw) as T;
-    }
-    const mem = memoryStore.get(key);
-    return mem ? (JSON.parse(mem) as T) : fallback;
-  } catch {
-    return fallback;
-  }
+  return safeReadLocal<T>(key, fallback);
 }
 
 function writeJson<T>(key: string, val: T): void {
-  try {
-    const str = JSON.stringify(val);
-    memoryStore.set(key, str);
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(key, str);
-    }
-  } catch {
-    // ignore storage quota errors
-  }
+  safeWriteLocal<T>(key, val);
 }
 
 const HIGH_SCHOOL_DEFAULT_TOPICS: TopicOptionItem[] = [
@@ -664,6 +651,19 @@ export function getUnifiedResourcesSync(): UnifiedLearningResource[] {
     });
   }
 
+  const snapUni = Array.isArray((cmsSnapshot as any)?.unifiedResources)
+    ? ((cmsSnapshot as any).unifiedResources as UnifiedLearningResource[])
+    : null;
+  if (snapUni && snapUni.length > 0) {
+    const filteredSnap = snapUni.filter((r) => {
+      if (deletedLessonSet.has(r.lessonId)) return false;
+      if (r.category === 'video' && clearedVideoSet.has(r.lessonId)) return false;
+      return true;
+    });
+    writeJson(UNIFIED_RESOURCES_KEY, filteredSnap);
+    return filteredSnap;
+  }
+
   const now = new Date().toISOString();
   const baseSeed: UnifiedLearningResource[] = [
     {
@@ -948,6 +948,7 @@ export function saveUnifiedLearningResource(
     }
   }
 
+  syncCmsSnapshotToRepo(false).catch(() => {});
   return newRes;
 }
 
@@ -975,6 +976,7 @@ export function updateUnifiedResourceTitle(
       : item
   );
   writeJson(UNIFIED_RESOURCES_KEY, next);
+  syncCmsSnapshotToRepo(false).catch(() => {});
   return next;
 }
 
@@ -999,6 +1001,7 @@ export function moveUnifiedResourceToLesson(
       : item
   );
   writeJson(UNIFIED_RESOURCES_KEY, next);
+  syncCmsSnapshotToRepo(false).catch(() => {});
   return next;
 }
 
@@ -1049,6 +1052,7 @@ export function replaceUnifiedResourceFile(
     }).catch(() => {});
   }
 
+  syncCmsSnapshotToRepo(false).catch(() => {});
   return next;
 }
 
@@ -1066,6 +1070,7 @@ export function toggleUnifiedResourceStatus(
       : item
   );
   writeJson(UNIFIED_RESOURCES_KEY, next);
+  syncCmsSnapshotToRepo(false).catch(() => {});
   return next;
 }
 
@@ -1083,6 +1088,7 @@ export function deleteUnifiedResource(resourceId: string): UnifiedLearningResour
       deleteAdminCatalogDoc(`cat-${resourceId}`).catch(() => {});
     }
   }
+  syncCmsSnapshotToRepo(false).catch(() => {});
   return next;
 }
 

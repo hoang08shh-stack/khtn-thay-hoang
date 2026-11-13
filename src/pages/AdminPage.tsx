@@ -63,7 +63,7 @@ import {
   saveUploadedAssetToRepository,
   buildCmsSnapshotPayload,
   syncCmsSnapshotToRepo,
-  importCmsSnapshotFromJson,
+  fetchAndApplyRemoteCmsSnapshot,
 } from '../services/adminService.ts';
 import { uploadLessonDocument } from '../services/storageService.ts';
 import {
@@ -82,6 +82,7 @@ import {
 import { WordQuestionImportModal } from '../components/admin/WordQuestionImportModal.tsx';
 import { UnifiedMaterialUploadModal } from '../components/admin/UnifiedMaterialUploadModal.tsx';
 import { FormulaEditorModal } from '../components/admin/FormulaEditorModal.tsx';
+import { CmsSyncModal } from '../components/admin/CmsSyncModal.tsx';
 import {
   parseExplanationIntoSteps,
   generateStepByStepSolution,
@@ -165,6 +166,7 @@ export const AdminPage: React.FC = () => {
   const [unifiedUploadInitialTab, setUnifiedUploadInitialTab] = useState<'wizard' | 'manager'>('wizard');
   const [isAdminFormulaOpen, setIsAdminFormulaOpen] = useState(false);
   const [adminFormulaTarget, setAdminFormulaTarget] = useState<'question' | 'explanation'>('question');
+  const [isCmsSyncModalOpen, setIsCmsSyncModalOpen] = useState(false);
 
   // 4. Games State
   const [gameSubTab, setGameSubTab] = useState<'pairs' | 'crosswords' | 'detective'>('pairs');
@@ -269,9 +271,19 @@ export const AdminPage: React.FC = () => {
   };
 
   useEffect(() => {
-    loadAllData().then(() => {
-      syncCmsSnapshotToRepo(false);
-    });
+    fetchAndApplyRemoteCmsSnapshot()
+      .catch(() => {})
+      .finally(() => {
+        loadAllData();
+      });
+
+    const handleCmsUpdate = () => {
+      loadAllData();
+    };
+    window.addEventListener('khtn-cms-updated', handleCmsUpdate);
+    return () => {
+      window.removeEventListener('khtn-cms-updated', handleCmsUpdate);
+    };
   }, []);
 
   // Lesson handlers
@@ -383,23 +395,6 @@ export const AdminPage: React.FC = () => {
     showToast(
       'Đã đồng bộ và xuất tệp cmsSnapshot.json! Bạn có thể dùng trực tiếp cho GitHub (src/data/cmsSnapshot.json).'
     );
-  };
-
-  const handleImportJsonBackup = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = importCmsSnapshotFromJson(String(reader.result || ''));
-      if (result.ok) {
-        loadAllData();
-        showToast(result.message);
-      } else {
-        showToast(result.message, 'error');
-      }
-      e.target.value = '';
-    };
-    reader.readAsText(file, 'utf-8');
   };
 
   const handleResetAllToDefault = () => {
@@ -530,6 +525,22 @@ export const AdminPage: React.FC = () => {
               <p className="text-xs sm:text-sm text-slate-300 max-w-3xl leading-relaxed">
                 Quản lý tập trung tất cả Chủ đề, Bài giảng (Lớp 6–9), Mô phỏng 3D, Ngân hàng câu hỏi trắc nghiệm, Trò chơi học tập, Video thí nghiệm, Tài liệu và Tài khoản người dùng. Mọi thay đổi được lưu và cập nhật trực tiếp lên trang web.
               </p>
+              <button
+                type="button"
+                onClick={() => setIsCmsSyncModalOpen(true)}
+                data-testid="admin-supabase-status-pill"
+                className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-[11px] font-bold border transition cursor-pointer ${
+                  isSupabaseConfigured
+                    ? 'bg-emerald-500/15 border-emerald-400/30 text-emerald-200 hover:bg-emerald-500/25'
+                    : 'bg-amber-500/15 border-amber-400/30 text-amber-200 hover:bg-amber-500/25'
+                }`}
+              >
+                <span>
+                  {isSupabaseConfigured
+                    ? 'Supabase Cloud: Đã kết nối đồng bộ tự động đa thiết bị'
+                    : 'Chế độ lưu trình duyệt (Chưa gắn Supabase lên Hosting) — Bấm xem cách đồng bộ tự động →'}
+                </span>
+              </button>
             </div>
 
             <div className="flex flex-wrap items-center gap-2 shrink-0 self-start">
@@ -572,19 +583,16 @@ export const AdminPage: React.FC = () => {
                 <span>Xuất cmsSnapshot.json</span>
               </button>
 
-              <label
+              <button
+                type="button"
+                onClick={() => setIsCmsSyncModalOpen(true)}
+                data-testid="open-cms-sync-modal-btn"
                 className="px-3.5 py-2 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-100 font-bold text-xs border border-slate-600/80 transition flex items-center gap-1.5 cursor-pointer"
-                title="Khôi phục dữ liệu thiết kế từ tệp cmsSnapshot.json hoặc bản sao lưu .JSON"
+                title="Mở trung tâm đồng bộ đa thiết bị, dán mã JSON hoặc nạp tệp cmsSnapshot.json"
               >
                 <FileUp className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Nhập JSON</span>
-                <input
-                  type="file"
-                  accept=".json,application/json"
-                  onChange={handleImportJsonBackup}
-                  className="hidden"
-                />
-              </label>
+                <span>Đồng bộ / Nhập JSON</span>
+              </button>
             </div>
           </div>
 
@@ -3732,6 +3740,17 @@ export const AdminPage: React.FC = () => {
             });
           }
         }}
+      />
+
+      {/* Multi-device Sync & JSON Import Modal */}
+      <CmsSyncModal
+        isOpen={isCmsSyncModalOpen}
+        onClose={() => setIsCmsSyncModalOpen(false)}
+        onSyncedSuccess={(message) => {
+          loadAllData();
+          showToast(message);
+        }}
+        onExportJsonFile={handleExportAllData}
       />
     </div>
   );

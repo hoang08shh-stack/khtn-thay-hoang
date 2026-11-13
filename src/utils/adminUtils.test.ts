@@ -644,7 +644,108 @@ test('Bài 5: Định luật bảo toàn khối lượng is published on Grade 8
     'Bài 5. Định luật bảo toàn khối lượng và phương trình hóa học'
   );
 
+  // 6. Cross-computer sync: Computer 1 builds CMS snapshot -> Computer 2 (empty localStorage) applies snapshot and sees the uploaded lesson & material
+  const { buildCmsSnapshotPayload, applyCmsSnapshotToLocalStorage } = await import(
+    '../services/adminService.ts'
+  );
+  const computer1Snapshot = buildCmsSnapshotPayload();
+  assert.ok(Array.isArray(computer1Snapshot.lessons));
+  assert.ok(Array.isArray(computer1Snapshot.unifiedResources));
+
+  // Simulate Computer 2 with empty localStorage
+  resetAllAdminDataToDefault();
+  const appliedOnComputer2 = applyCmsSnapshotToLocalStorage(computer1Snapshot, true);
+  assert.equal(appliedOnComputer2, true);
+
+  const computer2Btkl = await getLessonByIdOrSlug('khtn-8-bai-5-btkl');
+  assert.ok(
+    computer2Btkl?.assets?.some((a) => a.fileName === 'Bai_5_Dinh_luat_bao_toan_khoi_luong.pdf'),
+    'Computer 2 must see the uploaded document on Bài 5 after applying CMS snapshot from Computer 1'
+  );
+  const computer2Docs = getAllDocumentsSync(8);
+  assert.ok(
+    computer2Docs.some((d) => d.id === 'asset-gen-btkl-1'),
+    'Computer 2 must see the general uploaded document in Grade 8 documents'
+  );
+
   resetAllAdminDataToDefault();
 });
+
+test('CMS Sync JSON paste/import round-trips snapshot payload and rejects invalid JSON cleanly', async () => {
+  const {
+    resetAllAdminDataToDefault,
+    buildCmsSnapshotPayload,
+    importCmsSnapshotFromJson,
+    saveAdminLesson,
+  } = await import('../services/adminService.ts');
+  const { getLessonByIdOrSlug, getPublishedLessonsSync } = await import('../services/contentService.ts');
+
+  resetAllAdminDataToDefault();
+
+  // 1. Invalid JSON returns ok: false without throwing
+  const invalidResult = importCmsSnapshotFromJson('{not-valid-json');
+  assert.equal(invalidResult.ok, false);
+
+  // 2. Computer 1 adds a lesson and exports JSON string (copy/paste or file)
+  await saveAdminLesson(
+    {
+      id: 'lesson-json-sync-check',
+      topicId: 't8-1',
+      grade: 8,
+      domain: 'hoa-hoc',
+      code: 'KHTN8-SYNC',
+      title: 'Bài kiểm tra đồng bộ qua dán JSON',
+      summary: 'Tóm tắt kiểm tra',
+      content: '### 1. Nội dung\na) Mục nhỏ: Kiểm tra đồng bộ.',
+      durationMinutes: 45,
+      orderIndex: 10,
+      isPublished: true,
+    },
+    [],
+    []
+  );
+
+  const jsonString = JSON.stringify(buildCmsSnapshotPayload());
+
+  // 3. Computer 2 resets to default, then pastes the JSON string into CmsSyncModal
+  resetAllAdminDataToDefault();
+  assert.equal(
+    getPublishedLessonsSync(8).some((l) => l.id === 'lesson-json-sync-check'),
+    false
+  );
+
+  const importRes = importCmsSnapshotFromJson(jsonString);
+  assert.equal(importRes.ok, true);
+
+  assert.equal(
+    getPublishedLessonsSync(8).some((l) => l.id === 'lesson-json-sync-check'),
+    true
+  );
+  const syncedLesson = await getLessonByIdOrSlug('lesson-json-sync-check');
+  assert.ok(syncedLesson, 'Computer 2 must immediately see the lesson after pasting JSON');
+  assert.equal(syncedLesson.id, 'lesson-json-sync-check');
+  assert.equal(syncedLesson.title, 'Bài kiểm tra đồng bộ qua dán JSON');
+
+  resetAllAdminDataToDefault();
+});
+
+test('Supabase sync diagnostics clearly report unconfigured state and video upload extensions are allowed', async () => {
+  const { getSupabaseSyncDiagnostics } = await import('../services/adminService.ts');
+  const diag = await getSupabaseSyncDiagnostics();
+  assert.equal(diag.supabaseConfigured, false);
+  assert.equal(diag.reason, 'supabase_not_configured');
+  assert.equal(diag.target, 'local_only');
+
+  const mp4File = {
+    name: 'thi_nghiem_hoa_hoc.mp4',
+    type: 'video/mp4',
+    size: 12 * 1024 * 1024,
+  } as unknown as File;
+  const mp4Validation = validateUploadFile(mp4File);
+  assert.equal(mp4Validation.valid, true);
+});
+
+
+
 
 

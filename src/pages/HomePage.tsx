@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   HERO_LAB_IMAGE,
@@ -37,7 +37,15 @@ import {
 
 export const HomePage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [, setCmsTick] = useState(0);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const onCmsUpdated = () => setCmsTick((t) => t + 1);
+    window.addEventListener('khtn-cms-updated', onCmsUpdated);
+    return () => window.removeEventListener('khtn-cms-updated', onCmsUpdated);
+  }, []);
+
   const liveLessons = getPublishedLessonsSync();
   const liveTopics = getAdminTopicsSync();
   const liveQuestions = getAdminQuestionsSync();

@@ -48,6 +48,7 @@ export function isRealUploadedFileUrl(url?: string | null): boolean {
   const trimmed = url.trim();
   if (!trimmed || trimmed === '#') return false;
   return (
+    trimmed === '#uploaded-on-teacher-device' ||
     trimmed.startsWith('idb://') ||
     trimmed.startsWith('data:') ||
     trimmed.startsWith('blob:') ||
@@ -57,8 +58,25 @@ export function isRealUploadedFileUrl(url?: string | null): boolean {
   );
 }
 
+function readFileAsDataUrl(file: Blob): Promise<string | null> {
+  if (typeof FileReader === 'undefined') return Promise.resolve(null);
+  return new Promise((resolve) => {
+    try {
+      const reader = new FileReader();
+      reader.onload = () => {
+        resolve(typeof reader.result === 'string' ? reader.result : null);
+      };
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(file);
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
 /**
- * Lưu file gốc của Giáo viên vào IndexedDB và bộ nhớ đệm, trả về mã định danh `idb://...`
+ * Lưu file gốc của Giáo viên vào Server (/assets/uploads/...), IndexedDB và bộ nhớ đệm
+ * để máy tính khác truy cập được học liệu đã tải lên.
  */
 export async function saveTeacherFileToRepo(
   file: File,
@@ -72,8 +90,37 @@ export async function saveTeacherFileToRepo(
   const id =
     customId ||
     `file_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-  const fileUrl = `idb://${id}`;
+  let fileUrl = `idb://${id}`;
   const mimeType = file.type || guessMimeTypeFromFileName(file.name);
+
+  const dataUrl = file.size <= 15 * 1024 * 1024 ? await readFileAsDataUrl(file) : null;
+
+  // Try uploading to server /api/upload-teacher-file so other computers can access the static file at /assets/uploads/...
+  if (dataUrl && typeof window !== 'undefined' && typeof fetch !== 'undefined') {
+    try {
+      const res = await fetch('/api/upload-teacher-file', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fileName: file.name,
+          dataUrl,
+        }),
+      });
+      if (res.ok) {
+        const json = await res.json().catch(() => null);
+        if (json?.ok && typeof json.fileUrl === 'string' && json.fileUrl.startsWith('/')) {
+          fileUrl = json.fileUrl;
+        }
+      }
+    } catch {
+      // Fallback if running on static hosting without /api/upload-teacher-file
+    }
+  }
+
+  // If static hosting without server upload and file is <= 1.2MB, use dataUrl so it syncs in cmsSnapshot
+  if (fileUrl.startsWith('idb://') && dataUrl && file.size <= 1200 * 1024) {
+    fileUrl = dataUrl;
+  }
 
   const record: StoredTeacherFileRecord = {
     id,
@@ -81,6 +128,7 @@ export async function saveTeacherFileToRepo(
     mimeType,
     size: file.size,
     blob: file,
+    dataUrl: dataUrl || undefined,
     createdAt: new Date().toISOString(),
   };
 

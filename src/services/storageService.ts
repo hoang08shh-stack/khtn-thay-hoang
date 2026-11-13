@@ -7,7 +7,19 @@ import { saveTeacherFileToRepo } from './localFileStore.ts';
  */
 export const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024; // 52,428,800 bytes (50 MB)
 
-export const ALLOWED_DOC_EXTENSIONS = ['pdf', 'ppt', 'pptx', 'docx', 'doc', 'png', 'jpg', 'jpeg', 'webp'];
+export const ALLOWED_DOC_EXTENSIONS = [
+  'pdf',
+  'ppt',
+  'pptx',
+  'docx',
+  'doc',
+  'png',
+  'jpg',
+  'jpeg',
+  'webp',
+  'mp4',
+  'webm',
+];
 
 export const ALLOWED_MIME_TYPES = [
   'application/pdf',
@@ -18,6 +30,8 @@ export const ALLOWED_MIME_TYPES = [
   'image/png',
   'image/jpeg',
   'image/webp',
+  'video/mp4',
+  'video/webm',
 ];
 
 export interface FileValidationResult {

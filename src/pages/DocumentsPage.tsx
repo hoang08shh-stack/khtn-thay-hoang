@@ -33,13 +33,20 @@ export const DocumentsPage: React.FC = () => {
 
   useEffect(() => {
     let mounted = true;
-    getAllDocuments().then((data) => {
-      if (mounted) {
-        setDocsList(data);
-      }
-    });
+    const loadAll = () => {
+      if (!mounted) return;
+      setDocsList(getAllDocumentsSync());
+      getAllDocuments().then((data) => {
+        if (mounted) {
+          setDocsList(data);
+        }
+      });
+    };
+    loadAll();
+    window.addEventListener('khtn-cms-updated', loadAll);
     return () => {
       mounted = false;
+      window.removeEventListener('khtn-cms-updated', loadAll);
     };
   }, []);
 

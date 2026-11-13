@@ -1906,3 +1906,63 @@ BEGIN
   );
 END;
 $$;
+
+-- ====================================================================
+-- REAL-TIME MULTI-DEVICE CMS SYNC & STORAGE MIME FIX
+-- ====================================================================
+CREATE TABLE IF NOT EXISTS public.cms_snapshots (
+  id TEXT PRIMARY KEY DEFAULT 'live',
+  payload JSONB NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+  updated_by UUID REFERENCES auth.users(id) ON DELETE SET NULL
+);
+
+ALTER TABLE public.cms_snapshots ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Everyone can read live CMS snapshots" ON public.cms_snapshots;
+CREATE POLICY "Everyone can read live CMS snapshots"
+  ON public.cms_snapshots FOR SELECT
+  USING (true);
+
+DROP POLICY IF EXISTS "Teachers and admins can manage CMS snapshots" ON public.cms_snapshots;
+CREATE POLICY "Teachers and admins can manage CMS snapshots"
+  ON public.cms_snapshots FOR ALL
+  TO authenticated
+  USING (public.is_teacher_or_admin())
+  WITH CHECK (public.is_teacher_or_admin());
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.cms_snapshots;
+  END IF;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+
+UPDATE storage.buckets
+SET
+  public = true,
+  allowed_mime_types = ARRAY[
+    'application/pdf',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'application/vnd.ms-powerpoint',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/msword',
+    'application/zip',
+    'application/json',
+    'text/html',
+    'video/mp4',
+    'video/webm',
+    'image/png',
+    'image/jpeg',
+    'image/webp'
+  ]
+WHERE id = 'lesson-documents';
+
+DROP POLICY IF EXISTS "Authenticated users view lesson documents" ON storage.objects;
+DROP POLICY IF EXISTS "Public read lesson documents" ON storage.objects;
+CREATE POLICY "Public read lesson documents"
+  ON storage.objects FOR SELECT
+  USING (bucket_id = 'lesson-documents');
+

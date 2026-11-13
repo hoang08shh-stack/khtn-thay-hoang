@@ -34,7 +34,8 @@ import {
   loadWizardAutoDraft,
   clearWizardAutoDraft,
 } from '../../utils/materialUploadEngine.ts';
-import { saveTeacherFileToRepo } from '../../services/localFileStore.ts';
+import { uploadLessonDocument } from '../../services/storageService.ts';
+import { isSupabaseConfigured } from '../../lib/supabase.ts';
 import {
   buildEducationalDocumentData,
   triggerEducationalDocumentDownload,
@@ -305,59 +306,35 @@ export const UnifiedMaterialUploadModal: React.FC<UnifiedMaterialUploadModalProp
       return;
     }
 
-    // For files > 300KB, store binary directly in IndexedDB to avoid 5MB localStorage QuotaExceededError
-    if (file.size > 300 * 1024) {
-      saveTeacherFileToRepo(file)
-        .then((saved) => {
-          setStep2((prev) => ({
-            ...prev,
-            fileDataUrl: saved.fileUrl,
-            uploadProgress: 100,
-            uploadStatus: 'ready',
-          }));
-        })
-        .catch(() => {
-          setStep2((prev) => ({
-            ...prev,
-            uploadProgress: 0,
-            uploadStatus: 'error',
-            errorMessage: 'Không thể lưu tệp vào kho lưu trữ.',
-          }));
-        });
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      const resultStr = typeof reader.result === 'string' ? reader.result : '';
-      saveTeacherFileToRepo(file).catch(() => {});
-      setStep2((prev) => ({
-        ...prev,
-        fileDataUrl: resultStr,
-        uploadProgress: 100,
-        uploadStatus: 'ready',
-      }));
-    };
-    reader.onerror = () => {
-      saveTeacherFileToRepo(file)
-        .then((saved) => {
-          setStep2((prev) => ({
-            ...prev,
-            fileDataUrl: saved.fileUrl,
-            uploadProgress: 100,
-            uploadStatus: 'ready',
-          }));
-        })
-        .catch(() => {
-          setStep2((prev) => ({
-            ...prev,
-            uploadProgress: 0,
-            uploadStatus: 'error',
-            errorMessage: 'Không thể đọc tệp đã chọn.',
-          }));
-        });
-    };
-    reader.readAsDataURL(file);
+    uploadLessonDocument(
+      file,
+      step1.lessonId || 'general-assets',
+      (percent) => {
+        setStep2((prev) => ({
+          ...prev,
+          uploadProgress: percent,
+        }));
+      }
+    )
+      .then((saved) => {
+        if (!saved) {
+          throw new Error('Không nhận được đường dẫn sau khi tải tệp.');
+        }
+        setStep2((prev) => ({
+          ...prev,
+          fileDataUrl: saved.publicUrl,
+          uploadProgress: 100,
+          uploadStatus: 'ready',
+        }));
+      })
+      .catch((err: any) => {
+        setStep2((prev) => ({
+          ...prev,
+          uploadProgress: 0,
+          uploadStatus: 'error',
+          errorMessage: err?.message || 'Không thể lưu tệp vào kho lưu trữ.',
+        }));
+      });
   };
 
   // Step Navigation
@@ -462,7 +439,9 @@ export const UnifiedMaterialUploadModal: React.FC<UnifiedMaterialUploadModalProp
 
     setWizardToast(
       status === 'published'
-        ? `Đã xuất bản học liệu "${saved.title}" vào "${saved.lessonTitle}"!`
+        ? isSupabaseConfigured
+          ? `Đã xuất bản học liệu "${saved.title}" vào "${saved.lessonTitle}" và đồng bộ lên Supabase!`
+          : `Đã lưu học liệu "${saved.title}" vào "${saved.lessonTitle}" trên máy này. Để tự động cập nhật cho mọi máy khác, cần gắn Supabase lên Hosting hoặc dùng Đồng bộ / Nhập JSON.`
         : `Đã lưu bản nháp học liệu "${saved.title}"!`
     );
     setActiveTab('manager');
@@ -504,34 +483,18 @@ export const UnifiedMaterialUploadModal: React.FC<UnifiedMaterialUploadModalProp
   ) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 300 * 1024) {
-      saveTeacherFileToRepo(file).then((saved) => {
-        const updated = replaceUnifiedResourceFile(resourceId, {
-          fileName: file.name,
-          fileType: file.type || file.name.split('.').pop() || 'file',
-          fileSize: file.size,
-          fileDataUrl: saved.fileUrl,
-        });
-        setResources(updated);
-        setWizardToast(`Đã thay thế tệp gốc mới "${file.name}".`);
-      });
-      e.target.value = '';
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = typeof reader.result === 'string' ? reader.result : '';
-      saveTeacherFileToRepo(file).catch(() => {});
+    const targetRes = resources.find((r) => r.id === resourceId);
+    uploadLessonDocument(file, targetRes?.lessonId || 'general-assets').then((saved) => {
+      if (!saved) return;
       const updated = replaceUnifiedResourceFile(resourceId, {
         fileName: file.name,
         fileType: file.type || file.name.split('.').pop() || 'file',
         fileSize: file.size,
-        fileDataUrl: dataUrl,
+        fileDataUrl: saved.publicUrl,
       });
       setResources(updated);
-      setWizardToast(`Đã thay thế tệp mới "${file.name}".`);
-    };
-    reader.readAsDataURL(file);
+      setWizardToast(`Đã thay thế tệp gốc mới "${file.name}".`);
+    });
     e.target.value = '';
   };
 

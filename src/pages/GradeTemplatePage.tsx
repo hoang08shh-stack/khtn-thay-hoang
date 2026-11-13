@@ -136,24 +136,31 @@ export const GradeTemplatePage: React.FC<GradeTemplatePageProps> = ({ grade }) =
 
   useEffect(() => {
     let mounted = true;
-    setGradeLessons(getPublishedLessonsSync(grade));
-    setGradeDocuments(getAllDocumentsSync(grade));
-    setGradeVideos(getAdminVideosSync().filter((v) => v.grade === grade));
+    const reloadGradeContent = () => {
+      if (!mounted) return;
+      setGradeLessons(getPublishedLessonsSync(grade));
+      setGradeDocuments(getAllDocumentsSync(grade));
+      setGradeVideos(getAdminVideosSync().filter((v) => v.grade === grade));
 
-    Promise.all([
-      getLessonsByGrade(grade),
-      getDocumentsByGrade(grade),
-      getVideosByGrade(grade),
-    ]).then(([lessonsData, docsData, videosData]) => {
-      if (mounted) {
-        setGradeLessons(lessonsData);
-        setGradeDocuments(docsData);
-        setGradeVideos(videosData);
-      }
-    });
+      Promise.all([
+        getLessonsByGrade(grade),
+        getDocumentsByGrade(grade),
+        getVideosByGrade(grade),
+      ]).then(([lessonsData, docsData, videosData]) => {
+        if (mounted) {
+          setGradeLessons(lessonsData);
+          setGradeDocuments(docsData);
+          setGradeVideos(videosData);
+        }
+      });
+    };
+
+    reloadGradeContent();
+    window.addEventListener('khtn-cms-updated', reloadGradeContent);
 
     return () => {
       mounted = false;
+      window.removeEventListener('khtn-cms-updated', reloadGradeContent);
     };
   }, [grade]);
 

@@ -13,14 +13,19 @@ export const VideosPage: React.FC = () => {
 
   useEffect(() => {
     let mounted = true;
-    setVideosList(getAdminVideosSync());
-    getAllVideos().then((data) => {
-      if (mounted) {
-        setVideosList(data);
-      }
-    });
+    const loadVideos = () => {
+      setVideosList(getAdminVideosSync());
+      getAllVideos().then((data) => {
+        if (mounted) {
+          setVideosList(data);
+        }
+      });
+    };
+    loadVideos();
+    window.addEventListener('khtn-cms-updated', loadVideos);
     return () => {
       mounted = false;
+      window.removeEventListener('khtn-cms-updated', loadVideos);
     };
   }, []);
 

@@ -64,36 +64,39 @@ export async function fetchUserProfileAndRole(userId: string, userEmail?: string
 export async function signInWithEmail(email: string, password: string): Promise<AppUser> {
   const normalizedEmail = email.trim().toLowerCase();
 
-  // Direct owner admin login for hoang08shh@gmail.com
-  if (isHoangAdminEmail(normalizedEmail)) {
-    const adminUser: AppUser = {
-      ...DEMO_USERS.teacher,
-      email: 'hoang08shh@gmail.com',
-      role: 'admin',
-    };
-    localStorage.setItem(STORAGE_KEY_AUTH, JSON.stringify(adminUser));
-    return adminUser;
-  }
-
-  if (isSupabaseConfigured && supabase && normalizedEmail.endsWith('@khtn.edu.vn')) {
+  if (
+    isSupabaseConfigured &&
+    supabase &&
+    password &&
+    password !== 'password123' &&
+    password !== 'admin123' &&
+    (isHoangAdminEmail(normalizedEmail) || normalizedEmail.endsWith('@khtn.edu.vn'))
+  ) {
     try {
       const { data, error }: any = await withTimeout(
         supabase.auth.signInWithPassword({
           email: normalizedEmail,
           password,
         }),
-        1500,
+        2500,
         'Supabase auth timeout'
       );
 
-      if (!error && data.user) {
-        const { profile, role } = await fetchUserProfileAndRole(data.user.id, data.user.email || normalizedEmail);
+      if (!error && data?.user) {
+        const { profile, role } = await fetchUserProfileAndRole(
+          data.user.id,
+          data.user.email || normalizedEmail
+        );
 
         const appUser: AppUser = {
           id: data.user.id,
           email: data.user.email || normalizedEmail,
-          fullName: profile?.full_name || 'Giáo viên KHTN',
-          role: role === 'admin' ? 'admin' : 'teacher',
+          fullName:
+            profile?.full_name ||
+            (isHoangAdminEmail(normalizedEmail)
+              ? 'Quản trị viên KHOA HỌC SỐ KHTN'
+              : 'Giáo viên KHTN'),
+          role: isHoangAdminEmail(normalizedEmail) || role === 'admin' ? 'admin' : 'teacher',
           grade: (profile?.grade as Grade) || 8,
           school: profile?.school || 'THCS Đà Nẵng, Việt Nam',
         };
@@ -104,6 +107,17 @@ export async function signInWithEmail(email: string, password: string): Promise<
     } catch (err: any) {
       console.warn('Supabase auth network unreachable, using local session:', err);
     }
+  }
+
+  // Direct owner admin fallback for local/offline mode or quick demo login
+  if (isHoangAdminEmail(normalizedEmail)) {
+    const adminUser: AppUser = {
+      ...DEMO_USERS.teacher,
+      email: 'hoang08shh@gmail.com',
+      role: 'admin',
+    };
+    localStorage.setItem(STORAGE_KEY_AUTH, JSON.stringify(adminUser));
+    return adminUser;
   }
 
   // Students use anonymous local device mode without personal email or full name

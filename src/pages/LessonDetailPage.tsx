@@ -133,6 +133,17 @@ export const LessonDetailPage: React.FC = () => {
 
   useEffect(() => {
     let mounted = true;
+    const loadLessonData = () => {
+      if (!lessonId || !mounted) return;
+      getLessonByIdOrSlug(lessonId).then((found) => {
+        if (mounted && found) {
+          setLesson(found);
+          setQuickVideoInput(found.videoUrl || '');
+          setDocRefreshKey((k) => k + 1);
+        }
+      });
+    };
+
     if (lessonId) {
       getLessonByIdOrSlug(lessonId).then((found) => {
         if (mounted && found) {
@@ -153,8 +164,11 @@ export const LessonDetailPage: React.FC = () => {
         }
       });
     }
+
+    window.addEventListener('khtn-cms-updated', loadLessonData);
     return () => {
       mounted = false;
+      window.removeEventListener('khtn-cms-updated', loadLessonData);
     };
   }, [lessonId, userId]);
 
