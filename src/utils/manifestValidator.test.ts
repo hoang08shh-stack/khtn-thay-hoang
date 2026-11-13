@@ -228,3 +228,23 @@ test('All 4 KHTN 9 Optics 3D simulations in SEED_SIMULATIONS and SIMULATIONS_3D 
   }
 });
 
+test('Ethylene 3D Lab simulation in SEED_SIMULATIONS and SIMULATIONS_3D is valid and linked', async () => {
+  const { SEED_SIMULATIONS } = await import('../services/simulationService.ts');
+  const { SIMULATIONS_3D } = await import('../data/mockData.ts');
+
+  const manifest = SEED_SIMULATIONS.find((m) => m.id === 'sim-ethylene-lab-3d');
+  assert.ok(manifest, 'Manifest sim-ethylene-lab-3d must exist in SEED_SIMULATIONS');
+  assert.equal(manifest.externalUrl, 'https://ethylene-lab-thay-hoang.hoang08shh.chatgpt.site');
+  assert.equal(manifest.grade, 9);
+  assert.equal(manifest.domain, 'hoa-hoc');
+
+  const validation = validateSimulationManifest(manifest);
+  assert.equal(validation.isValid, true, `Manifest sim-ethylene-lab-3d must pass validation: ${validation.errors.join(', ')}`);
+
+  const sim3d = SIMULATIONS_3D.find((s) => s.id === 'sim-ethylene-lab-3d');
+  assert.ok(sim3d, 'Simulation3D sim-ethylene-lab-3d must exist in SIMULATIONS_3D');
+  assert.equal(sim3d.externalUrl, 'https://ethylene-lab-thay-hoang.hoang08shh.chatgpt.site');
+  assert.equal(sim3d.relatedLessonId, 'khtn-9-bai-8');
+});
+
+

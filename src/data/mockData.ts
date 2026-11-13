@@ -1854,6 +1854,33 @@ export const SIMULATIONS_3D: Simulation3D[] = [
     parameters: [],
   },
   {
+    id: 'sim-ethylene-lab-3d',
+    title: 'Ethylene Lab • KHTN Thầy Hoàng (C₂H₄)',
+    grade: 9,
+    domain: 'hoa-hoc',
+    category: 'Hydrocarbon & Polymer (Hóa học Hữu cơ)',
+    description:
+      'Phòng thí nghiệm 2.5D tương tác: điều chế và tính chất của Ethylene (C₂H₄) — tích hợp nguyên bản từ https://ethylene-lab-thay-hoang.hoang08shh.chatgpt.site.',
+    learningGoal:
+      'Thực hành mô phỏng điều chế khí Ethylene (C₂H₄) và khảo sát các tính chất đặc trưng của Ethylene theo chương trình KHTN 9.',
+    keyConcepts: [
+      'Cấu tạo phân tử C₂H₄',
+      'Điều chế khí Ethylene',
+      'Làm mất màu nước Bromine (Br₂)',
+      'Tính chất hóa học của Ethylene',
+    ],
+    thumbnail: grade9Img,
+    type: 'external-embed',
+    externalUrl: 'https://ethylene-lab-thay-hoang.hoang08shh.chatgpt.site',
+    difficulty: 'Trung bình',
+    relatedLessonId: 'khtn-9-bai-8',
+    controlsDescription: [
+      { key: 'Tương tác trực tiếp', action: 'Thao tác điều chế và thử tính chất Ethylene trực tiếp trong phòng thí nghiệm 2.5D' },
+      { key: 'Mở toàn màn hình', action: 'Bấm phóng to hoặc Mở tab riêng để trải nghiệm không gian rộng rãi' },
+    ],
+    parameters: [],
+  },
+  {
     id: 'sim-chemical-equation-3d',
     title: 'Cân Bằng Phương Trình Hóa Học 3D (Định Luật Bảo Toàn Khối Lượng)',
     grade: 8,

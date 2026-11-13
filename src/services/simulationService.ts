@@ -284,6 +284,69 @@ export const SEED_SIMULATIONS: SimulationManifest[] = [
   },
   {
     schemaVersion: '1.0.0',
+    id: 'sim-ethylene-lab-3d',
+    slug: 'phong-thi-nghiem-3d-ethylene-c2h4-khtn-9',
+    title: 'Ethylene Lab • KHTN Thầy Hoàng (C₂H₄)',
+    subtitle: 'Phòng thí nghiệm 2.5D tương tác: điều chế và tính chất của Ethylene (C₂H₄) — KHTN 9',
+    version: '1.0.0',
+    mode: 'external_embed',
+    externalUrl: 'https://ethylene-lab-thay-hoang.hoang08shh.chatgpt.site',
+    status: 'published',
+    grade: 9,
+    domain: 'hoa-hoc',
+    category: 'Hydrocarbon & Polymer (Hóa học Hữu cơ)',
+    difficulty: 'Trung bình',
+    curriculumCode: 'Kết nối tri thức - KHTN 9 (Alkene: Ethylene C₂H₄ & Phản ứng đặc trưng)',
+    tags: ['Ethylene', 'C₂H₄', 'Điều chế C₂H₄', 'Nước Bromine', 'KHTN Thầy Hoàng', 'KHTN 9'],
+    thumbnailUrl: domainChemImg,
+    summary: 'Phòng thí nghiệm 2.5D tương tác trực tiếp từ https://ethylene-lab-thay-hoang.hoang08shh.chatgpt.site: điều chế khí Ethylene (C₂H₄), khảo sát tính chất hóa học và phản ứng đặc trưng của Ethylene theo chương trình KHTN 9.',
+    learningObjectives: [
+      'Thực hành điều chế khí Ethylene (C₂H₄) và quan sát hiện tượng thí nghiệm trực quan.',
+      'Giải thích tính chất hóa học đặc trưng của Ethylene (phản ứng cộng làm mất màu nước Bromine Br₂, phản ứng cháy và phản ứng trùng hợp).',
+    ],
+    keyConcepts: [
+      { term: 'Liên kết đôi C=C', definition: 'Phân tử Ethylene (CH₂=CH₂) chứa liên kết đôi C=C kém bền dễ tham gia phản ứng cộng.' },
+      { term: 'Phản ứng cộng Bromine (Br₂)', definition: 'CH₂=CH₂ + Br₂ → CH₂Br–CH₂Br, làm mất màu nâu đỏ của dung dịch nước Bromine.' },
+      { term: 'Điều chế Ethylene (C₂H₄)', definition: 'C₂H₅OH —(H₂SO₄ đặc, 170°C)→ C₂H₄↑ + H₂O.' },
+    ],
+    controlsConfig: DEFAULT_CONTROLS_CONFIG,
+    annotations: [],
+    scientificExplanation: {
+      overview: 'Mô phỏng nhúng nguyên bản phòng thí nghiệm tương tác Ethylene Lab của Thầy Hoàng (KHTN 9).',
+      keyPoints: [
+        { title: 'Nhúng trực tiếp nguyên bản', content: 'Giữ nguyên toàn bộ giao diện, mô phỏng điều chế và thí nghiệm tính chất của Ethylene từ trang nguồn.' },
+      ],
+      realWorldApplication: 'Ứng dụng trong sản xuất nhựa Polyethylene (PE), điều chế Ethylic alcohol và kích thích quả chín.',
+    },
+    discoveryQuestions: [
+      {
+        id: 'dq-ethylene-1',
+        question: 'Sục lần lượt hai khí Methane (CH₄) và Ethylene (C₂H₄) vào hai ống nghiệm đựng dung dịch nước Bromine (Br₂) màu nâu đỏ. Hiện tượng quan sát được là gì?',
+        options: [
+          { id: 'a', text: 'Ống chứa Ethylene (C₂H₄) làm mất màu nâu đỏ của dung dịch Br₂; ống chứa Methane (CH₄) không đổi màu', isCorrect: true },
+          { id: 'b', text: 'Cả hai ống đều làm mất màu dung dịch Br₂ ngay lập tức', isCorrect: false },
+          { id: 'c', text: 'Chỉ có Methane làm mất màu dung dịch Br₂', isCorrect: false },
+        ],
+        explanation: 'Chính xác! Ethylene có liên kết đôi C=C tham gia phản ứng cộng với Br₂ tạo 1,2-dibromoethane không màu, còn Methane chỉ có liên kết đơn bền vững nên không làm mất màu Br₂.',
+      },
+      {
+        id: 'dq-ethylene-2',
+        question: 'Trong phòng thí nghiệm, điều kiện chuẩn để điều chế khí Ethylene từ Ethylic alcohol (C₂H₅OH) là:',
+        options: [
+          { id: 'a', text: 'H₂SO₄ đặc, đun nóng ở 170°C', isCorrect: true },
+          { id: 'b', text: 'NaOH loãng, 25°C', isCorrect: false },
+          { id: 'c', text: 'Ánh sáng mặt trời trực tiếp ở 20°C', isCorrect: false },
+        ],
+        explanation: 'Chính xác! Phản ứng tách nước C₂H₅OH —(H₂SO₄ đặc, 170°C)→ C₂H₄↑ + H₂O.',
+      },
+    ],
+    relatedLessonIds: ['khtn-9-bai-8', 'khtn-9-bai-24'],
+    createdAt: '2025-02-27T08:00:00.000Z',
+    updatedAt: '2025-02-27T08:00:00.000Z',
+    author: 'Thầy Hoàng • KHTN 9',
+  },
+  {
+    schemaVersion: '1.0.0',
     id: 'sim-chemical-equation-3d',
     slug: 'can-bang-phuong-trinh-hoa-hoc-3d',
     title: 'Cân Bằng Phương Trình Hóa Học 3D (Định Luật Bảo Toàn Khối Lượng)',
@@ -644,12 +707,26 @@ function getLocalSimulations(): SimulationManifest[] {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        const validLocal = parsed.filter((m: SimulationManifest) =>
-          Boolean(m) && ['hoa-hoc', 'vat-li', 'sinh-hoc'].includes(m.domain)
-        );
+        const ethyleneSeed = SEED_SIMULATIONS.find((s) => s.id === 'sim-ethylene-lab-3d');
+        let migrated = false;
+        const validLocal = parsed
+          .filter((m: SimulationManifest) =>
+            Boolean(m) && ['hoa-hoc', 'vat-li', 'sinh-hoc'].includes(m.domain)
+          )
+          .map((m: SimulationManifest) => {
+            if (
+              m.id === 'sim-ethylene-lab-3d' &&
+              m.externalUrl === '/assets/aistudio/Ethylene_Lab_3D_KHTN9.html' &&
+              ethyleneSeed
+            ) {
+              migrated = true;
+              return ethyleneSeed;
+            }
+            return m;
+          });
         const existingIds = new Set(validLocal.map((m: SimulationManifest) => m.id));
         const missingSeeds = SEED_SIMULATIONS.filter((seed) => !existingIds.has(seed.id));
-        if (missingSeeds.length > 0) {
+        if (missingSeeds.length > 0 || migrated) {
           const merged = [...missingSeeds, ...validLocal];
           localStorage.setItem(LOCAL_STORAGE_KEY_SIMS, JSON.stringify(merged));
           return merged;
