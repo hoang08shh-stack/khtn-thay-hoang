@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Breadcrumbs } from '../components/common/Breadcrumbs.tsx';
 import { useAuth } from '../hooks/useAuth.ts';
-import { isFirebaseConfigured } from '../firebase.ts';
+import { isFirebaseConfigured, FirebaseSignInError } from '../firebase.ts';
+import { FirebaseAuthErrorReport, isRunningInIframe } from '../utils/firebaseAuthHelpers.ts';
 import { AppUser, Grade } from '../types/index.ts';
 import {
   Lock,
@@ -15,6 +16,7 @@ import {
   EyeOff,
   Laptop,
   ArrowRight,
+  ExternalLink,
 } from 'lucide-react';
 
 interface AuthPageProps {
@@ -28,14 +30,17 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
   const [grade, setGrade] = useState<Grade>(8);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [firebaseErrorReport, setFirebaseErrorReport] = useState<FirebaseAuthErrorReport | null>(null);
   const [successMsg, setSuccessMsg] = useState('');
 
   const { login, loginWithGoogle, register } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const inIframe = isRunningInIframe();
 
   const handleGoogleTeacherLogin = async () => {
     setErrorMsg('');
+    setFirebaseErrorReport(null);
     setSuccessMsg('');
     setIsSubmitting(true);
     try {
@@ -44,10 +49,15 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
       const destination = (location.state as any)?.from?.pathname || '/quan-tri';
       navigate(destination, { replace: true });
     } catch (err: any) {
-      setErrorMsg(
-        err?.message ||
-          'Không thể đăng nhập Google Firebase. Vui lòng cho phép cửa sổ bật lên (popup) và chọn đúng tài khoản hoang08shh@gmail.com.'
-      );
+      if (err instanceof FirebaseSignInError) {
+        setFirebaseErrorReport(err.report);
+        setErrorMsg(err.report.message);
+      } else {
+        setErrorMsg(
+          err?.message ||
+            'Không thể đăng nhập Google Firebase. Vui lòng cho phép cửa sổ bật lên (popup) và chọn đúng tài khoản hoang08shh@gmail.com.'
+        );
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -158,9 +168,47 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
             </div>
 
             {errorMsg && (
-              <div className="p-3.5 rounded-xl bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800 text-xs text-red-700 dark:text-red-300 font-medium flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                <span>{errorMsg}</span>
+              <div
+                data-testid="auth-error-alert"
+                className="p-3.5 rounded-xl bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800 text-xs text-red-700 dark:text-red-300 font-medium space-y-2.5"
+              >
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <div className="font-bold">{errorMsg}</div>
+                    {firebaseErrorReport?.hint && (
+                      <p className="text-[11px] leading-relaxed text-red-600/90 dark:text-red-200/90">
+                        {firebaseErrorReport.hint}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                {(firebaseErrorReport?.shouldSuggestNewTab || firebaseErrorReport?.firebaseConsoleAuthUrl) && (
+                  <div className="flex flex-wrap items-center gap-2 pl-6">
+                    {firebaseErrorReport?.shouldSuggestNewTab && typeof window !== 'undefined' && (
+                      <a
+                        href={window.location.href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-700 hover:bg-red-600 text-white font-bold text-[11px] transition"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        <span>Mở trang ở tab mới để đăng nhập</span>
+                      </a>
+                    )}
+                    {firebaseErrorReport?.firebaseConsoleAuthUrl && (
+                      <a
+                        href={firebaseErrorReport.firebaseConsoleAuthUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 hover:bg-red-100/70 text-red-800 dark:text-red-200 border border-red-300 dark:border-red-700 font-bold text-[11px] transition"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        <span>Mở cài đặt Authorized Domains trên Firebase</span>
+                      </a>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
@@ -274,6 +322,20 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
                           : 'Đăng Nhập Google Quản Trị (Firebase Cloud)'}
                       </span>
                     </button>
+                    {inIframe && typeof window !== 'undefined' && (
+                      <div className="flex items-center justify-between gap-2 pt-1 text-[11px] text-emerald-800/90 dark:text-emerald-300/90">
+                        <span>Nếu khung xem trước chặn cửa sổ bật lên Google:</span>
+                        <a
+                          href={window.location.href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 font-extrabold underline hover:text-emerald-600 shrink-0"
+                        >
+                          <ExternalLink className="w-3 h-3" />
+                          <span>Mở ở tab mới</span>
+                        </a>
+                      </div>
+                    )}
                   </div>
                 )}
 

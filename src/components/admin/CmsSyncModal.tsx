@@ -11,6 +11,7 @@ import {
   AlertCircle,
   Database,
   Laptop,
+  ExternalLink,
 } from 'lucide-react';
 import {
   buildCmsSnapshotPayload,
@@ -19,6 +20,8 @@ import {
   importCmsSnapshotFromJson,
   syncCmsSnapshotWithReport,
 } from '../../services/adminService.ts';
+import { FirebaseSignInError } from '../../firebase.ts';
+import { FirebaseAuthErrorReport } from '../../utils/firebaseAuthHelpers.ts';
 import { useAuth } from '../../hooks/useAuth.ts';
 
 interface CmsSyncModalProps {
@@ -39,6 +42,7 @@ export const CmsSyncModal: React.FC<CmsSyncModalProps> = ({
   const [statusMessage, setStatusMessage] = useState<{
     type: 'success' | 'error' | 'info';
     text: string;
+    report?: FirebaseAuthErrorReport;
   } | null>(null);
   const [isSyncingCloud, setIsSyncingCloud] = useState(false);
   const [syncAvailability, setSyncAvailability] = useState<{
@@ -75,6 +79,11 @@ export const CmsSyncModal: React.FC<CmsSyncModalProps> = ({
           type: 'success',
           text: 'Đã đăng nhập Google Firebase và đẩy toàn bộ bài giảng lên Firestore Cloud! Điện thoại mở bất kỳ link nào cũng sẽ tự động thấy bài giảng mới.',
         });
+      } else if (report.reason === 'firebase_error' || report.errorDetail) {
+        setStatusMessage({
+          type: 'error',
+          text: `Đã đăng nhập Google nhưng đồng bộ lên Firestore lỗi: ${report.errorDetail || 'Vui lòng bấm "Đẩy dữ liệu máy này lên Cloud" để thử lại.'}`,
+        });
       } else {
         setStatusMessage({
           type: 'success',
@@ -82,12 +91,20 @@ export const CmsSyncModal: React.FC<CmsSyncModalProps> = ({
         });
       }
     } catch (err: any) {
-      setStatusMessage({
-        type: 'error',
-        text:
-          err?.message ||
-          'Chưa đăng nhập được Google Firebase. Hãy cho phép cửa sổ popup và chọn tài khoản hoang08shh@gmail.com.',
-      });
+      if (err instanceof FirebaseSignInError) {
+        setStatusMessage({
+          type: 'error',
+          text: err.report.message,
+          report: err.report,
+        });
+      } else {
+        setStatusMessage({
+          type: 'error',
+          text:
+            err?.message ||
+            'Chưa đăng nhập được Google Firebase. Hãy cho phép cửa sổ popup và chọn tài khoản hoang08shh@gmail.com.',
+        });
+      }
     } finally {
       setIsSyncingCloud(false);
     }
@@ -265,7 +282,8 @@ export const CmsSyncModal: React.FC<CmsSyncModalProps> = ({
         <div className="p-6 overflow-y-auto space-y-5 text-slate-800 dark:text-slate-100">
           {statusMessage && (
             <div
-              className={`p-3.5 rounded-2xl border text-xs sm:text-sm font-medium flex items-start gap-2.5 ${
+              data-testid="modal-sync-status-alert"
+              className={`p-3.5 rounded-2xl border text-xs sm:text-sm font-medium space-y-2 ${
                 statusMessage.type === 'success'
                   ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200'
                   : statusMessage.type === 'error'
@@ -273,12 +291,47 @@ export const CmsSyncModal: React.FC<CmsSyncModalProps> = ({
                   : 'bg-sky-50 dark:bg-sky-950/60 border-sky-200 dark:border-sky-800 text-sky-900 dark:text-sky-200'
               }`}
             >
-              {statusMessage.type === 'success' ? (
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-              ) : (
-                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              <div className="flex items-start gap-2.5">
+                {statusMessage.type === 'success' ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                )}
+                <div className="space-y-1">
+                  <div>{statusMessage.text}</div>
+                  {statusMessage.report?.hint && (
+                    <p className="text-[11px] opacity-90 leading-relaxed">
+                      {statusMessage.report.hint}
+                    </p>
+                  )}
+                </div>
+              </div>
+              {(statusMessage.report?.shouldSuggestNewTab || statusMessage.report?.firebaseConsoleAuthUrl) && (
+                <div className="flex flex-wrap items-center gap-2 pl-6">
+                  {statusMessage.report?.shouldSuggestNewTab && typeof window !== 'undefined' && (
+                    <a
+                      href={window.location.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] transition"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      <span>Mở trang ở tab mới để đăng nhập</span>
+                    </a>
+                  )}
+                  {statusMessage.report?.firebaseConsoleAuthUrl && (
+                    <a
+                      href={statusMessage.report.firebaseConsoleAuthUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 text-red-700 dark:text-red-200 border border-red-300 dark:border-red-700 font-bold text-[11px] transition"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      <span>Mở cài đặt Authorized Domains trên Firebase</span>
+                    </a>
+                  )}
+                </div>
               )}
-              <span>{statusMessage.text}</span>
             </div>
           )}
 

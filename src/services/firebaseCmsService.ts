@@ -18,6 +18,7 @@ import {
   handleFirestoreError,
   OperationType,
 } from '../firebase.ts';
+import { truncateUtf8Bytes } from '../utils/firebaseAuthHelpers.ts';
 
 const VALID_ID_REGEX = /^[a-zA-Z0-9_\-]+$/;
 const VALID_GRADES = new Set([6, 7, 8, 9]);
@@ -90,20 +91,23 @@ function sanitizeCrossDeviceUrlForFirestore(rawUrl: unknown, maxLen = 2048): str
   return trimmed.slice(0, maxLen);
 }
 
-function sanitizeCoreWordHtmlForFirestore(rawHtml: unknown, maxLen = 580000): string {
+function safeFiniteNumber(value: unknown, fallback: number, min = 0, max = Number.MAX_SAFE_INTEGER): number {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, n));
+}
+
+function sanitizeCoreWordHtmlForFirestore(rawHtml: unknown, maxUtf8Bytes = 480000): string {
   if (typeof rawHtml !== 'string') return '';
   let html = rawHtml;
-  // Never store giant base64-embedded binary images inside Firestore docs (1MB doc limit)
-  if (html.length > 400000) {
+  // Never store giant base64-embedded binary images inside Firestore docs (1 MiB UTF-8 doc limit)
+  if (html.length > 250000) {
     html = html.replace(
-      /<img\b[^>]*src=["']data:image\/[^"']{20000,}["'][^>]*>/gi,
+      /<img\b[^>]*src=["']data:image\/[^"']{15000,}["'][^>]*>/gi,
       '<p><em>[Hình ảnh lớn được lưu trong tệp Word gốc — bấm Tải tệp Word để xem đầy đủ]</em></p>'
     );
   }
-  if (html.length > maxLen) {
-    return html.slice(0, maxLen);
-  }
-  return html;
+  return truncateUtf8Bytes(html, maxUtf8Bytes);
 }
 
 export interface ExistingDocMeta {
@@ -176,13 +180,13 @@ export function buildFirestoreLessonDoc(
     title: truncateBlueprintString(lesson?.title || 'Bài học KHTN', 300) || 'Bài học KHTN',
     summary: truncateBlueprintString(lesson?.summary || '', 2000),
     content: truncateBlueprintString(lesson?.content || '', 120000),
-    durationMinutes: Math.min(600, Math.max(0, Number(lesson?.durationMinutes) || 45)),
-    orderIndex: Math.min(10000, Math.max(0, Number(lesson?.orderIndex) || 0)),
+    durationMinutes: safeFiniteNumber(lesson?.durationMinutes, 45, 0, 600),
+    orderIndex: safeFiniteNumber(lesson?.orderIndex, 0, 0, 10000),
     isPublished,
     isPublic: isPublished,
     thumbnailUrl: sanitizeCrossDeviceUrlForFirestore(lesson?.thumbnailUrl, 2048),
     videoUrl: sanitizeCrossDeviceUrlForFirestore(lesson?.videoUrl, 2048),
-    viewCount: Math.max(0, Number(lesson?.viewCount) || 0),
+    viewCount: safeFiniteNumber(lesson?.viewCount, 0, 0),
     lessonCreatedAt: truncateBlueprintString(lesson?.createdAt || '', 64),
     lessonUpdatedAt: truncateBlueprintString(lesson?.updatedAt || '', 64),
     assets,
@@ -564,6 +568,7 @@ export async function pushCmsSnapshotToFirebase(snapshot: any): Promise<Firebase
 
     const enqueueCollectionSync = (
       colName: string,
+      fallbackPrefix: string,
       items: any[],
       existingMap: Map<string, ExistingDocMeta>,
       builder: (item: any, existingMeta: ExistingDocMeta | undefined) => { docId: string; data: Record<string, any> }
@@ -571,7 +576,7 @@ export async function pushCmsSnapshotToFirebase(snapshot: any): Promise<Firebase
       const activeIds = new Set<string>();
       for (const item of items) {
         if (!item || typeof item !== 'object') continue;
-        const previewId = toSafeFirestoreDocId(item.id, colName);
+        const previewId = toSafeFirestoreDocId(item.id, fallbackPrefix);
         const existingMeta = existingMap.get(previewId);
         const built = builder(item, existingMeta);
         activeIds.add(built.docId);
@@ -586,36 +591,42 @@ export async function pushCmsSnapshotToFirebase(snapshot: any): Promise<Firebase
 
     enqueueCollectionSync(
       'cms_lessons',
+      'lesson',
       Array.isArray(snapshot?.lessons) ? snapshot.lessons : [],
       existingLessons,
       (item, meta) => buildFirestoreLessonDoc(item, uid, meta, nowSentinel)
     );
     enqueueCollectionSync(
       'cms_topics',
+      'topic',
       Array.isArray(snapshot?.topics) ? snapshot.topics : [],
       existingTopics,
       (item, meta) => buildFirestoreTopicDoc(item, uid, meta, nowSentinel)
     );
     enqueueCollectionSync(
       'cms_videos',
+      'video',
       Array.isArray(snapshot?.videos) ? snapshot.videos : [],
       existingVideos,
       (item, meta) => buildFirestoreVideoDoc(item, uid, meta, nowSentinel)
     );
     enqueueCollectionSync(
       'cms_catalog_docs',
+      'doc',
       Array.isArray(snapshot?.catalogDocs) ? snapshot.catalogDocs : [],
       existingCatalogDocs,
       (item, meta) => buildFirestoreCatalogDoc(item, uid, meta, nowSentinel)
     );
     enqueueCollectionSync(
       'cms_questions',
+      'q',
       Array.isArray(snapshot?.questions) ? snapshot.questions : [],
       existingQuestions,
       (item, meta) => buildFirestoreQuestionDoc(item, uid, meta, nowSentinel)
     );
     enqueueCollectionSync(
       'cms_quizzes',
+      'quiz',
       Array.isArray(snapshot?.quizzes) ? snapshot.quizzes : [],
       existingQuizzes,
       (item, meta) => buildFirestoreQuizDoc(item, uid, meta, nowSentinel)

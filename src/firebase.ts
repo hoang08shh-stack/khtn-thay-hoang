@@ -1,6 +1,12 @@
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import {
   getAuth,
+  initializeAuth,
+  indexedDBLocalPersistence,
+  browserLocalPersistence,
+  browserSessionPersistence,
+  inMemoryPersistence,
+  browserPopupRedirectResolver,
   Auth,
   GoogleAuthProvider,
   signInWithPopup,
@@ -11,9 +17,15 @@ import {
   getFirestore,
   Firestore,
   doc,
+  getDoc,
   getDocFromServer,
 } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
+import {
+  FirebaseAuthErrorReport,
+  formatFirebaseAuthError,
+  isRunningInIframe,
+} from './utils/firebaseAuthHelpers.ts';
 
 export const ADMIN_BOOTSTRAP_EMAIL = 'hoang08shh@gmail.com';
 
@@ -35,7 +47,21 @@ const isBrowserRuntime = typeof window !== 'undefined' && typeof document !== 'u
 if (isFirebaseConfigured && isBrowserRuntime) {
   appInstance = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
   dbInstance = getFirestore(appInstance, firebaseConfig.firestoreDatabaseId);
-  authInstance = getAuth(appInstance);
+  try {
+    // Fallback persistence chain (IndexedDB -> localStorage -> sessionStorage -> inMemory)
+    // ensures Google Sign-In works even inside restricted iframes / Safari ITP / Incognito mode.
+    authInstance = initializeAuth(appInstance, {
+      persistence: [
+        indexedDBLocalPersistence,
+        browserLocalPersistence,
+        browserSessionPersistence,
+        inMemoryPersistence,
+      ],
+      popupRedirectResolver: browserPopupRedirectResolver,
+    });
+  } catch {
+    authInstance = getAuth(appInstance);
+  }
 }
 
 export const firebaseApp = appInstance;
@@ -70,6 +96,18 @@ export interface FirestoreErrorInfo {
   };
 }
 
+export class FirebaseSignInError extends Error {
+  public readonly code: string;
+  public readonly report: FirebaseAuthErrorReport;
+
+  constructor(report: FirebaseAuthErrorReport) {
+    super(report.message);
+    this.name = 'FirebaseSignInError';
+    this.code = report.code;
+    this.report = report;
+  }
+}
+
 export function handleFirestoreError(
   error: unknown,
   operationType: OperationType,
@@ -102,12 +140,35 @@ export function isFirebaseQuotaError(error: unknown): boolean {
   return /quota exceeded/i.test(msg);
 }
 
+const verifiedAdminUids = new Set<string>();
+
 export function isFirebaseAdminUser(user?: FirebaseUser | null): boolean {
   if (!user || !user.email) return false;
-  return (
-    user.email.trim().toLowerCase() === ADMIN_BOOTSTRAP_EMAIL &&
-    user.emailVerified === true
-  );
+  if (user.emailVerified !== true) return false;
+  if (user.email.trim().toLowerCase() === ADMIN_BOOTSTRAP_EMAIL) {
+    return true;
+  }
+  return verifiedAdminUids.has(user.uid);
+}
+
+export async function verifyAndCacheFirebaseAdminUser(user?: FirebaseUser | null): Promise<boolean> {
+  if (!user || !user.email || user.emailVerified !== true) return false;
+  if (user.email.trim().toLowerCase() === ADMIN_BOOTSTRAP_EMAIL) {
+    verifiedAdminUids.add(user.uid);
+    return true;
+  }
+  if (verifiedAdminUids.has(user.uid)) return true;
+  if (!dbInstance) return false;
+  try {
+    const adminSnap = await getDoc(doc(dbInstance, 'admins', user.uid));
+    if (adminSnap.exists()) {
+      verifiedAdminUids.add(user.uid);
+      return true;
+    }
+  } catch {
+    // Non-admin user or read denied
+  }
+  return false;
 }
 
 export function isFirebaseAdminAuthenticated(): boolean {
@@ -118,24 +179,81 @@ export function getFirebaseCurrentUser(): FirebaseUser | null {
   return authInstance?.currentUser || null;
 }
 
+let inFlightGoogleSignIn: Promise<FirebaseUser> | null = null;
+
 export async function signInAdminWithGoogle(): Promise<FirebaseUser> {
   if (!isFirebaseConfigured || !authInstance) {
-    throw new Error('Firebase chưa được cấu hình.');
+    throw new FirebaseSignInError({
+      code: 'auth/not-configured',
+      message: 'Firebase chưa được cấu hình trong ứng dụng.',
+    });
   }
-  const provider = new GoogleAuthProvider();
-  provider.setCustomParameters({ prompt: 'select_account' });
-  const result = await signInWithPopup(authInstance, provider);
-  const signedInUser = result.user;
-  if (!isFirebaseAdminUser(signedInUser)) {
-    await signOut(authInstance).catch(() => {});
-    throw new Error(
-      `Tài khoản Google (${signedInUser.email || 'không rõ'}) không có quyền Quản trị viên. Vui lòng chọn đúng tài khoản ${ADMIN_BOOTSTRAP_EMAIL}.`
-    );
+
+  // Deduplicate rapid double-clicks so Firebase never rejects with auth/cancelled-popup-request
+  if (inFlightGoogleSignIn) {
+    return inFlightGoogleSignIn;
   }
-  return signedInUser;
+
+  const runSignIn = async (): Promise<FirebaseUser> => {
+    const provider = new GoogleAuthProvider();
+    provider.addScope('email');
+    provider.addScope('profile');
+    provider.setCustomParameters({ prompt: 'select_account' });
+
+    let signedInUser: FirebaseUser;
+    try {
+      const result = await signInWithPopup(authInstance!, provider, browserPopupRedirectResolver);
+      signedInUser = result.user;
+    } catch (err) {
+      const report = formatFirebaseAuthError(err, {
+        hostname: typeof window !== 'undefined' ? window.location.hostname : '',
+        inIframe: isRunningInIframe(),
+        projectId: firebaseProjectId,
+        adminEmail: ADMIN_BOOTSTRAP_EMAIL,
+      });
+      throw new FirebaseSignInError(report);
+    }
+
+    // Refresh ID token immediately so Firestore rules receive verified email claims right away
+    try {
+      await signedInUser.getIdToken(true);
+    } catch {
+      // Non-fatal; existing token from popup is already fresh
+    }
+
+    const isAllowedAdmin = await verifyAndCacheFirebaseAdminUser(signedInUser);
+    if (!isAllowedAdmin) {
+      const chosenEmail = signedInUser.email || 'không rõ';
+      await signOut(authInstance!).catch(() => {});
+      const report = formatFirebaseAuthError(
+        Object.assign(
+          new Error(
+            `Tài khoản Google (${chosenEmail}) không có quyền Quản trị viên. Vui lòng chọn đúng tài khoản ${ADMIN_BOOTSTRAP_EMAIL}.`
+          ),
+          { code: 'auth/admin-email-mismatch' }
+        ),
+        {
+          hostname: typeof window !== 'undefined' ? window.location.hostname : '',
+          inIframe: isRunningInIframe(),
+          projectId: firebaseProjectId,
+          adminEmail: ADMIN_BOOTSTRAP_EMAIL,
+        }
+      );
+      throw new FirebaseSignInError(report);
+    }
+
+    return signedInUser;
+  };
+
+  inFlightGoogleSignIn = runSignIn().finally(() => {
+    inFlightGoogleSignIn = null;
+  });
+
+  return inFlightGoogleSignIn;
 }
 
 export async function signOutFirebase(): Promise<void> {
+  verifiedAdminUids.clear();
   if (authInstance) {
     await signOut(authInstance).catch(() => {});
   }

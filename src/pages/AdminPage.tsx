@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Breadcrumbs } from '../components/common/Breadcrumbs.tsx';
 import { isSupabaseConfigured } from '../lib/supabase.ts';
-import { isFirebaseConfigured } from '../firebase.ts';
+import { isFirebaseConfigured, FirebaseSignInError } from '../firebase.ts';
+import { FirebaseAuthErrorReport } from '../utils/firebaseAuthHelpers.ts';
 import { useAuth } from '../hooks/useAuth.ts';
 import { SIMULATIONS_3D, DOMAINS } from '../data/mockData.ts';
 import {
@@ -146,6 +147,7 @@ type AdminTabId =
 export const AdminPage: React.FC = () => {
   const { user, isFirebaseAdmin, loginWithGoogle } = useAuth();
   const [isConnectingFirebase, setIsConnectingFirebase] = useState(false);
+  const [firebaseAuthError, setFirebaseAuthError] = useState<FirebaseAuthErrorReport | null>(null);
 
   // Active Navigation Tab
   const [activeTab, setActiveTab] = useState<AdminTabId>('overview');
@@ -248,12 +250,23 @@ export const AdminPage: React.FC = () => {
 
   const handleConnectFirebaseGoogle = async () => {
     setIsConnectingFirebase(true);
+    setFirebaseAuthError(null);
     try {
       await loginWithGoogle();
       const report = await syncCmsSnapshotWithReport(false);
       if (report.target === 'firebase' && report.ok) {
         showToast(
           'Đã kết nối Firebase Cloud và đồng bộ toàn bộ bài giảng! Mọi điện thoại mở bất kỳ đường link nào đều sẽ tự động nhận bài mới.'
+        );
+      } else if (report.reason === 'firebase_error' || report.errorDetail) {
+        setFirebaseAuthError({
+          code: 'firestore/sync-error',
+          message: `Đã đăng nhập Google nhưng đồng bộ lên Firestore gặp lỗi: ${report.errorDetail || 'Vui lòng thử bấm Đồng bộ lại.'}`,
+          hint: 'Bạn có thể mở mục "Đồng bộ / Nhập JSON" và bấm "Đẩy dữ liệu máy này lên Cloud" để thử lại.',
+        });
+        showToast(
+          `Đăng nhập Google thành công nhưng đẩy lên Firestore lỗi: ${report.errorDetail || 'Vui lòng thử lại.'}`,
+          'error'
         );
       } else {
         showToast(
@@ -262,11 +275,19 @@ export const AdminPage: React.FC = () => {
       }
       loadAllData();
     } catch (err: any) {
-      showToast(
-        err?.message ||
-          'Chưa đăng nhập được Google Firebase. Hãy cho phép cửa sổ popup và chọn tài khoản hoang08shh@gmail.com.',
-        'error'
-      );
+      if (err instanceof FirebaseSignInError) {
+        setFirebaseAuthError(err.report);
+        showToast(err.report.message, 'error');
+      } else {
+        const msg =
+          err?.message ||
+          'Chưa đăng nhập được Google Firebase. Hãy cho phép cửa sổ popup và chọn tài khoản hoang08shh@gmail.com.';
+        setFirebaseAuthError({
+          code: 'auth/unknown',
+          message: msg,
+        });
+        showToast(msg, 'error');
+      }
     } finally {
       setIsConnectingFirebase(false);
     }
@@ -707,6 +728,68 @@ export const AdminPage: React.FC = () => {
               </button>
             </div>
           </div>
+
+          {firebaseAuthError && (
+            <div
+              data-testid="admin-firebase-error-banner"
+              className="rounded-2xl bg-red-950/75 border border-red-400/50 p-4 text-xs text-red-100 space-y-2.5"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-2.5">
+                  <AlertCircle className="w-4 h-4 text-red-300 shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <div className="font-extrabold text-red-100">{firebaseAuthError.message}</div>
+                    {firebaseAuthError.hint && (
+                      <p className="text-[11px] text-red-200/90 leading-relaxed">
+                        {firebaseAuthError.hint}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setFirebaseAuthError(null)}
+                  aria-label="Đóng thông báo lỗi Firebase"
+                  className="p-1 rounded-lg hover:bg-white/10 text-red-200 cursor-pointer shrink-0"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 pl-6">
+                {firebaseAuthError.shouldSuggestNewTab && typeof window !== 'undefined' && (
+                  <a
+                    href={window.location.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-[11px] transition"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span>Mở trang quản trị ở tab mới để đăng nhập Google</span>
+                  </a>
+                )}
+                {firebaseAuthError.firebaseConsoleAuthUrl && (
+                  <a
+                    href={firebaseAuthError.firebaseConsoleAuthUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 text-white border border-white/25 font-bold text-[11px] transition"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span>Mở cài đặt Authorized Domains trên Firebase</span>
+                  </a>
+                )}
+                <button
+                  type="button"
+                  onClick={handleConnectFirebaseGoogle}
+                  disabled={isConnectingFirebase}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white font-bold text-[11px] transition cursor-pointer"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isConnectingFirebase ? 'animate-spin' : ''}`} />
+                  <span>Thử đăng nhập lại</span>
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Bottom Row: 4 Primary Teacher Action Cards */}
           <div className="pt-5 border-t border-white/10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">

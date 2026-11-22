@@ -6,6 +6,7 @@ import {
   auth as firebaseAuth,
   isFirebaseConfigured,
   isFirebaseAdminUser,
+  verifyAndCacheFirebaseAdminUser,
   signInAdminWithGoogle,
   signOutFirebase,
 } from '../firebase.ts';
@@ -45,6 +46,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [isFirebaseAuthReady, setIsFirebaseAuthReady] = useState<boolean>(!isFirebaseConfigured);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
+  const [isFirebaseAdminState, setIsFirebaseAdminState] = useState<boolean>(false);
+
   // Listen to Firebase Auth state changes (Google Admin login for Firestore Cloud sync)
   useEffect(() => {
     if (!isFirebaseConfigured || !firebaseAuth) {
@@ -52,10 +55,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return;
     }
 
-    const unsubscribe = onAuthStateChanged(firebaseAuth, (fbUser) => {
+    let active = true;
+    const unsubscribe = onAuthStateChanged(firebaseAuth, async (fbUser) => {
+      if (!active) return;
       setFirebaseUser(fbUser);
+      const isAdmin = fbUser ? await verifyAndCacheFirebaseAdminUser(fbUser) : false;
+      if (!active) return;
+      setIsFirebaseAdminState(isAdmin);
       setIsFirebaseAuthReady(true);
-      if (fbUser && isFirebaseAdminUser(fbUser)) {
+      if (fbUser && isAdmin) {
         const adminAppUser: AppUser = {
           id: fbUser.uid,
           email: fbUser.email || 'hoang08shh@gmail.com',
@@ -74,7 +82,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     });
 
-    return () => unsubscribe();
+    return () => {
+      active = false;
+      unsubscribe();
+    };
   }, []);
 
   // Initialize Supabase auth session and listen to changes
@@ -149,57 +160,45 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const login = async (email: string, password: string): Promise<AppUser> => {
-    setIsLoading(true);
-    try {
-      const authenticatedUser = await signInWithEmail(email, password);
-      setUser(authenticatedUser);
-      return authenticatedUser;
-    } finally {
-      setIsLoading(false);
-    }
+    const authenticatedUser = await signInWithEmail(email, password);
+    setUser(authenticatedUser);
+    return authenticatedUser;
   };
 
   const loginWithGoogle = async (): Promise<AppUser> => {
-    setIsLoading(true);
+    // Do NOT toggle global isLoading here: ProtectedRoute unmounts AdminPage/CmsSyncModal when isLoading=true!
+    const fbUser = await signInAdminWithGoogle();
+    setFirebaseUser(fbUser);
+    setIsFirebaseAdminState(true);
+    const adminUser: AppUser = {
+      id: fbUser.uid,
+      email: fbUser.email || 'hoang08shh@gmail.com',
+      fullName: fbUser.displayName || 'Quản trị viên KHOA HỌC SỐ KHTN',
+      role: 'admin',
+      grade: 8,
+      school: 'THCS Đà Nẵng, Việt Nam',
+      avatarUrl: fbUser.photoURL || undefined,
+    };
     try {
-      const fbUser = await signInAdminWithGoogle();
-      setFirebaseUser(fbUser);
-      const adminUser: AppUser = {
-        id: fbUser.uid,
-        email: fbUser.email || 'hoang08shh@gmail.com',
-        fullName: fbUser.displayName || 'Quản trị viên KHOA HỌC SỐ KHTN',
-        role: 'admin',
-        grade: 8,
-        school: 'THCS Đà Nẵng, Việt Nam',
-        avatarUrl: fbUser.photoURL || undefined,
-      };
-      try {
-        localStorage.setItem('khtn_hoang_user', JSON.stringify(adminUser));
-      } catch {
-        // ignore
-      }
-      setUser(adminUser);
-      return adminUser;
-    } finally {
-      setIsLoading(false);
+      localStorage.setItem('khtn_hoang_user', JSON.stringify(adminUser));
+    } catch {
+      // ignore
     }
+    setUser(adminUser);
+    return adminUser;
   };
 
   const register = async (data: SignUpData): Promise<AppUser> => {
-    setIsLoading(true);
-    try {
-      const newUser = await signUpWithEmail(data);
-      setUser(newUser);
-      return newUser;
-    } finally {
-      setIsLoading(false);
-    }
+    const newUser = await signUpWithEmail(data);
+    setUser(newUser);
+    return newUser;
   };
 
   const logout = async (): Promise<void> => {
     await signOutUser();
     await signOutFirebase();
     setFirebaseUser(null);
+    setIsFirebaseAdminState(false);
     setUser(null);
     setSession(null);
   };
@@ -217,7 +216,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         session,
         firebaseUser,
         isFirebaseAuthReady,
-        isFirebaseAdmin: isFirebaseAdminUser(firebaseUser),
+        isFirebaseAdmin: isFirebaseAdminState || isFirebaseAdminUser(firebaseUser),
         role: user?.role || 'student',
         isLoading,
         isSupabaseActive: isSupabaseConfigured,
