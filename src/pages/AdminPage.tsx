@@ -71,6 +71,7 @@ import {
   buildCmsSnapshotPayload,
   syncCmsSnapshotToRepo,
   fetchAndApplyRemoteCmsSnapshot,
+  checkRemoteSyncAvailability,
 } from '../services/adminService.ts';
 import { uploadLessonDocument } from '../services/storageService.ts';
 import {
@@ -174,6 +175,7 @@ export const AdminPage: React.FC = () => {
   const [isAdminFormulaOpen, setIsAdminFormulaOpen] = useState(false);
   const [adminFormulaTarget, setAdminFormulaTarget] = useState<'question' | 'explanation'>('question');
   const [isCmsSyncModalOpen, setIsCmsSyncModalOpen] = useState(false);
+  const [liveServerSyncAvailable, setLiveServerSyncAvailable] = useState<boolean>(false);
 
   // 4. Games State
   const [gameSubTab, setGameSubTab] = useState<'pairs' | 'crosswords' | 'detective'>('pairs');
@@ -288,13 +290,24 @@ export const AdminPage: React.FC = () => {
         if (applied) loadAllData();
       })
       .catch(() => {});
+    checkRemoteSyncAvailability()
+      .then((info) => setLiveServerSyncAvailable(info.serverApiAvailable))
+      .catch(() => {});
 
     const handleCmsUpdate = () => {
       loadAllData();
     };
+    const handleSyncStatus = (evt: Event) => {
+      const detail = (evt as CustomEvent)?.detail;
+      if (detail?.target === 'server' && detail?.ok) {
+        setLiveServerSyncAvailable(true);
+      }
+    };
     window.addEventListener('khtn-cms-updated', handleCmsUpdate);
+    window.addEventListener('khtn-sync-status-changed', handleSyncStatus);
     return () => {
       window.removeEventListener('khtn-cms-updated', handleCmsUpdate);
+      window.removeEventListener('khtn-sync-status-changed', handleSyncStatus);
     };
   }, []);
 
@@ -542,7 +555,7 @@ export const AdminPage: React.FC = () => {
                 onClick={() => setIsCmsSyncModalOpen(true)}
                 data-testid="admin-supabase-status-pill"
                 className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-[11px] font-bold border transition cursor-pointer ${
-                  isSupabaseConfigured
+                  isSupabaseConfigured || liveServerSyncAvailable
                     ? 'bg-emerald-500/15 border-emerald-400/30 text-emerald-200 hover:bg-emerald-500/25'
                     : 'bg-amber-500/15 border-amber-400/30 text-amber-200 hover:bg-amber-500/25'
                 }`}
@@ -550,7 +563,9 @@ export const AdminPage: React.FC = () => {
                 <span>
                   {isSupabaseConfigured
                     ? 'Supabase Cloud: Đã kết nối đồng bộ tự động đa thiết bị'
-                    : 'Chế độ lưu trình duyệt (Chưa gắn Supabase lên Hosting) — Bấm xem cách đồng bộ tự động →'}
+                    : liveServerSyncAvailable
+                    ? 'Máy chủ trực tiếp: Đang đồng bộ tự động mọi thiết bị truy cập cùng link web này →'
+                    : 'Chế độ lưu trình duyệt (Chưa gắn máy chủ/Supabase) — Bấm xem cách đồng bộ →'}
                 </span>
               </button>
             </div>

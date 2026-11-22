@@ -74,9 +74,59 @@ function readFileAsDataUrl(file: Blob): Promise<string | null> {
   });
 }
 
+const CHUNK_SIZE_BYTES = 4 * 1024 * 1024; // 4 MB binary chunks (safely under Nginx/Cloud Run limits)
+
+async function uploadFileViaChunkedBinary(file: File): Promise<string | null> {
+  const totalChunks = Math.ceil(file.size / CHUNK_SIZE_BYTES);
+  const uploadId = `up_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+  const encodedName = encodeURIComponent(file.name);
+
+  for (let idx = 0; idx < totalChunks; idx++) {
+    const start = idx * CHUNK_SIZE_BYTES;
+    const end = Math.min(file.size, start + CHUNK_SIZE_BYTES);
+    const chunkBlob = file.slice(start, end);
+
+    const res = await fetch('/api/upload-teacher-file-chunk', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/octet-stream',
+        'X-Upload-Id': uploadId,
+        'X-Chunk-Index': String(idx),
+        'X-Total-Chunks': String(totalChunks),
+        'X-File-Name': encodedName,
+      },
+      body: chunkBlob,
+    });
+    if (!res.ok) return null;
+    const json = await res.json().catch(() => null);
+    if (!json?.ok) return null;
+    if (json.completed && typeof json.fileUrl === 'string' && json.fileUrl.startsWith('/')) {
+      return json.fileUrl;
+    }
+  }
+  return null;
+}
+
+async function uploadFileViaRawBinary(file: File): Promise<string | null> {
+  const res = await fetch('/api/upload-teacher-file-raw', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/octet-stream',
+      'X-File-Name': encodeURIComponent(file.name),
+    },
+    body: file,
+  });
+  if (!res.ok) return null;
+  const json = await res.json().catch(() => null);
+  if (json?.ok && typeof json.fileUrl === 'string' && json.fileUrl.startsWith('/')) {
+    return json.fileUrl;
+  }
+  return null;
+}
+
 /**
  * Lưu file gốc của Giáo viên vào Server (/assets/uploads/...), IndexedDB và bộ nhớ đệm
- * để máy tính khác truy cập được học liệu đã tải lên.
+ * để điện thoại và máy tính khác truy cập được học liệu đã tải lên.
  */
 export async function saveTeacherFileToRepo(
   file: File,
@@ -92,34 +142,56 @@ export async function saveTeacherFileToRepo(
     `file_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   let fileUrl = `idb://${id}`;
   const mimeType = file.type || guessMimeTypeFromFileName(file.name);
+  let dataUrl: string | null = null;
 
-  const dataUrl = file.size <= 50 * 1024 * 1024 ? await readFileAsDataUrl(file) : null;
-
-  // Try uploading to server /api/upload-teacher-file so other computers can access the static file at /assets/uploads/...
-  if (dataUrl && typeof window !== 'undefined' && typeof fetch !== 'undefined') {
+  // 1. Prefer raw binary or chunked binary upload (zero base64 overhead, works smoothly up to 50MB behind Nginx/Cloud Run)
+  if (typeof window !== 'undefined' && typeof fetch !== 'undefined' && file.size > 0) {
     try {
-      const res = await fetch('/api/upload-teacher-file', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fileName: file.name,
-          dataUrl,
-        }),
-      });
-      if (res.ok) {
-        const json = await res.json().catch(() => null);
-        if (json?.ok && typeof json.fileUrl === 'string' && json.fileUrl.startsWith('/')) {
-          fileUrl = json.fileUrl;
-        }
+      const uploadedUrl =
+        file.size > CHUNK_SIZE_BYTES
+          ? await uploadFileViaChunkedBinary(file)
+          : await uploadFileViaRawBinary(file);
+      if (uploadedUrl) {
+        fileUrl = uploadedUrl;
       }
     } catch {
-      // Fallback if running on static hosting without /api/upload-teacher-file
+      // Fall through to legacy JSON endpoint below
+    }
+
+    // 2. Legacy JSON fallback if raw/chunked route is unavailable (e.g. older dev server)
+    if (fileUrl.startsWith('idb://') && file.size <= 15 * 1024 * 1024) {
+      dataUrl = await readFileAsDataUrl(file);
+      if (dataUrl) {
+        try {
+          const res = await fetch('/api/upload-teacher-file', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              fileName: file.name,
+              dataUrl,
+            }),
+          });
+          if (res.ok) {
+            const json = await res.json().catch(() => null);
+            if (json?.ok && typeof json.fileUrl === 'string' && json.fileUrl.startsWith('/')) {
+              fileUrl = json.fileUrl;
+            }
+          }
+        } catch {
+          // Fallback if running on static hosting without /api/upload-teacher-file
+        }
+      }
     }
   }
 
-  // If static hosting without server upload and file is <= 1.2MB, use dataUrl so it syncs in cmsSnapshot
-  if (fileUrl.startsWith('idb://') && dataUrl && file.size <= 1200 * 1024) {
-    fileUrl = dataUrl;
+  // 3. If static hosting without server upload and file is <= 2MB, embed dataUrl so it still syncs in cmsSnapshot
+  if (fileUrl.startsWith('idb://') && file.size <= 2 * 1024 * 1024) {
+    if (!dataUrl) {
+      dataUrl = await readFileAsDataUrl(file);
+    }
+    if (dataUrl) {
+      fileUrl = dataUrl;
+    }
   }
 
   const record: StoredTeacherFileRecord = {

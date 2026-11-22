@@ -508,11 +508,16 @@ export function applyCmsSnapshotToLocalStorage(snapshotObj: any, force = false):
   }
 
   if (snapStamp) {
+    // Only record SNAPSHOT_APPLIED_AT here — NEVER mark read-only visitor/phone devices as having unsynced local edits (LOCAL_UPDATED_AT)
     safeWriteLocal(STORAGE_KEYS.SNAPSHOT_APPLIED_AT, snapStamp);
-    safeWriteLocal(STORAGE_KEYS.LOCAL_UPDATED_AT, snapStamp);
+  }
+  if (snapshotUpdatedAt) {
+    safeWriteLocal(BUNDLED_SNAPSHOT_SEEN_KEY, snapshotUpdatedAt);
   }
   return true;
 }
+
+const BUNDLED_SNAPSHOT_SEEN_KEY = 'khtn_bundled_snapshot_seen_v1';
 
 function getMonotonicIsoTimestamp(): string {
   const nowMs = Date.now();
@@ -529,18 +534,32 @@ export function markLocalCmsModified(explicitIso?: string): string {
   const stamp = explicitIso || getMonotonicIsoTimestamp();
   safeWriteLocal(STORAGE_KEYS.LOCAL_UPDATED_AT, stamp);
   safeWriteLocal(STORAGE_KEYS.SNAPSHOT_APPLIED_AT, stamp);
+  if (snapshotUpdatedAt) {
+    safeWriteLocal(BUNDLED_SNAPSHOT_SEEN_KEY, snapshotUpdatedAt);
+  }
   return stamp;
 }
 
 function ensureBundledSnapshotSynced(): void {
   if (!snapshotUpdatedAt) return;
+  const hasLessons = Boolean(
+    typeof localStorage !== 'undefined' && localStorage.getItem(STORAGE_KEYS.LESSONS)
+  );
+  const seenBundled = safeReadLocal<string>(BUNDLED_SNAPSHOT_SEEN_KEY, '');
+  // If we already seeded this build's bundled snapshot OR applied a live server snapshot,
+  // NEVER let the build-time bundle clobber live server data (even if server & build clocks differ).
+  if (hasLessons && seenBundled === snapshotUpdatedAt) {
+    return;
+  }
   const localUpdated = safeReadLocal<string>(STORAGE_KEYS.LOCAL_UPDATED_AT, '');
-  if (localUpdated) {
-    const localMs = Date.parse(localUpdated);
-    const snapMs = Date.parse(snapshotUpdatedAt);
-    if (Number.isFinite(localMs) && Number.isFinite(snapMs) && localMs >= snapMs) {
-      return;
-    }
+  const lastApplied = safeReadLocal<string>(STORAGE_KEYS.SNAPSHOT_APPLIED_AT, '');
+  const localMs = localUpdated ? Date.parse(localUpdated) || 0 : 0;
+  const appliedMs = lastApplied ? Date.parse(lastApplied) || 0 : 0;
+  const knownMs = Math.max(localMs, appliedMs);
+  const snapMs = Date.parse(snapshotUpdatedAt);
+  if (hasLessons && knownMs > 0 && Number.isFinite(snapMs) && knownMs >= snapMs) {
+    safeWriteLocal(BUNDLED_SNAPSHOT_SEEN_KEY, snapshotUpdatedAt);
+    return;
   }
   applyCmsSnapshotToLocalStorage(cmsSnapshot, false);
 }
@@ -645,6 +664,7 @@ export function importCmsSnapshotFromJson(rawJson: any): { ok: boolean; message:
     if (Array.isArray(parsed.users)) {
       safeWriteLocal(STORAGE_KEYS.USERS, parsed.users);
     }
+    markLocalCmsModified(stamped.updatedAt);
     syncCmsSnapshotToRepo(true);
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('khtn-cms-updated'));
@@ -822,10 +842,12 @@ async function executeCmsSnapshotSyncOnce(rebuildZip: boolean): Promise<CloudSyn
     );
     if (res.ok) {
       const data = await res.json().catch(() => null);
-      if (data?.updatedAt && typeof data.updatedAt === 'string') {
-        finalUpdatedAt = data.updatedAt;
+      if (data && data.ok === true) {
+        if (typeof data.updatedAt === 'string' && data.updatedAt) {
+          finalUpdatedAt = data.updatedAt;
+        }
+        serverOk = true;
       }
-      serverOk = true;
     }
   } catch {
     // ignore if static host without /api/sync-cms-snapshot
@@ -834,10 +856,17 @@ async function executeCmsSnapshotSyncOnce(rebuildZip: boolean): Promise<CloudSyn
   if (supabaseOk || serverOk) {
     const currentLocal = safeReadLocal<string>(STORAGE_KEYS.LOCAL_UPDATED_AT, '');
     const currentMs = currentLocal ? Date.parse(currentLocal) || 0 : 0;
+    const baseMs = Date.parse(baseSnapshot.updatedAt) || 0;
     const finalMs = Date.parse(finalUpdatedAt) || 0;
-    if (finalMs >= currentMs) {
+    if (Math.max(baseMs, finalMs) >= currentMs) {
       safeWriteLocal(STORAGE_KEYS.SNAPSHOT_APPLIED_AT, finalUpdatedAt);
-      safeWriteLocal(STORAGE_KEYS.LOCAL_UPDATED_AT, finalUpdatedAt);
+      if (typeof localStorage !== 'undefined') {
+        try {
+          localStorage.removeItem(STORAGE_KEYS.LOCAL_UPDATED_AT);
+        } catch {
+          // ignore
+        }
+      }
     }
   }
 
@@ -993,27 +1022,54 @@ export async function fetchAndApplyRemoteCmsSnapshot(force = false): Promise<boo
     }
   }
 
+  // 3. Static snapshot fallback (/cms-snapshot.json) if live API & Supabase are unavailable
+  if (!bestSnapshot) {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 3000);
+      const res = await fetch(`/cms-snapshot.json?t=${Date.now()}`, {
+        cache: 'no-store',
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+      if (res.ok && (res.headers.get('content-type') || '').includes('application/json')) {
+        const staticSnap = await res.json().catch(() => null);
+        considerCandidate(staticSnap);
+      }
+    } catch {
+      // ignore if static file not present
+    }
+  }
+
   if (!bestSnapshot) return false;
   // Re-check in case a local write began while we were fetching remote
   if (!force && activeSyncPromise) return false;
 
   const lastApplied = safeReadLocal<string>(STORAGE_KEYS.SNAPSHOT_APPLIED_AT, '');
   const localUpdated = safeReadLocal<string>(STORAGE_KEYS.LOCAL_UPDATED_AT, '');
-  const lastAppliedMs = lastApplied ? Date.parse(lastApplied) || 0 : 0;
   const localUpdatedMs = localUpdated ? Date.parse(localUpdated) || 0 : 0;
-  const localTime = Math.max(lastAppliedMs, localUpdatedMs);
   const hasLocalLessons = Boolean(
     typeof localStorage !== 'undefined' && localStorage.getItem(STORAGE_KEYS.LESSONS)
   );
 
-  if (!force && hasLocalLessons && localTime > 0) {
-    if (localUpdatedMs > 0 && bestTime > 0 && localUpdatedMs > bestTime) {
-      // Local edits are strictly newer than remote -> NEVER wipe local; push local upstream instead
-      syncCmsSnapshotToRepo(false).catch(() => {});
-      return false;
-    }
-    if (bestTime > 0 && bestTime <= localTime) {
-      return false;
+  if (!force && hasLocalLessons) {
+    if (localUpdatedMs > 0) {
+      // This browser has unsynced local teacher edits
+      if (bestTime > 0 && localUpdatedMs > bestTime) {
+        // Local edits are strictly newer than remote -> NEVER wipe local; push local upstream instead
+        syncCmsSnapshotToRepo(false).catch(() => {});
+        return false;
+      }
+      if (bestTime > 0 && bestTime <= localUpdatedMs) {
+        return false;
+      }
+    } else {
+      // Read-only visitor / phone / already-synced browser:
+      // Always accept remote if it differs from the last applied snapshot timestamp!
+      const remoteStamp = typeof bestSnapshot.updatedAt === 'string' ? bestSnapshot.updatedAt : '';
+      if (lastApplied && remoteStamp && remoteStamp === lastApplied) {
+        return false;
+      }
     }
   }
 

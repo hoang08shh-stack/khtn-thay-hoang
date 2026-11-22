@@ -447,3 +447,190 @@ test('saveUnifiedLearningResourceAsync keeps selected lesson instead of creating
     cleanupBrowserEnv();
   }
 });
+
+test('read-only phone applies changed remote server snapshot even if previous applied timestamp was ahead (clock skew)', async () => {
+  const basePayload = buildCmsSnapshotPayload();
+  const g9 = basePayload.lessons.find((l) => l.grade === 9)!;
+  assert.ok(g9);
+
+  const phoneUpdatedServerSnapshot = {
+    ...basePayload,
+    // Even if server timestamp is earlier than a future-skewed bundled/applied timestamp,
+    // a read-only phone (LOCAL_UPDATED_AT unset) MUST accept the server snapshot whenever updatedAt differs!
+    updatedAt: '2026-06-01T10:00:00.000Z',
+    lessons: basePayload.lessons.map((l) =>
+      l.id === g9.id
+        ? {
+            ...l,
+            assets: [
+              ...(l.assets || []),
+              {
+                id: 'asset-phone-clock-skew',
+                lessonId: g9.id,
+                title: 'Tài liệu đồng bộ sang điện thoại (Clock Skew)',
+                format: 'pdf',
+                type: 'Giáo án điện tử',
+                fileSize: '300 KB',
+                fileUrl: '/assets/uploads/phone_clock_skew.pdf',
+                fileName: 'phone_clock_skew.pdf',
+              },
+            ],
+          }
+        : l
+    ),
+  };
+
+  const { ls } = installBrowserEnv(async (input) => {
+    const url = String(input);
+    if (url.includes('/api/cms-snapshot')) {
+      return new Response(JSON.stringify(phoneUpdatedServerSnapshot), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    return new Response('{}', { status: 404 });
+  });
+
+  try {
+    // Seed read-only phone via getInitialLocalLessons() (bundled snapshot)
+    getInitialLocalLessons();
+    assert.equal(
+      ls.getItem(STORAGE_KEYS.LOCAL_UPDATED_AT),
+      null,
+      'Read-only phone MUST NOT set LOCAL_UPDATED_AT when applying bundled snapshot'
+    );
+
+    const applied = await fetchAndApplyRemoteCmsSnapshot(false);
+    assert.equal(applied, true, 'Read-only phone must apply changed server snapshot');
+
+    const lessonOnPhone = await getLessonByIdOrSlug(g9.id);
+    assert.ok(
+      (lessonOnPhone?.assets || []).some((a) => a.id === 'asset-phone-clock-skew'),
+      'Phone must display newly synced teacher lesson PDF'
+    );
+
+    // Calling again with identical server updatedAt should be a no-op (avoid redundant re-renders)
+    const appliedAgain = await fetchAndApplyRemoteCmsSnapshot(false);
+    assert.equal(appliedAgain, false, 'Identical remote updatedAt should not re-apply redundantly');
+  } finally {
+    cleanupBrowserEnv();
+  }
+});
+
+test('syncCmsSnapshotWithReport rejects HTML 200 OK SPA fallback instead of falsely reporting serverOk', async () => {
+  installBrowserEnv(async (input) => {
+    const url = String(input);
+    if (url.includes('/api/sync-cms-snapshot')) {
+      // Simulate static SPA host returning index.html with 200 OK
+      return new Response('<!doctype html><html><body>SPA</body></html>', {
+        status: 200,
+        headers: { 'Content-Type': 'text/html' },
+      });
+    }
+    return new Response('{}', { status: 404 });
+  });
+
+  try {
+    getInitialLocalLessons();
+    const report = await syncCmsSnapshotWithReport(false);
+    assert.equal(report.ok, false, 'HTML 200 OK fallback must NOT count as successful server sync');
+    assert.equal(report.target, 'local_only');
+  } finally {
+    cleanupBrowserEnv();
+  }
+});
+
+test('fetchAndApplyRemoteCmsSnapshot falls back to static /cms-snapshot.json when /api/cms-snapshot is unavailable', async () => {
+  const basePayload = buildCmsSnapshotPayload();
+  const staticSnapshot = {
+    ...basePayload,
+    updatedAt: '2036-01-01T00:00:00.000Z',
+    catalogDocs: [
+      ...(basePayload.catalogDocs || []),
+      {
+        id: 'doc-static-fallback-phone',
+        title: 'Đề cương KHTN 9 từ cms-snapshot.json tĩnh',
+        grade: 9,
+        domain: 'hoa-hoc',
+        format: 'pdf',
+        type: 'Đề cương ôn tập',
+        pageCount: 4,
+        fileSize: '210 KB',
+        description: 'Fallback test',
+        author: 'GV',
+        downloadCount: 0,
+        downloadUrl: '/assets/uploads/static_fallback.pdf',
+        fileUrl: '/assets/uploads/static_fallback.pdf',
+      },
+    ],
+  };
+
+  installBrowserEnv(async (input) => {
+    const url = String(input);
+    if (url.includes('/api/cms-snapshot')) {
+      return new Response('Not Found', { status: 404 });
+    }
+    if (url.includes('/cms-snapshot.json')) {
+      return new Response(JSON.stringify(staticSnapshot), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    return new Response('{}', { status: 404 });
+  });
+
+  try {
+    getInitialLocalLessons();
+    const applied = await fetchAndApplyRemoteCmsSnapshot(false);
+    assert.equal(applied, true, 'Must apply /cms-snapshot.json when /api/cms-snapshot is unavailable');
+    const docs = getAllDocumentsSync(9);
+    assert.ok(
+      docs.some((d) => d.id === 'doc-static-fallback-phone'),
+      'Static snapshot document must appear in catalog'
+    );
+  } finally {
+    cleanupBrowserEnv();
+  }
+});
+
+test('server isSameOriginWriteAllowed permits Nginx/Cloud Run forwarded hosts & rejects third-party origins', async () => {
+  const { isSameOriginWriteAllowed } = await import('../../server.ts');
+
+  // 1. Proxied Cloud Run Shared Link (Host rewritten to localhost:3000 by Nginx)
+  assert.equal(
+    isSameOriginWriteAllowed({
+      headers: {
+        host: 'localhost:3000',
+        'x-forwarded-host': 'ais-pre-abc123.asia-southeast1.run.app',
+        origin: 'https://ais-pre-abc123.asia-southeast1.run.app',
+      },
+    } as any),
+    true,
+    'Must allow same-origin request behind Nginx proxy with X-Forwarded-Host'
+  );
+
+  // 2. Explicit :443 port normalization
+  assert.equal(
+    isSameOriginWriteAllowed({
+      headers: {
+        host: 'ais-pre-abc123.asia-southeast1.run.app:443',
+        origin: 'https://ais-pre-abc123.asia-southeast1.run.app',
+      },
+    } as any),
+    true,
+    'Must normalize standard :443 port'
+  );
+
+  // 3. Unrelated third-party origin MUST be rejected (CSRF protection)
+  assert.equal(
+    isSameOriginWriteAllowed({
+      headers: {
+        host: 'localhost:3000',
+        'x-forwarded-host': 'ais-pre-abc123.asia-southeast1.run.app',
+        origin: 'https://evil.example',
+      },
+    } as any),
+    false,
+    'Must reject unrelated third-party Origin'
+  );
+});

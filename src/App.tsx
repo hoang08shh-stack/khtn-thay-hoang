@@ -150,8 +150,29 @@ function AppContent() {
     };
 
     window.addEventListener('focus', handleFocus);
+    window.addEventListener('pageshow', handleFocus);
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('storage', handleStorageChange);
+
+    // Real-time Server-Sent Events stream for instant updates on phones & other open browsers
+    let eventSource: EventSource | null = null;
+    try {
+      if (typeof EventSource !== 'undefined') {
+        eventSource = new EventSource('/api/cms-events');
+        eventSource.addEventListener('cms-updated', () => {
+          fetchAndApplyRemoteCmsSnapshot(false).catch(() => {});
+        });
+      }
+    } catch {
+      // ignore on static hosts without /api/cms-events
+    }
+
+    // Gentle background refresh while tab is visible (safety net if proxy drops SSE)
+    const pollTimer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        fetchAndApplyRemoteCmsSnapshot(false).catch(() => {});
+      }
+    }, 20000);
 
     let broadcastChannel: BroadcastChannel | null = null;
     try {
@@ -188,8 +209,17 @@ function AppContent() {
 
     return () => {
       window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('pageshow', handleFocus);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('storage', handleStorageChange);
+      window.clearInterval(pollTimer);
+      if (eventSource) {
+        try {
+          eventSource.close();
+        } catch {
+          // ignore
+        }
+      }
       if (broadcastChannel) {
         try {
           broadcastChannel.close();

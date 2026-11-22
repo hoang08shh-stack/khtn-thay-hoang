@@ -251,7 +251,7 @@ export const CmsSyncModal: React.FC<CmsSyncModalProps> = ({
                     </h3>
                     <span
                       className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold ${
-                        syncAvailability?.supabaseAvailable
+                        syncAvailability?.supabaseAvailable || syncAvailability?.serverApiAvailable
                           ? 'bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200'
                           : 'bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-200'
                       }`}
@@ -260,7 +260,9 @@ export const CmsSyncModal: React.FC<CmsSyncModalProps> = ({
                         ? syncAvailability.supabaseAuthenticated
                           ? 'Supabase: Đã kết nối & Đăng nhập'
                           : 'Supabase: Đã gắn URL (Cần đăng nhập mật khẩu Supabase)'
-                        : 'Supabase: Chưa cấu hình trên Hosting'}
+                        : syncAvailability?.serverApiAvailable
+                        ? 'Máy chủ trực tiếp: Đang đồng bộ tự động'
+                        : 'Chế độ tĩnh: Chưa cấu hình Supabase'}
                     </span>
                   </div>
                   <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
@@ -268,7 +270,9 @@ export const CmsSyncModal: React.FC<CmsSyncModalProps> = ({
                       ? syncAvailability.supabaseAuthenticated
                         ? 'Mọi bài giảng và học liệu tải lên sẽ tự động lưu lên Supabase Cloud và cập nhật sang mọi thiết bị khác.'
                         : 'Để đẩy bài giảng lên Supabase, hãy đăng xuất rồi đăng nhập lại bằng Email + Mật khẩu tài khoản Supabase (không dùng Truy cập nhanh).'
-                      : 'Hiện web chạy tĩnh chưa có biến môi trường VITE_SUPABASE_URL & VITE_SUPABASE_ANON_KEY trên Cloudflare Pages / Vercel nên bài giảng mới chỉ lưu trên trình duyệt máy này.'}
+                      : syncAvailability?.serverApiAvailable
+                      ? 'Máy chủ web đang tự động lưu bài giảng & tệp tải lên và đẩy cập nhật tức thì tới mọi điện thoại/máy tính mở CÙNG đường link này.'
+                      : 'Hiện web chạy tĩnh chưa có biến môi trường VITE_SUPABASE_URL & VITE_SUPABASE_ANON_KEY nên bài giảng mới chỉ lưu trên trình duyệt máy này.'}
                   </p>
                 </div>
               </div>
@@ -276,8 +280,13 @@ export const CmsSyncModal: React.FC<CmsSyncModalProps> = ({
 
             {!syncAvailability?.supabaseAvailable && (
               <div className="p-3 rounded-xl bg-white/80 dark:bg-slate-900/70 border border-teal-200/80 dark:border-teal-800/60 text-[11px] text-slate-700 dark:text-slate-300 space-y-1.5">
+                {syncAvailability?.serverApiAvailable && (
+                  <div className="p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-200 leading-relaxed">
+                    <strong>Lưu ý quan trọng khi xem trên điện thoại:</strong> Hãy mở <strong>đúng cùng một đường link chia sẻ</strong> (ví dụ link <code className="font-mono">ais-pre-...</code>) trên cả máy tính (để tải bài giảng trong Quản trị) và điện thoại (để xem). Đường link xem trước (<code className="font-mono">ais-dev-...</code>) và đường link chia sẻ (<code className="font-mono">ais-pre-...</code>) chạy trên 2 máy chủ độc lập nếu chưa gắn cơ sở dữ liệu đám mây Supabase.
+                  </div>
+                )}
                 <div className="font-bold text-slate-900 dark:text-white">
-                  Để tự động cập nhật bài giảng lên web từ mọi máy tính bằng Supabase (Miễn phí):
+                  Nếu muốn đồng bộ xuyên suốt giữa nhiều link / hosting tĩnh bằng Supabase (Miễn phí):
                 </div>
                 <ol className="list-decimal list-inside space-y-0.5">
                   <li>
@@ -292,7 +301,7 @@ export const CmsSyncModal: React.FC<CmsSyncModalProps> = ({
                     .
                   </li>
                   <li>
-                    Trong <strong>Cloudflare Pages / Vercel → Settings → Environment Variables</strong>, thêm{' '}
+                    Thêm biến môi trường{' '}
                     <code className="font-mono bg-slate-100 dark:bg-slate-800 px-1 rounded">VITE_SUPABASE_URL</code> và{' '}
                     <code className="font-mono bg-slate-100 dark:bg-slate-800 px-1 rounded">VITE_SUPABASE_ANON_KEY</code> rồi Deploy lại.
                   </li>
