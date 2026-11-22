@@ -19,6 +19,7 @@ import {
   Sigma,
   ClipboardPaste,
   Bold,
+  Upload,
 } from 'lucide-react';
 import {
   LessonReviewQuestionType,
@@ -26,7 +27,14 @@ import {
   Grade,
   SubjectDomain,
   LessonMiniQuizItem,
+  CoreWordDocumentMeta,
 } from '../../types/index.ts';
+import { WordDocumentReader } from '../common/WordDocumentReader.tsx';
+import {
+  convertDocxArrayBufferToWordHtml,
+  isDocxFilename,
+} from '../../utils/wordReaderEngine.ts';
+import { uploadLessonDocument } from '../../services/storageService.ts';
 import { DOMAINS, SIMULATIONS_3D, LESSONS } from '../../data/mockData.ts';
 import {
   AdminLesson,
@@ -35,6 +43,8 @@ import {
   checkSlugAvailable,
   extractYouTubeId,
   saveAdminLesson,
+  saveUploadedAssetToRepository,
+  deleteAdminAsset,
   getAdminTopicsSync,
 } from '../../services/adminService.ts';
 import { AssetUploader } from './AssetUploader.tsx';
@@ -83,6 +93,11 @@ const LessonFormModalContent: React.FC<Omit<LessonFormModalProps, 'isOpen'>> = (
     lesson?.simulationIds || []
   );
   const [assets, setAssets] = useState<LessonAssetItem[]>(lesson?.assets || []);
+  const [coreWordDoc, setCoreWordDoc] = useState<CoreWordDocumentMeta | null>(
+    lesson?.coreWordDoc || null
+  );
+  const [isUploadingCoreWord, setIsUploadingCoreWord] = useState(false);
+  const coreWordFileInputRef = useRef<HTMLInputElement | null>(null);
   const [miniQuiz, setMiniQuiz] = useState<LessonMiniQuizItem[]>(
     lesson?.miniQuiz && lesson.miniQuiz.length > 0
       ? [...lesson.miniQuiz]
@@ -127,12 +142,93 @@ const LessonFormModalContent: React.FC<Omit<LessonFormModalProps, 'isOpen'>> = (
     });
   };
 
+  const handleUploadCoreWordInModal = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const ext = file.name.split('.').pop()?.toLowerCase() || '';
+    if (ext !== 'docx' && ext !== 'doc') {
+      setErrorMessage('Chỉ hỗ trợ tải tệp Microsoft Word (.docx hoặc .doc).');
+      e.target.value = '';
+      return;
+    }
+
+    setIsUploadingCoreWord(true);
+    setErrorMessage(null);
+    try {
+      let htmlContent: string | undefined;
+      if (isDocxFilename(file.name)) {
+        try {
+          const arrayBuffer = await file.arrayBuffer();
+          const parsed = await convertDocxArrayBufferToWordHtml(arrayBuffer);
+          if (parsed.htmlContent.trim()) {
+            htmlContent = parsed.htmlContent;
+          }
+        } catch {
+          // WordDocumentReader will still attempt fetch decode
+        }
+      }
+      const targetLessonKey = lesson?.id || `draft-${Date.now()}`;
+      const uploaded = await uploadLessonDocument(file, targetLessonKey);
+      if (!uploaded) {
+        throw new Error('Không thể tải tệp Word lên máy chủ lưu trữ.');
+      }
+      const nextCoreWord: CoreWordDocumentMeta = {
+        id: `core-word-${targetLessonKey}-${Date.now()}`,
+        fileName: uploaded.fileName || file.name,
+        fileUrl: uploaded.publicUrl,
+        fileSize: uploaded.sizeFormatted,
+        htmlContent,
+        uploadedAt: new Date().toISOString(),
+      };
+      setCoreWordDoc(nextCoreWord);
+
+      // Immediately persist when editing an existing lesson so closing the modal never loses the Word file
+      if (lesson?.id) {
+        const persisted = await saveAdminLesson(
+          {
+            ...lesson,
+            topicId: topicId || lesson.topicId,
+            grade,
+            domain,
+            code: code.trim() || lesson.code,
+            slug: slug.trim() || lesson.slug,
+            title: title.trim() || lesson.title,
+            summary: summary.trim() || lesson.summary,
+            content: content.trim() || lesson.content,
+            durationMinutes: Number(durationMinutes) || lesson.durationMinutes || 45,
+            orderIndex: Number(orderIndex) || lesson.orderIndex || 1,
+            isPublished,
+            videoUrl: parsedYouTubeId
+              ? `https://www.youtube.com/watch?v=${parsedYouTubeId}`
+              : videoInput.trim() || undefined,
+            coreWordDoc: nextCoreWord,
+            miniQuiz,
+          },
+          assets,
+          selectedSimulations,
+          miniQuiz
+        );
+        setAssets(persisted.assets || assets);
+        onSaved(persisted);
+        setInstantSaveNotice(
+          `Đã lưu tệp Word "${nextCoreWord.fileName}" trực tiếp vào bài học và đồng bộ lên web!`
+        );
+      }
+    } catch (err: any) {
+      setErrorMessage(err?.message || 'Lỗi khi tải tệp Word nội dung cốt lõi.');
+    } finally {
+      setIsUploadingCoreWord(false);
+      e.target.value = '';
+    }
+  };
+
   // UI / Status states
   const [activeTab, setActiveTab] = useState<'info' | 'content' | 'media' | 'assets' | 'miniquiz'>(
     initialTab
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [instantSaveNotice, setInstantSaveNotice] = useState<string | null>(null);
   const [slugStatus, setSlugStatus] = useState<{
     checking: boolean;
     available?: boolean;
@@ -345,6 +441,7 @@ const LessonFormModalContent: React.FC<Omit<LessonFormModalProps, 'isOpen'>> = (
           videoUrl: parsedYouTubeId
             ? `https://www.youtube.com/watch?v=${parsedYouTubeId}`
             : videoInput.trim() || undefined,
+          coreWordDoc: coreWordDoc === null ? null : coreWordDoc,
           miniQuiz,
         },
         assets,
@@ -367,8 +464,12 @@ const LessonFormModalContent: React.FC<Omit<LessonFormModalProps, 'isOpen'>> = (
     );
   };
 
-  const removeAsset = (assetId: string) => {
+  const removeAsset = async (assetId: string) => {
     setAssets((prev) => prev.filter((a) => a.id !== assetId));
+    if (lesson?.id) {
+      await deleteAdminAsset(assetId);
+      setInstantSaveNotice('Đã gỡ tài liệu khỏi bài học và đồng bộ lên web.');
+    }
   };
 
   return (
@@ -461,7 +562,18 @@ const LessonFormModalContent: React.FC<Omit<LessonFormModalProps, 'isOpen'>> = (
           <div className="mx-6 mt-4 p-3 rounded-2xl bg-red-50 dark:bg-red-950/60 border border-red-200 dark:border-red-900 text-red-700 dark:text-red-300 text-xs flex items-center gap-2">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span className="font-medium flex-1">{errorMessage}</span>
-            <button onClick={() => setErrorMessage(null)}>
+            <button type="button" onClick={() => setErrorMessage(null)}>
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        {/* Instant auto-save confirmation */}
+        {instantSaveNotice && (
+          <div className="mx-6 mt-4 p-3 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 text-xs flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+            <span className="font-bold flex-1">{instantSaveNotice}</span>
+            <button type="button" onClick={() => setInstantSaveNotice(null)}>
               <X className="w-4 h-4" />
             </button>
           </div>
@@ -678,6 +790,90 @@ const LessonFormModalContent: React.FC<Omit<LessonFormModalProps, 'isOpen'>> = (
           {/* TAB 2: CONTENT */}
           {activeTab === 'content' && (
             <div className="space-y-4 animate-fadeIn">
+              {/* Core Word Upload & Reader Preview */}
+              <div className="p-4 rounded-2xl border-2 border-blue-200 dark:border-blue-900 bg-blue-50/50 dark:bg-blue-950/25 space-y-3">
+                <input
+                  ref={coreWordFileInputRef}
+                  type="file"
+                  accept=".docx,.doc,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword"
+                  onChange={handleUploadCoreWordInModal}
+                  className="hidden"
+                />
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <div className="text-xs font-black text-blue-950 dark:text-blue-200 flex items-center gap-1.5">
+                      <FileText className="w-4 h-4 text-blue-600" />
+                      <span>File Word Nội dung cốt lõi (Hiển thị bằng Trình đọc Word cho học sinh)</span>
+                    </div>
+                    <p className="text-[11px] text-slate-600 dark:text-slate-400">
+                      Chỉ cần tải lên 1 tệp .docx, học sinh mở bài học sẽ xem ngay trong Trình đọc Word đầy đủ bảng, hình ảnh và công thức.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={isUploadingCoreWord}
+                      onClick={() => coreWordFileInputRef.current?.click()}
+                      className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-xs cursor-pointer"
+                    >
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>
+                        {isUploadingCoreWord
+                          ? 'Đang tải...'
+                          : coreWordDoc
+                          ? 'Thay file Word'
+                          : 'Tải file Word (.docx)'}
+                      </span>
+                    </button>
+                    {coreWordDoc && (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          setCoreWordDoc(null);
+                          if (lesson?.id) {
+                            const persisted = await saveAdminLesson(
+                              {
+                                ...lesson,
+                                topicId: topicId || lesson.topicId,
+                                grade,
+                                domain,
+                                code: code.trim() || lesson.code,
+                                slug: slug.trim() || lesson.slug,
+                                title: title.trim() || lesson.title,
+                                summary: summary.trim() || lesson.summary,
+                                content: content.trim() || lesson.content,
+                                durationMinutes: Number(durationMinutes) || lesson.durationMinutes || 45,
+                                orderIndex: Number(orderIndex) || lesson.orderIndex || 1,
+                                isPublished,
+                                videoUrl: parsedYouTubeId
+                                  ? `https://www.youtube.com/watch?v=${parsedYouTubeId}`
+                                  : videoInput.trim() || undefined,
+                                coreWordDoc: null,
+                                miniQuiz,
+                              },
+                              assets,
+                              selectedSimulations,
+                              miniQuiz
+                            );
+                            setAssets(persisted.assets || []);
+                            onSaved(persisted);
+                            setInstantSaveNotice('Đã gỡ file Word nội dung cốt lõi và đồng bộ lên web.');
+                          }
+                        }}
+                        className="px-2.5 py-1.5 rounded-xl bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 text-xs font-bold flex items-center gap-1 cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Xóa</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {coreWordDoc && (
+                  <WordDocumentReader coreWordDoc={coreWordDoc} lessonTitle={title} compact />
+                )}
+              </div>
+
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1">
                   Tóm tắt bài học (Summary)
@@ -938,7 +1134,23 @@ const LessonFormModalContent: React.FC<Omit<LessonFormModalProps, 'isOpen'>> = (
               {/* Asset Uploader */}
               <AssetUploader
                 lessonId={lesson?.id || 'new-lesson'}
-                onAssetUploaded={(newAsset) => setAssets((prev) => [...prev, newAsset])}
+                onAssetUploaded={async (newAsset) => {
+                  const enrichedAsset: LessonAssetItem = {
+                    ...newAsset,
+                    lessonId: lesson?.id || newAsset.lessonId,
+                    lessonTitle: title.trim() || lesson?.title || newAsset.lessonTitle,
+                  };
+                  setAssets((prev) => [
+                    enrichedAsset,
+                    ...prev.filter((a) => a.id !== enrichedAsset.id),
+                  ]);
+                  if (lesson?.id) {
+                    await saveUploadedAssetToRepository(enrichedAsset);
+                    setInstantSaveNotice(
+                      `Đã lưu tệp "${enrichedAsset.fileName || enrichedAsset.title}" trực tiếp vào bài học và đồng bộ lên trang web!`
+                    );
+                  }
+                }}
               />
 
               {/* Current attached assets list */}

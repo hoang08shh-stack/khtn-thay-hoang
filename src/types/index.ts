@@ -70,6 +70,15 @@ export interface LessonAsset {
   fileName?: string;
 }
 
+export interface CoreWordDocumentMeta {
+  id?: string;
+  fileName: string;
+  fileUrl: string;
+  fileSize?: string;
+  htmlContent?: string;
+  uploadedAt?: string;
+}
+
 export interface Lesson {
   id: string;
   topicId: string;
@@ -85,6 +94,7 @@ export interface Lesson {
   keyFormulas?: string[];
   miniQuiz?: LessonMiniQuizItem[];
   assets?: LessonAsset[];
+  coreWordDoc?: CoreWordDocumentMeta;
   thumbnailUrl?: string;
   simulationId?: string;
   videoUrl?: string;

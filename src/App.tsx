@@ -138,7 +138,32 @@ function AppContent() {
     const handleFocus = () => {
       fetchAndApplyRemoteCmsSnapshot().catch(() => {});
     };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchAndApplyRemoteCmsSnapshot().catch(() => {});
+      }
+    };
+    const handleStorageChange = (e: StorageEvent) => {
+      if (!e.key || e.key.startsWith('khtn_')) {
+        window.dispatchEvent(new CustomEvent('khtn-cms-updated'));
+      }
+    };
+
     window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('storage', handleStorageChange);
+
+    let broadcastChannel: BroadcastChannel | null = null;
+    try {
+      if (typeof BroadcastChannel !== 'undefined') {
+        broadcastChannel = new BroadcastChannel('khtn-cms-sync');
+        broadcastChannel.onmessage = () => {
+          window.dispatchEvent(new CustomEvent('khtn-cms-updated'));
+        };
+      }
+    } catch {
+      // ignore if BroadcastChannel unavailable
+    }
 
     let realtimeChannel: any = null;
     if (isSupabaseConfigured && supabase) {
@@ -150,7 +175,7 @@ function AppContent() {
             { event: '*', schema: 'public', table: 'cms_snapshots', filter: 'id=eq.live' },
             (payloadEvent: any) => {
               const nextSnap = payloadEvent?.new?.payload;
-              if (nextSnap && applyCmsSnapshotToLocalStorage(nextSnap, true)) {
+              if (nextSnap && applyCmsSnapshotToLocalStorage(nextSnap, false)) {
                 window.dispatchEvent(new CustomEvent('khtn-cms-updated'));
               }
             }
@@ -163,6 +188,15 @@ function AppContent() {
 
     return () => {
       window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('storage', handleStorageChange);
+      if (broadcastChannel) {
+        try {
+          broadcastChannel.close();
+        } catch {
+          // ignore
+        }
+      }
       if (realtimeChannel && supabase) {
         supabase.removeChannel(realtimeChannel).catch(() => {});
       }

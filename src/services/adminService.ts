@@ -9,7 +9,12 @@ import {
   QuizMeta,
   AppUser,
   LessonMiniQuizItem,
+  CoreWordDocumentMeta,
 } from '../types/index.ts';
+import {
+  resolveCoreWordDocFromLesson,
+  upsertCoreWordAssetInList,
+} from '../utils/wordReaderEngine.ts';
 import {
   LESSONS,
   DOCUMENTS,
@@ -68,6 +73,7 @@ export interface AdminLesson {
   createdAt: string;
   updatedAt: string;
   assets?: LessonAssetItem[];
+  coreWordDoc?: CoreWordDocumentMeta;
   simulationIds?: string[];
   miniQuiz?: LessonMiniQuizItem[];
 }
@@ -99,6 +105,7 @@ export const STORAGE_KEYS = {
   SETTINGS: 'khtn_admin_site_settings_v2',
   DELETED_IDS: 'khtn_admin_deleted_ids_v1',
   SNAPSHOT_APPLIED_AT: 'khtn_cms_snapshot_applied_at_v1',
+  LOCAL_UPDATED_AT: 'khtn_cms_local_updated_at_v1',
 } as const;
 
 export interface DeletedIdsRegistry {
@@ -502,12 +509,39 @@ export function applyCmsSnapshotToLocalStorage(snapshotObj: any, force = false):
 
   if (snapStamp) {
     safeWriteLocal(STORAGE_KEYS.SNAPSHOT_APPLIED_AT, snapStamp);
+    safeWriteLocal(STORAGE_KEYS.LOCAL_UPDATED_AT, snapStamp);
   }
   return true;
 }
 
+function getMonotonicIsoTimestamp(): string {
+  const nowMs = Date.now();
+  const prevLocal = safeReadLocal<string>(STORAGE_KEYS.LOCAL_UPDATED_AT, '');
+  const prevApplied = safeReadLocal<string>(STORAGE_KEYS.SNAPSHOT_APPLIED_AT, '');
+  const prevMs = Math.max(
+    prevLocal ? Date.parse(prevLocal) || 0 : 0,
+    prevApplied ? Date.parse(prevApplied) || 0 : 0
+  );
+  return new Date(Math.max(nowMs, prevMs + 1)).toISOString();
+}
+
+export function markLocalCmsModified(explicitIso?: string): string {
+  const stamp = explicitIso || getMonotonicIsoTimestamp();
+  safeWriteLocal(STORAGE_KEYS.LOCAL_UPDATED_AT, stamp);
+  safeWriteLocal(STORAGE_KEYS.SNAPSHOT_APPLIED_AT, stamp);
+  return stamp;
+}
+
 function ensureBundledSnapshotSynced(): void {
   if (!snapshotUpdatedAt) return;
+  const localUpdated = safeReadLocal<string>(STORAGE_KEYS.LOCAL_UPDATED_AT, '');
+  if (localUpdated) {
+    const localMs = Date.parse(localUpdated);
+    const snapMs = Date.parse(snapshotUpdatedAt);
+    if (Number.isFinite(localMs) && Number.isFinite(snapMs) && localMs >= snapMs) {
+      return;
+    }
+  }
   applyCmsSnapshotToLocalStorage(cmsSnapshot, false);
 }
 
@@ -541,6 +575,12 @@ export function buildCmsSnapshotPayload() {
       ...a,
       fileUrl: sanitizeCrossDeviceFileUrl(a.fileUrl),
     })),
+    coreWordDoc: l.coreWordDoc
+      ? {
+          ...l.coreWordDoc,
+          fileUrl: sanitizeCrossDeviceFileUrl(l.coreWordDoc.fileUrl),
+        }
+      : undefined,
   }));
 
   const cleanCatalogDocs = rawCatalogDocs.map((d) => ({
@@ -564,7 +604,7 @@ export function buildCmsSnapshotPayload() {
   );
 
   return {
-    updatedAt: new Date().toISOString(),
+    updatedAt: getMonotonicIsoTimestamp(),
     lessons: cleanLessons,
     questions: rawQuestions,
     quizzes: rawQuizzes,
@@ -682,19 +722,12 @@ export async function getSupabaseSyncDiagnostics(): Promise<CloudSyncStatusRepor
   };
 }
 
-export async function syncCmsSnapshotWithReport(
-  rebuildZip = false
-): Promise<CloudSyncStatusReport> {
-  if (typeof window === 'undefined' || typeof fetch === 'undefined') {
-    return {
-      ok: false,
-      target: 'local_only',
-      supabaseConfigured: isSupabaseConfigured,
-      supabaseAuthenticated: false,
-      reason: 'supabase_not_configured',
-    };
-  }
+let activeSyncPromise: Promise<CloudSyncStatusReport> | null = null;
+let queuedSyncPending = false;
+let queuedRebuildZip = false;
+let queuedSyncWaiters: Array<(report: CloudSyncStatusReport) => void> = [];
 
+async function executeCmsSnapshotSyncOnce(rebuildZip: boolean): Promise<CloudSyncStatusReport> {
   const baseSnapshot = buildCmsSnapshotPayload();
   const payload = {
     ...baseSnapshot,
@@ -705,6 +738,7 @@ export async function syncCmsSnapshotWithReport(
   let serverOk = false;
   let supabaseAuthenticated = false;
   let supabaseErrorDetail: string | undefined;
+  let finalUpdatedAt = baseSnapshot.updatedAt;
 
   // 1. Sync to Supabase Cloud (Database table `cms_snapshots` + Storage buckets)
   if (isSupabaseConfigured && supabase) {
@@ -771,16 +805,12 @@ export async function syncCmsSnapshotWithReport(
       } catch {
         // ignore
       }
-
-      if (supabaseOk) {
-        safeWriteLocal(STORAGE_KEYS.SNAPSHOT_APPLIED_AT, baseSnapshot.updatedAt);
-      }
     } catch (err: any) {
       supabaseErrorDetail = err?.message;
     }
   }
 
-  // 2. Sync to Server /api/sync-cms-snapshot (updates src/data/cmsSnapshot.json & khtn-source-code.zip)
+  // 2. Sync to Server /api/sync-cms-snapshot (updates src/data/cmsSnapshot.json & optional zip)
   try {
     const res = await fetch(
       rebuildZip ? '/api/sync-cms-snapshot?rebuildZip=1' : '/api/sync-cms-snapshot',
@@ -792,8 +822,8 @@ export async function syncCmsSnapshotWithReport(
     );
     if (res.ok) {
       const data = await res.json().catch(() => null);
-      if (data?.updatedAt) {
-        safeWriteLocal(STORAGE_KEYS.SNAPSHOT_APPLIED_AT, data.updatedAt);
+      if (data?.updatedAt && typeof data.updatedAt === 'string') {
+        finalUpdatedAt = data.updatedAt;
       }
       serverOk = true;
     }
@@ -801,9 +831,17 @@ export async function syncCmsSnapshotWithReport(
     // ignore if static host without /api/sync-cms-snapshot
   }
 
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('khtn-cms-updated'));
+  if (supabaseOk || serverOk) {
+    const currentLocal = safeReadLocal<string>(STORAGE_KEYS.LOCAL_UPDATED_AT, '');
+    const currentMs = currentLocal ? Date.parse(currentLocal) || 0 : 0;
+    const finalMs = Date.parse(finalUpdatedAt) || 0;
+    if (finalMs >= currentMs) {
+      safeWriteLocal(STORAGE_KEYS.SNAPSHOT_APPLIED_AT, finalUpdatedAt);
+      safeWriteLocal(STORAGE_KEYS.LOCAL_UPDATED_AT, finalUpdatedAt);
+    }
   }
+
+  dispatchCmsUpdatedEvent();
 
   const target: CloudSyncStatusReport['target'] = supabaseOk
     ? 'supabase'
@@ -826,8 +864,51 @@ export async function syncCmsSnapshotWithReport(
     supabaseAuthenticated,
     reason,
     errorDetail: supabaseOk ? undefined : supabaseErrorDetail,
-    updatedAt: baseSnapshot.updatedAt,
+    updatedAt: finalUpdatedAt,
   });
+}
+
+export async function syncCmsSnapshotWithReport(
+  rebuildZip = false
+): Promise<CloudSyncStatusReport> {
+  if (typeof window === 'undefined' || typeof fetch === 'undefined') {
+    return {
+      ok: false,
+      target: 'local_only',
+      supabaseConfigured: isSupabaseConfigured,
+      supabaseAuthenticated: false,
+      reason: 'supabase_not_configured',
+    };
+  }
+
+  // Coalesce concurrent sync requests so rapid edits never race or overwrite newer payloads on server
+  if (activeSyncPromise) {
+    queuedSyncPending = true;
+    queuedRebuildZip = queuedRebuildZip || rebuildZip;
+    return new Promise<CloudSyncStatusReport>((resolve) => {
+      queuedSyncWaiters.push(resolve);
+    });
+  }
+
+  const runLoop = async (initialRebuildZip: boolean): Promise<CloudSyncStatusReport> => {
+    let report = await executeCmsSnapshotSyncOnce(initialRebuildZip);
+    while (queuedSyncPending) {
+      queuedSyncPending = false;
+      const nextRebuild = queuedRebuildZip;
+      queuedRebuildZip = false;
+      const waiters = queuedSyncWaiters;
+      queuedSyncWaiters = [];
+      report = await executeCmsSnapshotSyncOnce(nextRebuild);
+      waiters.forEach((resolve) => resolve(report));
+    }
+    return report;
+  };
+
+  activeSyncPromise = runLoop(rebuildZip).finally(() => {
+    activeSyncPromise = null;
+  });
+
+  return activeSyncPromise;
 }
 
 export async function syncCmsSnapshotToRepo(rebuildZip = false): Promise<boolean> {
@@ -841,6 +922,8 @@ export async function syncCmsSnapshotToRepo(rebuildZip = false): Promise<boolean
  */
 export async function fetchAndApplyRemoteCmsSnapshot(force = false): Promise<boolean> {
   if (typeof window === 'undefined' || typeof fetch === 'undefined') return false;
+  // Never overwrite local state while a local edit is actively syncing upstream
+  if (!force && activeSyncPromise) return false;
 
   let bestSnapshot: any = null;
   let bestTime = 0;
@@ -858,7 +941,7 @@ export async function fetchAndApplyRemoteCmsSnapshot(force = false): Promise<boo
   // 1. Check live server endpoint /api/cms-snapshot
   try {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 3000);
+    const timer = setTimeout(() => controller.abort(), 3500);
     const res = await fetch(`/api/cms-snapshot?t=${Date.now()}`, {
       cache: 'no-store',
       signal: controller.signal,
@@ -911,18 +994,32 @@ export async function fetchAndApplyRemoteCmsSnapshot(force = false): Promise<boo
   }
 
   if (!bestSnapshot) return false;
+  // Re-check in case a local write began while we were fetching remote
+  if (!force && activeSyncPromise) return false;
 
   const lastApplied = safeReadLocal<string>(STORAGE_KEYS.SNAPSHOT_APPLIED_AT, '');
+  const localUpdated = safeReadLocal<string>(STORAGE_KEYS.LOCAL_UPDATED_AT, '');
+  const lastAppliedMs = lastApplied ? Date.parse(lastApplied) || 0 : 0;
+  const localUpdatedMs = localUpdated ? Date.parse(localUpdated) || 0 : 0;
+  const localTime = Math.max(lastAppliedMs, localUpdatedMs);
   const hasLocalLessons = Boolean(
     typeof localStorage !== 'undefined' && localStorage.getItem(STORAGE_KEYS.LESSONS)
   );
-  if (!force && bestSnapshot.updatedAt && bestSnapshot.updatedAt === lastApplied && hasLocalLessons) {
-    return false;
+
+  if (!force && hasLocalLessons && localTime > 0) {
+    if (localUpdatedMs > 0 && bestTime > 0 && localUpdatedMs > bestTime) {
+      // Local edits are strictly newer than remote -> NEVER wipe local; push local upstream instead
+      syncCmsSnapshotToRepo(false).catch(() => {});
+      return false;
+    }
+    if (bestTime > 0 && bestTime <= localTime) {
+      return false;
+    }
   }
 
   const applied = applyCmsSnapshotToLocalStorage(bestSnapshot, true);
-  if (applied && typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('khtn-cms-updated'));
+  if (applied) {
+    dispatchCmsUpdatedEvent();
   }
   return applied;
 }
@@ -1216,6 +1313,10 @@ export function getInitialLocalLessons(): AdminLesson[] {
         assets: (snapLesson?.assets || []).filter(
           (a) => a && a.fileUrl && a.fileUrl.trim() !== '' && a.fileUrl.trim() !== '#'
         ),
+        coreWordDoc: resolveCoreWordDocFromLesson({
+          coreWordDoc: (snapLesson as any)?.coreWordDoc,
+          assets: snapLesson?.assets,
+        }) || undefined,
       };
     }
   );
@@ -1261,19 +1362,30 @@ export function dispatchCmsUpdatedEvent(): void {
     if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
       window.dispatchEvent(new CustomEvent('khtn-cms-updated'));
     }
+    if (typeof BroadcastChannel !== 'undefined') {
+      const channel = new BroadcastChannel('khtn-cms-sync');
+      channel.postMessage({ type: 'khtn-cms-updated', at: Date.now() });
+      channel.close();
+    }
   } catch {
     // ignore in non-DOM test environments
   }
 }
 
-function saveLocalLessons(lessons: AdminLesson[]) {
+function saveLocalLessonsOnly(lessons: AdminLesson[]) {
   safeWriteLocal(STORAGE_KEYS.LESSONS, lessons);
-  syncCmsSnapshotToRepo();
+  markLocalCmsModified();
   dispatchCmsUpdatedEvent();
+}
+
+function saveLocalLessons(lessons: AdminLesson[]) {
+  saveLocalLessonsOnly(lessons);
+  syncCmsSnapshotToRepo().catch(() => {});
 }
 
 export async function fetchAdminLessons(): Promise<AdminLesson[]> {
   const localLessons = getInitialLocalLessons();
+  const deletedLessonSet = new Set(getDeletedIdsRegistrySync().lessons);
 
   if (isSupabaseConfigured && supabase) {
     try {
@@ -1286,12 +1398,20 @@ export async function fetchAdminLessons(): Promise<AdminLesson[]> {
         const { data: assetsData } = await supabase.from('lesson_assets').select('*');
         const { data: simLinks } = await supabase.from('lesson_simulations').select('*');
 
-        return lessonsData.map((l: any) => {
-          const localMatch = localLessons.find((loc) => loc.id === l.id);
+        const mergedById = new Map<string, AdminLesson>();
+        localLessons.forEach((loc) => {
+          if (!deletedLessonSet.has(loc.id)) {
+            mergedById.set(loc.id, loc);
+          }
+        });
+
+        lessonsData.forEach((l: any) => {
+          if (!l?.id || deletedLessonSet.has(l.id)) return;
+          const localMatch = mergedById.get(l.id);
           const baseMatch = LESSONS.find((m) => m.id === l.id);
           const snapMatch = snapshotLessons.find((s) => s.id === l.id);
 
-          const lessonAssets: LessonAssetItem[] = (assetsData || [])
+          const supaAssets: LessonAssetItem[] = (assetsData || [])
             .filter((a: any) => a.lesson_id === l.id)
             .map((a: any) => ({
               id: a.id,
@@ -1306,43 +1426,65 @@ export async function fetchAdminLessons(): Promise<AdminLesson[]> {
               createdAt: a.created_at,
             }));
 
+          // Union local/snapshot assets and Supabase table assets so newer uploads are never hidden
+          const combinedAssetsMap = new Map<string, LessonAssetItem>();
+          [...(localMatch?.assets || []), ...supaAssets].forEach((a) => {
+            if (a && a.id && a.fileUrl && a.fileUrl !== '#' && !combinedAssetsMap.has(a.id)) {
+              combinedAssetsMap.set(a.id, a);
+            }
+          });
+          const mergedAssets = Array.from(combinedAssetsMap.values());
+
           const simulationIds = (simLinks || [])
             .filter((sl: any) => sl.lesson_id === l.id)
             .map((sl: any) => sl.simulation_id);
 
           const resolvedMiniQuiz: LessonMiniQuizItem[] =
-            Array.isArray(l.mini_quiz) && l.mini_quiz.length > 0
-              ? l.mini_quiz
-              : localMatch?.miniQuiz && localMatch.miniQuiz.length > 0
+            localMatch?.miniQuiz && localMatch.miniQuiz.length > 0
               ? localMatch.miniQuiz
+              : Array.isArray(l.mini_quiz) && l.mini_quiz.length > 0
+              ? l.mini_quiz
               : snapMatch?.miniQuiz && snapMatch.miniQuiz.length > 0
               ? snapMatch.miniQuiz
               : baseMatch?.miniQuiz || [];
 
-          return {
+          const localMs = localMatch?.updatedAt ? Date.parse(localMatch.updatedAt) || 0 : 0;
+          const supaMs = l.updated_at ? Date.parse(l.updated_at) || 0 : 0;
+          const preferLocal = Boolean(localMatch && localMs >= supaMs);
+
+          mergedById.set(l.id, {
             id: l.id,
-            topicId: l.topic_id || localMatch?.topicId || '',
-            grade: l.grade as Grade,
-            domain: l.domain as SubjectDomain,
-            code: l.code,
-            slug: l.slug || generateSlug(l.title),
-            title: l.title,
-            summary: l.summary,
-            content: l.content,
-            durationMinutes: l.duration_minutes || 45,
-            orderIndex: l.order_index ?? 0,
-            isPublished: l.is_published ?? true,
-            thumbnailUrl: l.thumbnail_url || localMatch?.thumbnailUrl || undefined,
-            videoUrl: normalizeVideoUrl(l.video_url || localMatch?.videoUrl),
-            viewCount: l.view_count || 0,
-            createdAt: l.created_at,
-            updatedAt: l.updated_at,
-            assets: lessonAssets.length > 0 ? lessonAssets : localMatch?.assets || [],
+            topicId: (preferLocal ? localMatch?.topicId : l.topic_id) || localMatch?.topicId || '',
+            grade: (preferLocal ? localMatch?.grade : l.grade) as Grade,
+            domain: (preferLocal ? localMatch?.domain : l.domain) as SubjectDomain,
+            code: (preferLocal ? localMatch?.code : l.code) || l.code,
+            slug: (preferLocal ? localMatch?.slug : l.slug) || generateSlug(l.title),
+            title: (preferLocal ? localMatch?.title : l.title) || l.title,
+            summary: (preferLocal ? localMatch?.summary : l.summary) || l.summary,
+            content: (preferLocal ? localMatch?.content : l.content) || l.content,
+            durationMinutes: (preferLocal ? localMatch?.durationMinutes : l.duration_minutes) || 45,
+            orderIndex: (preferLocal ? localMatch?.orderIndex : l.order_index) ?? 0,
+            isPublished: preferLocal ? localMatch!.isPublished : l.is_published ?? true,
+            thumbnailUrl: localMatch?.thumbnailUrl || l.thumbnail_url || undefined,
+            videoUrl: normalizeVideoUrl(preferLocal ? localMatch?.videoUrl : l.video_url || localMatch?.videoUrl),
+            viewCount: Math.max(l.view_count || 0, localMatch?.viewCount || 0),
+            createdAt: l.created_at || localMatch?.createdAt || new Date().toISOString(),
+            updatedAt: preferLocal ? localMatch!.updatedAt : l.updated_at,
+            assets: mergedAssets,
+            coreWordDoc:
+              resolveCoreWordDocFromLesson({
+                coreWordDoc: localMatch?.coreWordDoc || (snapMatch as any)?.coreWordDoc,
+                assets: mergedAssets,
+              }) || undefined,
             simulationIds:
-              simulationIds.length > 0 ? simulationIds : localMatch?.simulationIds || [],
+              localMatch?.simulationIds && localMatch.simulationIds.length > 0
+                ? localMatch.simulationIds
+                : simulationIds,
             miniQuiz: resolvedMiniQuiz,
-          };
+          });
         });
+
+        return Array.from(mergedById.values());
       }
     } catch (err) {
       console.warn('Supabase fetch error, fallback to local:', err);
@@ -1390,6 +1532,7 @@ export async function saveAdminLesson(
     isPublished: boolean;
     thumbnailUrl?: string;
     videoUrl?: string;
+    coreWordDoc?: CoreWordDocumentMeta | null;
     miniQuiz?: LessonMiniQuizItem[];
   },
   assets: LessonAssetItem[],
@@ -1434,6 +1577,21 @@ export async function saveAdminLesson(
     id: mq.id && mq.id.trim() ? mq.id.trim() : `q-lesson-${id}-${idx + 1}`,
   }));
 
+  const resolvedCoreWordDoc: CoreWordDocumentMeta | undefined =
+    lessonData.coreWordDoc === null
+      ? undefined
+      : lessonData.coreWordDoc !== undefined
+      ? lessonData.coreWordDoc
+      : resolveCoreWordDocFromLesson({
+          coreWordDoc: existing?.coreWordDoc,
+          assets,
+        }) || undefined;
+
+  const syncedAssetsRaw =
+    lessonData.coreWordDoc !== undefined
+      ? upsertCoreWordAssetInList(assets, id, lessonData.title, resolvedCoreWordDoc || null)
+      : assets;
+
   const savedLesson: AdminLesson = {
     id,
     topicId: lessonData.topicId,
@@ -1452,11 +1610,12 @@ export async function saveAdminLesson(
     viewCount: existing?.viewCount || 0,
     createdAt: existing?.createdAt || now,
     updatedAt: now,
-    assets: assets.map((a, i) => ({
+    assets: syncedAssetsRaw.map((a, i) => ({
       ...a,
       id: a.id || `asset-${id}-${i}`,
       lessonId: id,
     })),
+    coreWordDoc: resolvedCoreWordDoc,
     simulationIds,
     miniQuiz: normalizedMiniQuiz,
   };
@@ -1469,7 +1628,8 @@ export async function saveAdminLesson(
   }
 
   syncLessonMiniQuizToQuestionBank(savedLesson);
-  saveLocalLessons(local);
+  saveLocalLessonsOnly(local);
+  await syncCmsSnapshotToRepo();
   return savedLesson;
 }
 
@@ -1482,7 +1642,7 @@ export async function clearAdminLessonVideo(lessonId: string): Promise<boolean> 
     markIdAsDeleted('clearedLessonVideoIds', target.id);
     target.videoUrl = '';
     target.updatedAt = new Date().toISOString();
-    saveLocalLessons(local);
+    safeWriteLocal(STORAGE_KEYS.LESSONS, local);
   }
   try {
     const uniKey = 'khtn_unified_learning_resources_v2';
@@ -1500,6 +1660,9 @@ export async function clearAdminLessonVideo(lessonId: string): Promise<boolean> 
   } catch {
     // ignore
   }
+  markLocalCmsModified();
+  dispatchCmsUpdatedEvent();
+  await syncCmsSnapshotToRepo();
   return true;
 }
 
@@ -1516,7 +1679,7 @@ export async function clearAllAdminLessonVideos(grade?: Grade): Promise<number> 
       l.updatedAt = new Date().toISOString();
     }
   });
-  saveLocalLessons(local);
+  safeWriteLocal(STORAGE_KEYS.LESSONS, local);
 
   try {
     const uniKey = 'khtn_unified_learning_resources_v2';
@@ -1530,6 +1693,9 @@ export async function clearAllAdminLessonVideos(grade?: Grade): Promise<number> 
   } catch {
     // ignore
   }
+  markLocalCmsModified();
+  dispatchCmsUpdatedEvent();
+  await syncCmsSnapshotToRepo();
   return clearedCount;
 }
 
@@ -1568,7 +1734,8 @@ export async function toggleLessonPublish(
   if (target) {
     target.isPublished = isPublished;
     target.updatedAt = new Date().toISOString();
-    saveLocalLessons(local);
+    saveLocalLessonsOnly(local);
+    await syncCmsSnapshotToRepo();
     return true;
   }
   return false;
@@ -1580,7 +1747,7 @@ export async function deleteAdminLesson(lessonId: string): Promise<boolean> {
   const local = getInitialLocalLessons();
   const target = local.find((l) => l.id === lessonId);
   const filtered = local.filter((l) => l.id !== lessonId);
-  saveLocalLessons(filtered);
+  safeWriteLocal(STORAGE_KEYS.LESSONS, filtered);
 
   // Also remove any unified learning resources and lesson-owned bank questions linked to this deleted lesson
   try {
@@ -1602,6 +1769,9 @@ export async function deleteAdminLesson(lessonId: string): Promise<boolean> {
   } catch {
     // ignore
   }
+  markLocalCmsModified();
+  dispatchCmsUpdatedEvent();
+  await syncCmsSnapshotToRepo();
   return true;
 }
 
@@ -1610,7 +1780,8 @@ export function getGeneralUploadedAssetsSync(): LessonAssetItem[] {
 }
 
 export async function saveUploadedAssetToRepository(
-  newAsset: LessonAssetItem
+  newAsset: LessonAssetItem,
+  options?: { skipRemoteSync?: boolean }
 ): Promise<LessonAssetItem> {
   const localLessons = getInitialLocalLessons();
   let matchedLesson = localLessons.find(
@@ -1648,7 +1819,7 @@ export async function saveUploadedAssetToRepository(
       ...existing.filter((a) => a.id !== enriched.id),
     ];
     matchedLesson.updatedAt = new Date().toISOString();
-    saveLocalLessons(localLessons);
+    safeWriteLocal(STORAGE_KEYS.LESSONS, localLessons);
   }
 
   const generalAssets = getGeneralUploadedAssetsSync();
@@ -1657,6 +1828,13 @@ export async function saveUploadedAssetToRepository(
     ...generalAssets.filter((a) => a.id !== enriched.id),
   ];
   safeWriteLocal(STORAGE_KEYS.ASSETS, updatedGeneral);
+
+  markLocalCmsModified();
+  dispatchCmsUpdatedEvent();
+
+  if (!options?.skipRemoteSync) {
+    await syncCmsSnapshotToRepo();
+  }
 
   return enriched;
 }
@@ -1701,10 +1879,14 @@ export async function deleteAdminAsset(
       l.assets = l.assets.filter((a) => a.id !== assetId);
     }
   });
-  saveLocalLessons(local);
+  safeWriteLocal(STORAGE_KEYS.LESSONS, local);
 
   const generalAssets = getGeneralUploadedAssetsSync().filter((a) => a.id !== assetId);
   safeWriteLocal(STORAGE_KEYS.ASSETS, generalAssets);
+
+  markLocalCmsModified();
+  dispatchCmsUpdatedEvent();
+  await syncCmsSnapshotToRepo();
   return true;
 }
 
@@ -1721,7 +1903,16 @@ export async function updateAssetMetadata(
       asset.type = newType;
     }
   });
-  saveLocalLessons(local);
+  safeWriteLocal(STORAGE_KEYS.LESSONS, local);
+
+  const generalAssets = getGeneralUploadedAssetsSync().map((a) =>
+    a.id === assetId ? { ...a, title: newTitle, type: newType } : a
+  );
+  safeWriteLocal(STORAGE_KEYS.ASSETS, generalAssets);
+
+  markLocalCmsModified();
+  dispatchCmsUpdatedEvent();
+  await syncCmsSnapshotToRepo();
   return true;
 }
 
@@ -1812,8 +2003,9 @@ export async function saveAdminTopic(topicInput: Partial<Topic> & { title: strin
     all.unshift(saved);
   }
   safeWriteLocal(STORAGE_KEYS.TOPICS, all);
-  syncCmsSnapshotToRepo();
+  markLocalCmsModified();
   dispatchCmsUpdatedEvent();
+  await syncCmsSnapshotToRepo();
   return saved;
 }
 
@@ -1821,8 +2013,9 @@ export async function deleteAdminTopic(topicId: string): Promise<boolean> {
   markIdAsDeleted('topics', topicId);
   const all = getAdminTopicsSync().filter((t) => t.id !== topicId);
   safeWriteLocal(STORAGE_KEYS.TOPICS, all);
-  syncCmsSnapshotToRepo();
+  markLocalCmsModified();
   dispatchCmsUpdatedEvent();
+  await syncCmsSnapshotToRepo();
   return true;
 }
 
@@ -2122,8 +2315,9 @@ export async function saveAdminQuestion(qInput: Partial<QuizQuestion> & { questi
   }
   safeWriteLocal(STORAGE_KEYS.QUESTIONS, all);
   syncQuestionsToLessonsMiniQuiz([saved]);
-  syncCmsSnapshotToRepo();
+  markLocalCmsModified();
   dispatchCmsUpdatedEvent();
+  await syncCmsSnapshotToRepo();
   return saved;
 }
 
@@ -2189,8 +2383,9 @@ export async function saveAdminQuestionsBulk(
   const merged = [...savedItems, ...all.filter((q) => !existingIds.has(q.id))];
   safeWriteLocal(STORAGE_KEYS.QUESTIONS, merged);
   syncQuestionsToLessonsMiniQuiz(savedItems);
-  syncCmsSnapshotToRepo();
+  markLocalCmsModified();
   dispatchCmsUpdatedEvent();
+  await syncCmsSnapshotToRepo();
   return savedItems;
 }
 
@@ -2198,8 +2393,9 @@ export async function deleteAdminQuestion(questionId: string): Promise<boolean> 
   markIdAsDeleted('questions', questionId);
   const all = getAdminQuestionsSync().filter((q) => q.id !== questionId);
   safeWriteLocal(STORAGE_KEYS.QUESTIONS, all);
-  syncCmsSnapshotToRepo();
+  markLocalCmsModified();
   dispatchCmsUpdatedEvent();
+  await syncCmsSnapshotToRepo();
   return true;
 }
 
@@ -2248,7 +2444,9 @@ export async function saveAdminQuiz(quizInput: Partial<QuizMeta> & { title: stri
     all.unshift(saved);
   }
   safeWriteLocal(STORAGE_KEYS.QUIZZES, all);
-  syncCmsSnapshotToRepo();
+  markLocalCmsModified();
+  dispatchCmsUpdatedEvent();
+  await syncCmsSnapshotToRepo();
   return saved;
 }
 
@@ -2256,7 +2454,9 @@ export async function deleteAdminQuiz(quizId: string): Promise<boolean> {
   markIdAsDeleted('quizzes', quizId);
   const all = getAdminQuizzesSync().filter((q) => q.id !== quizId);
   safeWriteLocal(STORAGE_KEYS.QUIZZES, all);
-  syncCmsSnapshotToRepo();
+  markLocalCmsModified();
+  dispatchCmsUpdatedEvent();
+  await syncCmsSnapshotToRepo();
   return true;
 }
 
@@ -2315,8 +2515,9 @@ export async function saveAdminVideo(vInput: Partial<VideoLesson> & { title: str
     all.unshift(saved);
   }
   safeWriteLocal(STORAGE_KEYS.VIDEOS, all);
-  syncCmsSnapshotToRepo();
+  markLocalCmsModified();
   dispatchCmsUpdatedEvent();
+  await syncCmsSnapshotToRepo();
   return saved;
 }
 
@@ -2361,8 +2562,9 @@ export async function deleteAdminVideo(videoId: string): Promise<boolean> {
     }
   }
 
-  syncCmsSnapshotToRepo();
+  markLocalCmsModified();
   dispatchCmsUpdatedEvent();
+  await syncCmsSnapshotToRepo();
   return true;
 }
 
@@ -2442,8 +2644,9 @@ export async function saveAdminCatalogDoc(docInput: Partial<DocumentItem> & { ti
     all.unshift(saved);
   }
   safeWriteLocal(STORAGE_KEYS.CATALOG_DOCS, all);
-  syncCmsSnapshotToRepo();
+  markLocalCmsModified();
   dispatchCmsUpdatedEvent();
+  await syncCmsSnapshotToRepo();
   return saved;
 }
 
@@ -2451,8 +2654,9 @@ export async function deleteAdminCatalogDoc(docId: string): Promise<boolean> {
   markIdAsDeleted('catalogDocs', docId);
   const all = getAdminCatalogDocsSync().filter((d) => d.id !== docId);
   safeWriteLocal(STORAGE_KEYS.CATALOG_DOCS, all);
-  syncCmsSnapshotToRepo();
+  markLocalCmsModified();
   dispatchCmsUpdatedEvent();
+  await syncCmsSnapshotToRepo();
   return true;
 }
 
@@ -2639,7 +2843,9 @@ export function getSiteSettingsSync(): SiteSettings {
 
 export function saveSiteSettingsSync(settings: SiteSettings): SiteSettings {
   safeWriteLocal(STORAGE_KEYS.SETTINGS, settings);
-  syncCmsSnapshotToRepo();
+  markLocalCmsModified();
+  dispatchCmsUpdatedEvent();
+  syncCmsSnapshotToRepo().catch(() => {});
   return settings;
 }
 

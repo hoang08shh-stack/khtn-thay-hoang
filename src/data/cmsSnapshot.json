@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-13T17:25:57.343Z",
+  "updatedAt": "2026-11-13T18:02:06.661Z",
   "lessons": [
     {
       "id": "khtn-6-bai-9",
@@ -646,7 +646,8 @@
       "videoUrl": "https://www.youtube.com/watch?v=HsLLq6Rm5tU",
       "viewCount": 4210,
       "createdAt": "2026-11-13T14:26:47.308Z",
-      "updatedAt": "2026-11-13T14:26:47.308Z",
+      "updatedAt": "2026-11-13T18:02:06.621Z",
+      "assets": [],
       "simulationIds": [
         "sim-electric-circuit"
       ],
@@ -730,8 +731,7 @@
           "rubric": "Đổi đúng V = 0,0005 m³ và tính F_A = 5 N (0,5đ); Tính đúng P = 3,5 N, so sánh F_A > P và kết luận vật nổi (0,5đ).",
           "explanation": "F_A = 10 000 × 0,0005 = 5 N; P = 10 × 0,35 = 3,5 N. Do F_A > P nên khối gỗ nổi lên."
         }
-      ],
-      "assets": []
+      ]
     },
     {
       "id": "khtn-9-bai-4",
@@ -960,7 +960,8 @@
       "createdAt": "2026-11-13T14:26:47.308Z",
       "updatedAt": "2026-11-13T14:26:47.308Z",
       "simulationIds": [
-        "sim-dna-double-helix"
+        "sim-dna-double-helix",
+        "sim-ethylene-lab-3d"
       ],
       "miniQuiz": [
         {
@@ -1047,6 +1048,127 @@
     }
   ],
   "questions": [
+    {
+      "id": "q-khtn8-3",
+      "lessonId": "khtn-8-bai-8",
+      "grade": 8,
+      "domain": "vat-li",
+      "question": "Tác dụng một áp lực F = 600 N vuông góc lên một mặt sàn có diện tích bị ép S = 0,03 m². Áp suất p gây ra trên mặt sàn là:",
+      "questionType": "single_choice",
+      "options": [
+        "20 000 Pa",
+        "18 Pa",
+        "2 000 Pa",
+        "200 Pa"
+      ],
+      "correctAnswer": 0,
+      "explanation": "Đáp án A. Áp suất p = F / S = 600 / 0,03 = 20 000 Pa.",
+      "solutionSteps": [
+        "Dữ kiện: Áp lực vuông góc: F = 600 N | Diện tích bị ép: S = 0,03 m²",
+        "Bước 1 (Công thức tính áp suất lên mặt sàn): Áp suất bằng độ lớn áp lực chia cho diện tích bị ép:\n[EQ] p = \\frac{F}{S}",
+        "Bước 2 (Thay số tính áp suất p): Thay F = 600 N và S = 0,03 m²:\n[EQ] p = \\frac{600}{0,03} = 20 000 Pa = 20 kPa   ⇒   Chọn đáp án A"
+      ],
+      "difficulty": "Thông hiểu",
+      "points": 2.5,
+      "topicId": "t8-2",
+      "approvalStatus": "approved",
+      "createdAt": "2026-11-13T17:56:31.135Z",
+      "updatedAt": "2026-11-13T18:02:06.623Z"
+    },
+    {
+      "id": "mq-khtn8-b8-2",
+      "lessonId": "khtn-8-bai-8",
+      "topicId": "t8-2",
+      "grade": 8,
+      "domain": "vat-li",
+      "question": "Nhúng chìm hoàn toàn một khối kim loại có thể tích V = 0,002 m³ vào trong nước có trọng lượng riêng d = 10 000 N/m³. Độ lớn lực đẩy Archimedes (F_A) tác dụng lên khối kim loại là:",
+      "questionType": "single_choice",
+      "options": [
+        "20 N",
+        "200 N",
+        "2 N",
+        "5 000 N"
+      ],
+      "correctAnswer": 0,
+      "explanation": "Áp dụng công thức lực đẩy Archimedes: F_A = d × V = 10 000 × 0,002 = 20 N.",
+      "difficulty": "Thông hiểu",
+      "approvalStatus": "approved",
+      "createdAt": "2026-11-13T17:56:31.135Z",
+      "updatedAt": "2026-11-13T18:02:06.623Z",
+      "points": 0.25
+    },
+    {
+      "id": "mq-khtn8-b8-3",
+      "lessonId": "khtn-8-bai-8",
+      "topicId": "t8-2",
+      "grade": 8,
+      "domain": "vat-li",
+      "question": "Xét các phát biểu sau về áp suất, lực đẩy Archimedes và cách mắc dụng cụ đo điện:",
+      "questionType": "true_false",
+      "options": [
+        "a) Muốn tăng áp suất (ví dụ mài sắc lưỡi dao), ta giữ nguyên áp lực F và giảm diện tích mặt bị ép S.",
+        "b) Lực đẩy Archimedes tác dụng lên vật nhúng trong chất lỏng có phương thẳng đứng, chiều từ trên xuống dưới.",
+        "c) Khi trọng lượng riêng của vật nhỏ hơn trọng lượng riêng của chất lỏng (d_vật < d_lỏng), vật sẽ nổi lên.",
+        "d) Trong mạch điện, Ampe kế được mắc nối tiếp còn Vôn kế được mắc song song với đoạn mạch cần đo."
+      ],
+      "correctAnswer": 0,
+      "trueFalseStatements": [
+        {
+          "id": "a",
+          "label": "a",
+          "text": "Muốn tăng áp suất (ví dụ mài sắc lưỡi dao), ta giữ nguyên áp lực F và giảm diện tích mặt bị ép S.",
+          "isTrue": true,
+          "explanation": "Đúng vì p = F / S, khi S giảm thì p tăng."
+        },
+        {
+          "id": "b",
+          "label": "b",
+          "text": "Lực đẩy Archimedes tác dụng lên vật nhúng trong chất lỏng có phương thẳng đứng, chiều từ trên xuống dưới.",
+          "isTrue": false,
+          "explanation": "Sai vì lực đẩy Archimedes có phương thẳng đứng nhưng chiều hướng từ dưới lên trên."
+        },
+        {
+          "id": "c",
+          "label": "c",
+          "text": "Khi trọng lượng riêng của vật nhỏ hơn trọng lượng riêng của chất lỏng (d_vật < d_lỏng), vật sẽ nổi lên.",
+          "isTrue": true,
+          "explanation": "Đúng, khi d_vật < d_lỏng thì F_A > P nên vật nổi lên."
+        },
+        {
+          "id": "d",
+          "label": "d",
+          "text": "Trong mạch điện, Ampe kế được mắc nối tiếp còn Vôn kế được mắc song song với đoạn mạch cần đo.",
+          "isTrue": true,
+          "explanation": "Đúng theo quy tắc mắc dụng cụ đo điện."
+        }
+      ],
+      "explanation": "Đáp án Đúng/Sai: a) Đúng | b) Sai (chiều từ dưới lên trên) | c) Đúng | d) Đúng.",
+      "difficulty": "Thông hiểu",
+      "approvalStatus": "approved",
+      "createdAt": "2026-11-13T17:56:31.135Z",
+      "updatedAt": "2026-11-13T18:02:06.623Z",
+      "points": 1
+    },
+    {
+      "id": "mq-khtn8-b8-4",
+      "lessonId": "khtn-8-bai-8",
+      "topicId": "t8-2",
+      "grade": 8,
+      "domain": "vat-li",
+      "question": "Một khối gỗ hình hộp chữ nhật có thể tích V = 500 cm³ được nhấn chìm hoàn toàn trong bể nước (trọng lượng riêng của nước là d = 10 000 N/m³). a) Đổi thể tích V ra đơn vị m³ và tính độ lớn lực đẩy Archimedes tác dụng lên khối gỗ; b) Biết khối gỗ có khối lượng m = 350 g, khi buông tay ra thì khối gỗ sẽ nổi lên hay chìm xuống? Giải thích.",
+      "questionType": "essay",
+      "options": [],
+      "correctAnswer": 0,
+      "sampleAnswer": "a) Đổi V = 500 cm³ = 0,0005 m³.\n- Lực đẩy Archimedes khi khối gỗ chìm hoàn toàn: F_A = d × V = 10 000 × 0,0005 = 5 (N).\nb) Trọng lượng của khối gỗ: m = 350 g = 0,35 kg ⇒ P = 10 × m = 3,5 (N).\n- Vì F_A = 5 N > P = 3,5 N nên khi buông tay, khối gỗ sẽ nổi lên trên mặt nước.",
+      "rubric": "Đổi đúng V = 0,0005 m³ và tính F_A = 5 N (0,5đ); Tính đúng P = 3,5 N, so sánh F_A > P và kết luận vật nổi (0,5đ).",
+      "allowImageUpload": true,
+      "explanation": "F_A = 10 000 × 0,0005 = 5 N; P = 10 × 0,35 = 3,5 N. Do F_A > P nên khối gỗ nổi lên.",
+      "difficulty": "Thông hiểu",
+      "approvalStatus": "approved",
+      "createdAt": "2026-11-13T17:56:31.135Z",
+      "updatedAt": "2026-11-13T18:02:06.623Z",
+      "points": 2.5
+    },
     {
       "id": "q-khtn6-1",
       "lessonId": "khtn-6-bai-9",
@@ -1270,29 +1392,6 @@
       "sampleAnswer": "a) Zn + 2HCl → ZnCl₂ + H₂ ↑ ; n(Zn) = 6,5 / 65 = 0,1 mol\nb) n(H₂) = n(Zn) = 0,1 mol ⇒ V(H₂) = 0,1 × 24,79 = 2,479 L\nc) n(HCl) = 2 × 0,1 = 0,2 mol ⇒ CM(HCl) = 0,2 / 0,200 = 1 mol/L = 1 M.",
       "difficulty": "Vận dụng",
       "points": 3
-    },
-    {
-      "id": "q-khtn8-3",
-      "lessonId": "khtn-8-bai-8",
-      "grade": 8,
-      "domain": "vat-li",
-      "question": "Tác dụng một áp lực F = 600 N vuông góc lên một mặt sàn có diện tích bị ép S = 0,03 m². Áp suất p gây ra trên mặt sàn là:",
-      "questionType": "single_choice",
-      "options": [
-        "20 000 Pa",
-        "18 Pa",
-        "2 000 Pa",
-        "200 Pa"
-      ],
-      "correctAnswer": 0,
-      "explanation": "Đáp án A. Áp suất p = F / S = 600 / 0,03 = 20 000 Pa.",
-      "solutionSteps": [
-        "Dữ kiện: Áp lực vuông góc: F = 600 N | Diện tích bị ép: S = 0,03 m²",
-        "Bước 1 (Công thức tính áp suất lên mặt sàn): Áp suất bằng độ lớn áp lực chia cho diện tích bị ép:\n[EQ] p = \\frac{F}{S}",
-        "Bước 2 (Thay số tính áp suất p): Thay F = 600 N và S = 0,03 m²:\n[EQ] p = \\frac{600}{0,03} = 20 000 Pa = 20 kPa   ⇒   Chọn đáp án A"
-      ],
-      "difficulty": "Thông hiểu",
-      "points": 2.5
     },
     {
       "id": "q-khtn9-1",

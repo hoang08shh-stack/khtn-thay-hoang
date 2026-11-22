@@ -17,6 +17,7 @@ import {
   inferDocumentSubCategory,
   formatFileSize,
 } from '../utils/materialUploadEngine.ts';
+import { resolveCoreWordDocFromLesson } from '../utils/wordReaderEngine.ts';
 import {
   Topic,
   Lesson,
@@ -253,6 +254,11 @@ function mapAdminLessonToLesson(l: AdminLesson): Lesson {
     keyFormulas: baseMatch?.keyFormulas,
     miniQuiz: resolvedMiniQuiz,
     assets: Array.from(mergedAssetsMap.values()),
+    coreWordDoc:
+      resolveCoreWordDocFromLesson({
+        coreWordDoc: l.coreWordDoc,
+        assets: Array.from(mergedAssetsMap.values()),
+      }) || undefined,
     thumbnailUrl: l.thumbnailUrl || baseMatch?.thumbnailUrl,
     simulationId: l.simulationIds?.[0] || baseMatch?.simulationId,
     videoUrl: resolvedVideoUrl,
@@ -266,6 +272,9 @@ function mapAdminLessonToLesson(l: AdminLesson): Lesson {
  * Fetch all published topics
  */
 export async function getTopics(grade?: Grade, domain?: SubjectDomain): Promise<Topic[]> {
+  const localTopics = getAdminTopicsSync();
+  const deletedTopicSet = new Set(getDeletedIdsRegistrySync().topics);
+
   if (isSupabaseConfigured && supabase) {
     try {
       let query = supabase.from('topics').select('*').order('order_index', { ascending: true });
@@ -274,28 +283,41 @@ export async function getTopics(grade?: Grade, domain?: SubjectDomain): Promise<
 
       const { data, error } = await query;
       if (!error && data && data.length > 0) {
-        return data.map((t: any) => ({
-          id: t.id,
-          grade: t.grade as Grade,
-          domain: t.domain as SubjectDomain,
-          code: t.code,
-          chapterNumber: t.code,
-          title: t.title,
-          description: t.description,
-          lessonCount: 4,
-          lessonsCount: 4,
-          experimentCount: 2,
-          icon: 'BookOpen',
-          order: t.order_index,
-        }));
+        const mergedMap = new Map<string, Topic>();
+        localTopics.forEach((t) => {
+          if (!deletedTopicSet.has(t.id)) {
+            if (grade && t.grade !== grade) return;
+            if (domain && t.domain !== domain) return;
+            mergedMap.set(t.id, t);
+          }
+        });
+        data.forEach((t: any) => {
+          if (!t?.id || deletedTopicSet.has(t.id)) return;
+          if (!mergedMap.has(t.id)) {
+            mergedMap.set(t.id, {
+              id: t.id,
+              grade: t.grade as Grade,
+              domain: t.domain as SubjectDomain,
+              code: t.code,
+              chapterNumber: t.code,
+              title: t.title,
+              description: t.description,
+              lessonCount: 4,
+              lessonsCount: 4,
+              experimentCount: 2,
+              icon: 'BookOpen',
+              order: t.order_index,
+            });
+          }
+        });
+        return Array.from(mergedMap.values());
       }
     } catch (err) {
-      console.warn('Supabase getTopics failed, falling back to mock:', err);
+      console.warn('Supabase getTopics failed, falling back to local:', err);
     }
   }
 
-  const allTopics = getAdminTopicsSync();
-  return allTopics.filter((t) => {
+  return localTopics.filter((t) => {
     if (grade && t.grade !== grade) return false;
     if (domain && t.domain !== domain) return false;
     return true;

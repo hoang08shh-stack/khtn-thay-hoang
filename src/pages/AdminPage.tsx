@@ -197,6 +197,8 @@ export const AdminPage: React.FC = () => {
   const [documents, setDocuments] = useState<LessonAssetItem[]>(() => getGeneralUploadedAssetsSync());
   const [docFormatFilter, setDocFormatFilter] = useState<'all' | 'pptx' | 'pdf' | 'docx' | 'image'>('all');
   const [editingCatalogDoc, setEditingCatalogDoc] = useState<Partial<DocumentItem> | null>(null);
+  const [storageTargetGrade, setStorageTargetGrade] = useState<Grade | 'all'>('all');
+  const [storageTargetLessonId, setStorageTargetLessonId] = useState<string>('general-library');
 
   // 7. Users State
   const [usersList, setUsersList] = useState<AppUser[]>(() => getAdminUsersSync());
@@ -3398,12 +3400,76 @@ export const AdminPage: React.FC = () => {
                     <FileUp className="w-5 h-5 text-teal-600" />
                     Tải Lên Tệp Đính Kèm Kho Bài Giảng (PPTX, PDF, DOCX, Hình ảnh)
                   </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1">
+                        Khối lớp nhận tài liệu
+                      </label>
+                      <select
+                        value={storageTargetGrade}
+                        data-testid="storage-target-grade-select"
+                        onChange={(e) => {
+                          const val = e.target.value === 'all' ? 'all' : (Number(e.target.value) as Grade);
+                          setStorageTargetGrade(val);
+                          if (val === 'all') {
+                            setStorageTargetLessonId('general-library');
+                          } else {
+                            const firstInGrade = lessons.find((l) => l.grade === val);
+                            setStorageTargetLessonId(firstInGrade?.id || 'general-library');
+                          }
+                        }}
+                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-xs font-bold"
+                      >
+                        <option value="all">Kho học liệu chung (Tất cả khối lớp)</option>
+                        <option value={6}>Khối lớp 6</option>
+                        <option value={7}>Khối lớp 7</option>
+                        <option value={8}>Khối lớp 8</option>
+                        <option value={9}>Khối lớp 9</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1">
+                        Gắn trực tiếp vào bài học (tùy chọn)
+                      </label>
+                      <select
+                        value={storageTargetLessonId}
+                        data-testid="storage-target-lesson-select"
+                        onChange={(e) => setStorageTargetLessonId(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-xs font-bold"
+                      >
+                        <option value="general-library">Kho học liệu chung (Hiển thị tại trang Tài liệu)</option>
+                        {lessons
+                          .filter((l) => storageTargetGrade === 'all' || l.grade === storageTargetGrade)
+                          .map((l) => (
+                            <option key={l.id} value={l.id}>
+                              Lớp {l.grade} – {l.title}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                  </div>
                   <AssetUploader
-                    lessonId="general-library"
+                    lessonId={storageTargetLessonId}
                     onAssetUploaded={async (newDoc) => {
-                      await saveUploadedAssetToRepository(newDoc);
-                      setDocuments((prev) => [newDoc, ...prev]);
-                      showToast(`Đã tải lên kho bài giảng: "${newDoc.fileName || newDoc.title}"`);
+                      const matchedLesson = lessons.find((l) => l.id === storageTargetLessonId);
+                      const savedDoc = await saveUploadedAssetToRepository({
+                        ...newDoc,
+                        lessonId: matchedLesson?.id || storageTargetLessonId,
+                        lessonTitle:
+                          matchedLesson?.title ||
+                          (storageTargetGrade !== 'all'
+                            ? `Kho học liệu chung Lớp ${storageTargetGrade}`
+                            : 'Kho học liệu chung'),
+                      });
+                      setDocuments((prev) => [
+                        savedDoc,
+                        ...prev.filter((d) => d.id !== savedDoc.id),
+                      ]);
+                      showToast(
+                        matchedLesson
+                          ? `Đã tải lên và đồng bộ "${savedDoc.fileName || savedDoc.title}" vào "${matchedLesson.title}" (Lớp ${matchedLesson.grade})!`
+                          : `Đã tải lên và đồng bộ "${savedDoc.fileName || savedDoc.title}" vào Kho học liệu!`
+                      );
                       await loadAllData();
                     }}
                   />

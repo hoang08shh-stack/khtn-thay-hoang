@@ -22,7 +22,7 @@ import {
   validateSimulationHtmlSafety,
   formatFileSize,
   extractYoutubeEmbedUrl,
-  saveUnifiedLearningResource,
+  saveUnifiedLearningResourceAsync,
   getUnifiedResourcesSync,
   updateUnifiedResourceTitle,
   moveUnifiedResourceToLesson,
@@ -38,6 +38,10 @@ import { uploadLessonDocument } from '../../services/storageService.ts';
 import { isSupabaseConfigured } from '../../lib/supabase.ts';
 import { LessonMiniQuizItem } from '../../types/index.ts';
 import { parseWordToLessonReviewQuestions } from '../../utils/lessonReviewQuizConverter.ts';
+import {
+  convertDocxArrayBufferToWordHtml,
+  isDocxFilename,
+} from '../../utils/wordReaderEngine.ts';
 import {
   buildEducationalDocumentData,
   triggerEducationalDocumentDownload,
@@ -134,6 +138,7 @@ export const UnifiedMaterialUploadModal: React.FC<UnifiedMaterialUploadModalProp
   // Status & Validation messages
   const [wizardError, setWizardError] = useState<string | null>(null);
   const [wizardToast, setWizardToast] = useState<string | null>(null);
+  const [isSavingMaterial, setIsSavingMaterial] = useState(false);
 
   // Post-Upload Resource Manager State
   const [resources, setResources] = useState<UnifiedLearningResource[]>(() =>
@@ -431,7 +436,8 @@ export const UnifiedMaterialUploadModal: React.FC<UnifiedMaterialUploadModalProp
   };
 
   // Publish or Save Draft (Step 3)
-  const handleSaveMaterial = (status: MaterialPublishStatus) => {
+  const handleSaveMaterial = async (status: MaterialPublishStatus) => {
+    if (isSavingMaterial) return;
     setWizardError(null);
     const validation = validateMaterialFileOrSource(step2);
     if (!validation.valid) {
@@ -439,40 +445,54 @@ export const UnifiedMaterialUploadModal: React.FC<UnifiedMaterialUploadModalProp
       return;
     }
 
-    const saved = saveUnifiedLearningResource(step1, step2, status);
-    const updatedList = getUnifiedResourcesSync();
-    setResources(updatedList);
-    clearWizardAutoDraft();
-    setStep2((prev) => ({
-      ...prev,
-      title: '',
-      description: '',
-      fileName: '',
-      fileType: '',
-      fileSize: 0,
-      fileDataUrl: undefined,
-      externalUrl: '',
-      simulationHtml: '',
-      uploadProgress: 0,
-      uploadStatus: 'idle',
-      lessonSummary: '',
-      lessonContent: '',
-      reviewQuestions: [],
-    }));
-    setCurrentStep(1);
+    setIsSavingMaterial(true);
+    try {
+      const { resource: saved, synced } = await saveUnifiedLearningResourceAsync(
+        step1,
+        step2,
+        status
+      );
+      const updatedList = getUnifiedResourcesSync();
+      setResources(updatedList);
+      clearWizardAutoDraft();
+      setStep2((prev) => ({
+        ...prev,
+        title: '',
+        description: '',
+        fileName: '',
+        fileType: '',
+        fileSize: 0,
+        fileDataUrl: undefined,
+        externalUrl: '',
+        simulationHtml: '',
+        uploadProgress: 0,
+        uploadStatus: 'idle',
+        lessonSummary: '',
+        lessonContent: '',
+        coreWordDoc: undefined,
+        reviewQuestions: [],
+      }));
+      setCurrentStep(1);
 
-    if (onSavedResource) {
-      onSavedResource(saved);
+      if (onSavedResource) {
+        onSavedResource(saved);
+      }
+
+      setWizardToast(
+        status === 'published'
+          ? isSupabaseConfigured
+            ? `Đã xuất bản học liệu "${saved.title}" vào "${saved.lessonTitle}" (Lớp ${saved.grade}) và đồng bộ lên Supabase!`
+            : synced
+            ? `Đã xuất bản "${saved.title}" vào "${saved.lessonTitle}" (Lớp ${saved.grade}) và đồng bộ lên máy chủ web thành công!`
+            : `Đã xuất bản "${saved.title}" vào "${saved.lessonTitle}" (Lớp ${saved.grade}). Nội dung đã lưu trên trình duyệt này.`
+          : `Đã lưu bản nháp học liệu "${saved.title}"!`
+      );
+      setActiveTab('manager');
+    } catch (err: any) {
+      setWizardError(err?.message || 'Không thể lưu và đồng bộ học liệu.');
+    } finally {
+      setIsSavingMaterial(false);
     }
-
-    setWizardToast(
-      status === 'published'
-        ? isSupabaseConfigured
-          ? `Đã xuất bản học liệu "${saved.title}" vào "${saved.lessonTitle}" (Lớp ${saved.grade}) và đồng bộ lên Supabase!`
-          : `Đã xuất bản "${saved.title}" vào "${saved.lessonTitle}" (Lớp ${saved.grade}). Nội dung và câu hỏi ôn tập đã cập nhật ngay vào mục Khối lớp ${saved.grade}.`
-        : `Đã lưu bản nháp học liệu "${saved.title}"!`
-    );
-    setActiveTab('manager');
   };
 
   const handleAddQuickReviewQuestion = () => {
@@ -524,6 +544,56 @@ export const UnifiedMaterialUploadModal: React.FC<UnifiedMaterialUploadModalProp
     setQuickWordPaste('');
     setWizardError(null);
     setWizardToast(`Đã tách thêm ${withIds.length} câu hỏi ôn tập vào bài học!`);
+  };
+
+  const handleUploadStep2CoreWord = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const ext = file.name.split('.').pop()?.toLowerCase() || '';
+    if (ext !== 'docx' && ext !== 'doc') {
+      setWizardError('Chỉ hỗ trợ tệp Word (.docx hoặc .doc) cho Nội dung cốt lõi.');
+      e.target.value = '';
+      return;
+    }
+
+    setWizardError(null);
+    try {
+      let htmlContent: string | undefined;
+      if (isDocxFilename(file.name)) {
+        try {
+          const buffer = await file.arrayBuffer();
+          const parsed = await convertDocxArrayBufferToWordHtml(buffer);
+          if (parsed.htmlContent.trim()) {
+            htmlContent = parsed.htmlContent;
+          }
+        } catch {
+          // fallback to lazy decoding inside WordDocumentReader
+        }
+      }
+
+      const uploaded = await uploadLessonDocument(file, step1.lessonId || 'wizard-core-word');
+      if (!uploaded) {
+        throw new Error('Không thể lưu tệp Word lên hệ thống.');
+      }
+
+      setStep2((prev) => ({
+        ...prev,
+        title: prev.title?.trim() || `${step1.lessonTitle || 'Bài giảng Word'}`,
+        coreWordDoc: {
+          id: `core-word-${step1.lessonId || 'wizard'}-${Date.now()}`,
+          fileName: uploaded.fileName || file.name,
+          fileUrl: uploaded.publicUrl,
+          fileSize: uploaded.sizeFormatted,
+          htmlContent,
+          uploadedAt: new Date().toISOString(),
+        },
+      }));
+      setWizardToast(`Đã đính kèm file Word "${file.name}" cho phần Nội dung cốt lõi!`);
+    } catch (err: any) {
+      setWizardError(err?.message || 'Lỗi khi tải file Word nội dung cốt lõi.');
+    } finally {
+      e.target.value = '';
+    }
   };
 
   // Post-Upload Manager Handlers
@@ -1618,9 +1688,47 @@ export const UnifiedMaterialUploadModal: React.FC<UnifiedMaterialUploadModalProp
 
                     {showExtraLessonFields && (
                       <div className="space-y-4 pt-2 border-t border-indigo-200/70 dark:border-indigo-800/60">
+                        {/* Upload Core Word File (.docx) for Word Reader */}
+                        <div className="p-3.5 rounded-xl bg-blue-50/80 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 flex flex-wrap items-center justify-between gap-3">
+                          <div className="space-y-0.5">
+                            <div className="text-xs font-extrabold text-blue-950 dark:text-blue-200 flex items-center gap-1.5">
+                              <FileText className="w-4 h-4 text-blue-600" />
+                              <span>Tải file Word (.docx) cho Trình đọc Nội dung cốt lõi</span>
+                            </div>
+                            <p className="text-[11px] text-slate-600 dark:text-slate-300">
+                              {step2.coreWordDoc
+                                ? `Đã gắn file: ${step2.coreWordDoc.fileName} (${step2.coreWordDoc.fileSize || 'Tệp Word'})`
+                                : 'Học sinh mở bài học sẽ xem trực tiếp file Word này trong Trình đọc Word.'}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <label className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-extrabold inline-flex items-center gap-1.5 cursor-pointer shadow-xs">
+                              <Upload className="w-3.5 h-3.5" />
+                              <span>{step2.coreWordDoc ? 'Đổi file Word' : 'Chọn file Word (.docx)'}</span>
+                              <input
+                                type="file"
+                                accept=".docx,.doc,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword"
+                                onChange={handleUploadStep2CoreWord}
+                                className="hidden"
+                              />
+                            </label>
+                            {step2.coreWordDoc && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setStep2((prev) => ({ ...prev, coreWordDoc: undefined }))
+                                }
+                                className="px-2.5 py-1.5 rounded-lg bg-rose-50 text-rose-700 border border-rose-200 text-xs font-bold cursor-pointer"
+                              >
+                                Gỡ
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
                         <div>
                           <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                            Nội dung trọng tâm bài học (tùy chọn):
+                            Hoặc nhập tóm tắt nội dung trọng tâm bài học (tùy chọn):
                           </label>
                           <textarea
                             rows={3}
@@ -1815,6 +1923,11 @@ export const UnifiedMaterialUploadModal: React.FC<UnifiedMaterialUploadModalProp
                         {step2.fileName || step2.externalUrl || 'Mã HTML/JS tương tác'}
                       </span>
                     </div>
+                    {step2.coreWordDoc && (
+                      <div className="sm:col-span-2 lg:col-span-4 pt-1 border-t border-slate-200 dark:border-slate-700 text-blue-700 dark:text-blue-300 font-bold">
+                        ✓ Kèm file Word Nội dung cốt lõi ({step2.coreWordDoc.fileName}) — Hiển thị trực tiếp bằng Trình đọc Word
+                      </div>
+                    )}
                     {(step2.reviewQuestions?.length || 0) > 0 && (
                       <div className="sm:col-span-2 lg:col-span-4 pt-1 border-t border-slate-200 dark:border-slate-700 text-teal-700 dark:text-teal-300 font-bold">
                         ✓ Kèm {step2.reviewQuestions?.length} câu hỏi ôn tập cuối bài (tự động cập nhật vào Khối lớp {step1.grade})
@@ -1836,21 +1949,23 @@ export const UnifiedMaterialUploadModal: React.FC<UnifiedMaterialUploadModalProp
                     <button
                       type="button"
                       data-testid="step3-save-draft-btn"
+                      disabled={isSavingMaterial || step2.uploadStatus === 'uploading'}
                       onClick={() => handleSaveMaterial('draft')}
-                      className="px-5 py-2.5 rounded-xl bg-amber-100 hover:bg-amber-200 dark:bg-amber-950 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-800 font-extrabold text-xs flex items-center gap-2 cursor-pointer"
+                      className="px-5 py-2.5 rounded-xl bg-amber-100 hover:bg-amber-200 dark:bg-amber-950 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-800 font-extrabold text-xs flex items-center gap-2 disabled:opacity-50 cursor-pointer"
                     >
                       <Save className="w-4 h-4" />
-                      <span>LƯU BẢN NHÁP</span>
+                      <span>{isSavingMaterial ? 'ĐANG LƯU...' : 'LƯU BẢN NHÁP'}</span>
                     </button>
 
                     <button
                       type="button"
                       data-testid="step3-publish-btn"
+                      disabled={isSavingMaterial || step2.uploadStatus === 'uploading'}
                       onClick={() => handleSaveMaterial('published')}
-                      className="px-6 py-2.5 rounded-xl bg-teal-700 hover:bg-teal-600 text-white font-extrabold text-xs shadow-md flex items-center gap-2 cursor-pointer"
+                      className="px-6 py-2.5 rounded-xl bg-teal-700 hover:bg-teal-600 text-white font-extrabold text-xs shadow-md flex items-center gap-2 disabled:opacity-50 cursor-pointer"
                     >
                       <Sparkles className="w-4 h-4 text-amber-300" />
-                      <span>XUẤT BẢN</span>
+                      <span>{isSavingMaterial ? 'ĐANG ĐỒNG BỘ LÊN WEB...' : 'XUẤT BẢN'}</span>
                     </button>
                   </div>
                 </div>
@@ -1861,7 +1976,7 @@ export const UnifiedMaterialUploadModal: React.FC<UnifiedMaterialUploadModalProp
                 <button
                   type="button"
                   data-testid="wizard-prev-btn"
-                  disabled={currentStep === 1}
+                  disabled={currentStep === 1 || isSavingMaterial}
                   onClick={handlePrevStep}
                   className="px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-700 font-bold text-xs text-slate-700 dark:text-slate-200 disabled:opacity-40 flex items-center gap-1.5 cursor-pointer"
                 >
@@ -1873,10 +1988,15 @@ export const UnifiedMaterialUploadModal: React.FC<UnifiedMaterialUploadModalProp
                   <button
                     type="button"
                     data-testid="wizard-next-btn"
+                    disabled={currentStep === 2 && step2.uploadStatus === 'uploading'}
                     onClick={handleNextStep}
-                    className="px-5 py-2.5 rounded-xl bg-teal-700 hover:bg-teal-600 text-white font-extrabold text-xs shadow-sm flex items-center gap-1.5 cursor-pointer"
+                    className="px-5 py-2.5 rounded-xl bg-teal-700 hover:bg-teal-600 text-white font-extrabold text-xs shadow-sm flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
                   >
-                    <span>Tiếp tục (Bước {currentStep + 1}/3)</span>
+                    <span>
+                      {currentStep === 2 && step2.uploadStatus === 'uploading'
+                        ? `Đang tải tệp (${step2.uploadProgress}%)...`
+                        : `Tiếp tục (Bước ${currentStep + 1}/3)`}
+                    </span>
                     <ArrowRight className="w-4 h-4" />
                   </button>
                 )}

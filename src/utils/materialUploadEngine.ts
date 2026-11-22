@@ -1,4 +1,12 @@
-import { Grade, Lesson, LessonMiniQuizItem, SubjectDomain, Topic } from '../types/index.ts';
+import {
+  CoreWordDocumentMeta,
+  Grade,
+  Lesson,
+  LessonMiniQuizItem,
+  SubjectDomain,
+  Topic,
+} from '../types/index.ts';
+import { upsertCoreWordAssetInList } from './wordReaderEngine.ts';
 import cmsSnapshot from '../data/cmsSnapshot.json';
 import {
   getAdminTopicsSync,
@@ -14,6 +22,7 @@ import {
   saveAdminCatalogDoc,
   saveUploadedAssetToRepository,
   syncCmsSnapshotToRepo,
+  markLocalCmsModified,
   safeReadLocal,
   safeWriteLocal,
   extractYouTubeId,
@@ -133,6 +142,7 @@ export interface WizardStep2Data {
   errorMessage?: string;
   lessonSummary?: string;
   lessonContent?: string;
+  coreWordDoc?: CoreWordDocumentMeta;
   reviewQuestions?: LessonMiniQuizItem[];
 }
 
@@ -588,11 +598,28 @@ export function validateMaterialFileOrSource(step2: WizardStep2Data): {
     return { valid: false, error: 'Vui lòng nhập Tên hiển thị học liệu.' };
   }
 
+  if (step2.uploadStatus === 'uploading') {
+    return {
+      valid: false,
+      error: 'Tệp đang được tải lên máy chủ, vui lòng chờ hoàn tất 100% trước khi tiếp tục.',
+    };
+  }
+
+  if (step2.uploadStatus === 'error') {
+    return {
+      valid: false,
+      error: step2.errorMessage || 'Tệp tải lên bị lỗi. Vui lòng chọn lại tệp.',
+    };
+  }
+
   if (step2.category === 'lecture_doc') {
+    if (!step2.fileName && step2.coreWordDoc?.fileUrl) {
+      return { valid: true };
+    }
     if (!step2.fileName) {
       return {
         valid: false,
-        error: 'Vui lòng chọn tệp Bài giảng hoặc Tài liệu (.ppt, .pptx, .pdf, .doc, .docx).',
+        error: 'Vui lòng chọn tệp Bài giảng hoặc Tài liệu (.ppt, .pptx, .pdf, .doc, .docx) hoặc tải file Word Nội dung cốt lõi.',
       };
     }
     const ext = step2.fileName.split('.').pop()?.toLowerCase() || '';
@@ -600,6 +627,12 @@ export function validateMaterialFileOrSource(step2: WizardStep2Data): {
       return {
         valid: false,
         error: 'Định dạng không hỗ trợ. Chỉ nhận .ppt, .pptx, .pdf, .doc, .docx.',
+      };
+    }
+    if (!step2.fileDataUrl && !step2.externalUrl && !step2.coreWordDoc?.fileUrl) {
+      return {
+        valid: false,
+        error: 'Tệp chưa hoàn tất lưu lên hệ thống. Vui lòng chờ hoàn tất hoặc chọn lại tệp.',
       };
     }
     return { valid: true };
@@ -613,6 +646,12 @@ export function validateMaterialFileOrSource(step2: WizardStep2Data): {
       const ext = step2.fileName.split('.').pop()?.toLowerCase() || '';
       if (!['mp4', 'webm'].includes(ext)) {
         return { valid: false, error: 'Định dạng video chỉ hỗ trợ .mp4 hoặc .webm.' };
+      }
+      if (!step2.fileDataUrl && !step2.externalUrl) {
+        return {
+          valid: false,
+          error: 'Video chưa hoàn tất tải lên hệ thống. Vui lòng chờ hoàn tất hoặc chọn lại tệp.',
+        };
       }
       return { valid: true };
     }
@@ -794,9 +833,6 @@ export function saveUnifiedLearningResource(
     if (matchByBaiNum) {
       resolvedLessonId = matchByBaiNum.id;
       resolvedLessonTitle = matchByBaiNum.title;
-    } else {
-      resolvedLessonId = `lesson-upload-g${safeGrade}-b${step2BaiNum}-${Date.now()}`;
-      resolvedLessonTitle = step2.title.trim();
     }
   } else if (
     !isExplicitInlineLesson &&
@@ -864,7 +900,7 @@ export function saveUnifiedLearningResource(
           ? `https://www.youtube.com/watch?v=${ytId}`
           : candidateVideo;
       }
-    } else if (step2.category === 'lecture_doc') {
+    } else if (step2.category === 'lecture_doc' && (step2.fileDataUrl || step2.externalUrl)) {
       const ext = step2.fileName?.split('.').pop()?.toLowerCase() || 'pdf';
       const fmt: 'pptx' | 'pdf' | 'docx' =
         ext === 'pptx' || ext === 'ppt'
@@ -885,7 +921,7 @@ export function saveUnifiedLearningResource(
         lessonTitle: resolvedLessonTitle || matchedLesson?.title,
       };
       existingAssets.unshift(assetObj);
-      saveUploadedAssetToRepository(assetObj).catch(() => {});
+      saveUploadedAssetToRepository(assetObj, { skipRemoteSync: true }).catch(() => {});
     }
 
     const mergeMiniQuizItems = (
@@ -928,6 +964,8 @@ export function saveUnifiedLearningResource(
       return lines.length > 1 ? `${lines[0]}: ${lines[1]}` : lines[0];
     };
 
+    const customCoreWord = step2.coreWordDoc?.fileUrl ? step2.coreWordDoc : undefined;
+
     if (matchedLesson) {
       const finalLessonTitle =
         step1.lessonId === matchedLesson.id && step1.lessonTitle?.trim()
@@ -952,6 +990,14 @@ export function saveUnifiedLearningResource(
         step2.description ||
         derivePlainSummary(customContent) ||
         finalLessonTitle;
+      const syncedAssets = customCoreWord
+        ? upsertCoreWordAssetInList(
+            existingAssets,
+            matchedLesson.id,
+            finalLessonTitle,
+            customCoreWord
+          )
+        : existingAssets;
       saveAdminLesson(
         {
           id: matchedLesson.id,
@@ -968,14 +1014,23 @@ export function saveUnifiedLearningResource(
           isPublished: status === 'published' ? true : matchedLesson.isPublished,
           thumbnailUrl: matchedLesson.thumbnailUrl,
           videoUrl: updatedVideoUrl,
+          coreWordDoc: customCoreWord || matchedLesson.coreWordDoc,
           miniQuiz: mergedMiniQuiz,
         },
-        existingAssets,
+        syncedAssets,
         matchedLesson.simulationIds || [],
         mergedMiniQuiz
       ).catch(() => {});
     } else if (resolvedLessonId && resolvedLessonTitle) {
       const mergedMiniQuiz = mergeMiniQuizItems([], incomingQuestions, resolvedLessonId);
+      const syncedAssets = customCoreWord
+        ? upsertCoreWordAssetInList(
+            existingAssets,
+            resolvedLessonId,
+            resolvedLessonTitle,
+            customCoreWord
+          )
+        : existingAssets;
       saveAdminLesson(
         {
           id: resolvedLessonId,
@@ -996,9 +1051,10 @@ export function saveUnifiedLearningResource(
           orderIndex: step2BaiNum || 1,
           isPublished: true,
           videoUrl: updatedVideoUrl,
+          coreWordDoc: customCoreWord,
           miniQuiz: mergedMiniQuiz,
         },
-        existingAssets,
+        syncedAssets,
         [],
         mergedMiniQuiz
       ).catch(() => {});
@@ -1009,9 +1065,10 @@ export function saveUnifiedLearningResource(
 
   // Sync to catalog/videos if published and grade <= 9
   if (status === 'published') {
-    if (step2.category === 'lecture_doc') {
-      const ext = step2.fileName?.split('.').pop()?.toLowerCase() || 'pdf';
-      const resolvedUrl = step2.fileDataUrl || step2.externalUrl || '#';
+    if (step2.category === 'lecture_doc' && (step2.fileDataUrl || step2.externalUrl || step2.coreWordDoc?.fileUrl)) {
+      const effectiveName = step2.fileName || step2.coreWordDoc?.fileName;
+      const ext = effectiveName?.split('.').pop()?.toLowerCase() || 'pdf';
+      const resolvedUrl = step2.fileDataUrl || step2.externalUrl || step2.coreWordDoc?.fileUrl || '#';
       saveAdminCatalogDoc({
         id: `cat-${newRes.id}`,
         lessonId: resolvedLessonId,
@@ -1019,11 +1076,13 @@ export function saveUnifiedLearningResource(
         grade: safeGrade,
         domain,
         format: ext === 'pptx' || ext === 'ppt' ? 'pptx' : ext === 'docx' || ext === 'doc' ? 'docx' : 'pdf',
-        type: resolvedDocSubType || CATEGORY_LABELS[step2.category],
-        fileSize: formatFileSize(step2.fileSize || 1048576),
+        type: step2.fileDataUrl || step2.externalUrl
+          ? resolvedDocSubType || CATEGORY_LABELS[step2.category]
+          : 'Nội dung cốt lõi (Word)',
+        fileSize: step2.coreWordDoc?.fileSize || formatFileSize(step2.fileSize || 1048576),
         downloadUrl: resolvedUrl,
         fileUrl: resolvedUrl !== '#' ? resolvedUrl : undefined,
-        fileName: step2.fileName,
+        fileName: effectiveName,
         description: `${step1.topicTitle} – ${resolvedLessonTitle} (${TEXTBOOK_LABELS[step1.textbook]})`,
       }).catch(() => {});
     } else if (step2.category === 'video' && step2.externalUrl) {
@@ -1038,9 +1097,23 @@ export function saveUnifiedLearningResource(
     }
   }
 
-  syncCmsSnapshotToRepo(false).catch(() => {});
+  markLocalCmsModified();
   dispatchCmsUpdatedEvent();
+  syncCmsSnapshotToRepo(false).catch(() => {});
   return newRes;
+}
+
+/**
+ * Phiên bản async cho giao diện Quản trị: đảm bảo đồng bộ hoàn tất lên máy chủ/cloud trước khi báo thành công.
+ */
+export async function saveUnifiedLearningResourceAsync(
+  step1: WizardStep1Data,
+  step2: WizardStep2Data,
+  status: MaterialPublishStatus
+): Promise<{ resource: UnifiedLearningResource; synced: boolean }> {
+  const resource = saveUnifiedLearningResource(step1, step2, status);
+  const synced = await syncCmsSnapshotToRepo(false);
+  return { resource, synced };
 }
 
 export function getUnifiedResourcesForLesson(
@@ -1067,6 +1140,8 @@ export function updateUnifiedResourceTitle(
       : item
   );
   writeJson(UNIFIED_RESOURCES_KEY, next);
+  markLocalCmsModified();
+  dispatchCmsUpdatedEvent();
   syncCmsSnapshotToRepo(false).catch(() => {});
   return next;
 }
@@ -1092,6 +1167,8 @@ export function moveUnifiedResourceToLesson(
       : item
   );
   writeJson(UNIFIED_RESOURCES_KEY, next);
+  markLocalCmsModified();
+  dispatchCmsUpdatedEvent();
   syncCmsSnapshotToRepo(false).catch(() => {});
   return next;
 }
@@ -1128,21 +1205,26 @@ export function replaceUnifiedResourceFile(
         : ext === 'docx' || ext === 'doc'
         ? 'docx'
         : 'pdf';
-    saveUploadedAssetToRepository({
-      id: `asset-${updatedTarget.id}`,
-      lessonId: updatedTarget.lessonId,
-      title: updatedTarget.title,
-      format: fmt,
-      type:
-        updatedTarget.docSubType ||
-        inferDocumentSubCategory(updatedTarget.title, filePatch.fileName),
-      fileSize: formatFileSize(filePatch.fileSize),
-      fileUrl: filePatch.fileDataUrl,
-      fileName: filePatch.fileName,
-      lessonTitle: updatedTarget.lessonTitle,
-    }).catch(() => {});
+    saveUploadedAssetToRepository(
+      {
+        id: `asset-${updatedTarget.id}`,
+        lessonId: updatedTarget.lessonId,
+        title: updatedTarget.title,
+        format: fmt,
+        type:
+          updatedTarget.docSubType ||
+          inferDocumentSubCategory(updatedTarget.title, filePatch.fileName),
+        fileSize: formatFileSize(filePatch.fileSize),
+        fileUrl: filePatch.fileDataUrl,
+        fileName: filePatch.fileName,
+        lessonTitle: updatedTarget.lessonTitle,
+      },
+      { skipRemoteSync: true }
+    ).catch(() => {});
   }
 
+  markLocalCmsModified();
+  dispatchCmsUpdatedEvent();
   syncCmsSnapshotToRepo(false).catch(() => {});
   return next;
 }
@@ -1161,6 +1243,8 @@ export function toggleUnifiedResourceStatus(
       : item
   );
   writeJson(UNIFIED_RESOURCES_KEY, next);
+  markLocalCmsModified();
+  dispatchCmsUpdatedEvent();
   syncCmsSnapshotToRepo(false).catch(() => {});
   return next;
 }
@@ -1179,6 +1263,8 @@ export function deleteUnifiedResource(resourceId: string): UnifiedLearningResour
       deleteAdminCatalogDoc(`cat-${resourceId}`).catch(() => {});
     }
   }
+  markLocalCmsModified();
+  dispatchCmsUpdatedEvent();
   syncCmsSnapshotToRepo(false).catch(() => {});
   return next;
 }

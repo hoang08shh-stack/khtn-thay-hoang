@@ -33,14 +33,20 @@ export const TopicsPage: React.FC = () => {
 
   useEffect(() => {
     let mounted = true;
-    setAllTopics(getAdminTopicsSync());
-    getPublishedLessons().then((data) => {
-      if (mounted) {
-        setAllLessons(data);
-      }
-    });
+    const refreshData = () => {
+      if (!mounted) return;
+      setAllTopics(getAdminTopicsSync());
+      getPublishedLessons().then((data) => {
+        if (mounted) {
+          setAllLessons(data);
+        }
+      });
+    };
+    refreshData();
+    window.addEventListener('khtn-cms-updated', refreshData);
     return () => {
       mounted = false;
+      window.removeEventListener('khtn-cms-updated', refreshData);
     };
   }, []);
 

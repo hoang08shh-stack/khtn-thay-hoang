@@ -6,7 +6,14 @@ import {
   LessonMiniQuizItem,
   LessonReviewQuestionType,
   TrueFalseStatement,
+  CoreWordDocumentMeta,
 } from '../types/index.ts';
+import { WordDocumentReader } from '../components/common/WordDocumentReader.tsx';
+import {
+  convertDocxArrayBufferToWordHtml,
+  isCoreWordAssetType,
+  isDocxFilename,
+} from '../utils/wordReaderEngine.ts';
 import { getLessonByIdOrSlug, getPublishedLessonsSync } from '../services/contentService.ts';
 import { getYoutubeEmbedUrl } from '../lib/supabase.ts';
 import {
@@ -121,7 +128,10 @@ export const LessonDetailPage: React.FC = () => {
   );
   const [quizFeedbackMsg, setQuizFeedbackMsg] = useState<string | null>(null);
 
-  // Core Knowledge Content inline editor & Bold function state
+  // Core Knowledge Content Word Reader + inline editor & Bold function state
+  const [coreWordViewMode, setCoreWordViewMode] = useState<'word' | 'summary'>('word');
+  const [isUploadingCoreWord, setIsUploadingCoreWord] = useState(false);
+  const coreWordInputRef = useRef<HTMLInputElement | null>(null);
   const [isEditingCoreContent, setIsEditingCoreContent] = useState(false);
   const [coreContentDraft, setCoreContentDraft] = useState('');
   const [coreContentFeedback, setCoreContentFeedback] = useState<string | null>(null);
@@ -159,6 +169,8 @@ export const LessonDetailPage: React.FC = () => {
           setEssayAnswers({});
           setShowResults(false);
           setActiveVideoIndex(0);
+          setCoreWordViewMode('word');
+          setIsEditingCoreContent(false);
         }
       });
 
@@ -212,9 +224,13 @@ export const LessonDetailPage: React.FC = () => {
   const relatedSimulation =
     relatedSimulationsList[activeSimIndex] || relatedSimulationsList[0] || null;
 
-  const relatedLessons = LESSONS.filter(
-    (l) => l.grade === lesson.grade && l.id !== lesson.id
-  ).slice(0, 3);
+  const relatedLessons = useMemo(
+    () =>
+      getPublishedLessonsSync(lesson.grade)
+        .filter((l) => l.id !== lesson.id)
+        .slice(0, 3),
+    [lesson.grade, lesson.id, docRefreshKey]
+  );
 
   // Collect all videos & documents for this lesson (primary lesson.videoUrl + any resources uploaded via 3-step wizard)
   const unifiedResources = useMemo(
@@ -278,7 +294,7 @@ export const LessonDetailPage: React.FC = () => {
     const seenUrls = new Set<string>();
 
     (lesson.assets || []).forEach((a) => {
-      if (isRealUploadedFileUrl(a.fileUrl)) {
+      if (!isCoreWordAssetType(a.type) && isRealUploadedFileUrl(a.fileUrl)) {
         seenUrls.add(a.fileUrl);
         realUploaded.push({
           id: a.id,
@@ -590,6 +606,106 @@ export const LessonDetailPage: React.FC = () => {
     setTimeout(() => setCoreContentFeedback(null), 4000);
   };
 
+  const handleUploadCoreWordFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const ext = file.name.split('.').pop()?.toLowerCase() || '';
+    if (ext !== 'docx' && ext !== 'doc') {
+      setCoreContentFeedback('Vui lòng chọn tệp Microsoft Word định dạng .docx hoặc .doc.');
+      setTimeout(() => setCoreContentFeedback(null), 4500);
+      e.target.value = '';
+      return;
+    }
+
+    setIsUploadingCoreWord(true);
+    try {
+      let htmlContent: string | undefined;
+      if (isDocxFilename(file.name)) {
+        try {
+          const arrayBuffer = await file.arrayBuffer();
+          const parsed = await convertDocxArrayBufferToWordHtml(arrayBuffer);
+          if (parsed.htmlContent.trim()) {
+            htmlContent = parsed.htmlContent;
+          }
+        } catch {
+          // fallback to lazy decoding inside WordDocumentReader if instant parse fails
+        }
+      }
+
+      const uploaded = await uploadLessonDocument(file, lesson.id);
+      if (!uploaded) {
+        throw new Error('Không thể lưu tệp Word lên hệ thống.');
+      }
+
+      const nextCoreWordDoc: CoreWordDocumentMeta = {
+        id: `core-word-${lesson.id}-${Date.now()}`,
+        fileName: uploaded.fileName || file.name,
+        fileUrl: uploaded.publicUrl,
+        fileSize: uploaded.sizeFormatted,
+        htmlContent,
+        uploadedAt: new Date().toISOString(),
+      };
+
+      const allLocal = getInitialLocalLessons();
+      const found = allLocal.find((l) => l.id === lesson.id || l.code === lesson.code);
+      if (found) {
+        await saveAdminLesson(
+          {
+            ...found,
+            coreWordDoc: nextCoreWordDoc,
+          },
+          found.assets || [],
+          found.simulationIds || [],
+          found.miniQuiz || lesson.miniQuiz || []
+        );
+      }
+
+      const refreshed = await getLessonByIdOrSlug(lesson.id);
+      if (refreshed) {
+        setLesson(refreshed);
+      } else {
+        setLesson((prev) => ({ ...prev, coreWordDoc: nextCoreWordDoc }));
+      }
+      setCoreWordViewMode('word');
+      setDocRefreshKey((k) => k + 1);
+      setCoreContentFeedback(
+        `Đã tải file Word "${file.name}" lên phần Nội dung cốt lõi — Học sinh có thể đọc ngay bằng Trình đọc Word!`
+      );
+      setTimeout(() => setCoreContentFeedback(null), 5000);
+    } catch (err: any) {
+      setCoreContentFeedback(err?.message || 'Không thể tải tệp Word lên.');
+      setTimeout(() => setCoreContentFeedback(null), 4500);
+    } finally {
+      setIsUploadingCoreWord(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleRemoveCoreWordFile = async () => {
+    const allLocal = getInitialLocalLessons();
+    const found = allLocal.find((l) => l.id === lesson.id || l.code === lesson.code);
+    if (found) {
+      await saveAdminLesson(
+        {
+          ...found,
+          coreWordDoc: null,
+        },
+        found.assets || [],
+        found.simulationIds || [],
+        found.miniQuiz || lesson.miniQuiz || []
+      );
+    }
+    const refreshed = await getLessonByIdOrSlug(lesson.id);
+    if (refreshed) {
+      setLesson(refreshed);
+    } else {
+      setLesson((prev) => ({ ...prev, coreWordDoc: undefined }));
+    }
+    setDocRefreshKey((k) => k + 1);
+    setCoreContentFeedback('Đã gỡ file Word khỏi phần nội dung cốt lõi.');
+    setTimeout(() => setCoreContentFeedback(null), 4000);
+  };
+
   const handleApplyBoldToCoreTextarea = () => {
     const el = coreTextareaRef.current;
     if (!el) return;
@@ -861,22 +977,31 @@ export const LessonDetailPage: React.FC = () => {
               </ul>
             </div>
 
-            {/* Theory Sections with Visual Illustrations */}
+            {/* Core Knowledge Zone with Integrated Word File Reader */}
             <div
               id="lesson-core-knowledge-section"
-              className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 border-2 border-slate-100 dark:border-slate-800 shadow-sm space-y-6"
+              className="bg-white dark:bg-slate-900 rounded-3xl p-5 sm:p-8 border-2 border-slate-100 dark:border-slate-800 shadow-sm space-y-5"
             >
+              <input
+                ref={coreWordInputRef}
+                type="file"
+                accept=".docx,.doc,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword"
+                data-testid="input-core-word-file"
+                onChange={handleUploadCoreWordFile}
+                className="hidden"
+              />
+
               <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b-2 border-teal-100 dark:border-slate-800">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-xl bg-teal-600 text-white flex items-center justify-center shadow-sm">
-                    <BookOpen className="w-5 h-5" />
+                  <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-sm shrink-0">
+                    <FileText className="w-5 h-5" />
                   </div>
                   <div>
                     <h2 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white">
                       Nội Dung Kiến Thức Trọng Tâm
                     </h2>
                     <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                      Trình bày chuẩn Sách giáo khoa Kết nối tri thức với cuộc sống • Đề mục nhỏ in đậm &amp; Công thức chuẩn
+                      Khu vực Trình đọc File Word • Giáo viên tải file Word (.docx) lên để học sinh xem nội dung cốt lõi
                     </p>
                   </div>
                 </div>
@@ -884,33 +1009,93 @@ export const LessonDetailPage: React.FC = () => {
                 <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="button"
-                    data-testid="btn-bold-core-content"
-                    onClick={handleHeaderBoldButtonClick}
-                    title="Bôi đen văn bản bất kỳ rồi bấm In đậm (hoặc mở trình chỉnh sửa in đậm đề mục)"
-                    className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-teal-600 dark:hover:bg-teal-500 text-white text-xs font-black flex items-center gap-1.5 shadow-xs transition cursor-pointer"
+                    data-testid="btn-upload-core-word"
+                    disabled={isUploadingCoreWord}
+                    onClick={() => coreWordInputRef.current?.click()}
+                    className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-sm transition cursor-pointer"
                   >
-                    <Bold className="w-3.5 h-3.5 stroke-[3]" />
-                    <span>In đậm (B)</span>
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>
+                      {isUploadingCoreWord
+                        ? 'Đang tải Word...'
+                        : lesson.coreWordDoc
+                        ? 'Thay file Word (.docx)'
+                        : 'Tải file Word (.docx)'}
+                    </span>
                   </button>
 
-                  <button
-                    type="button"
-                    data-testid="btn-edit-core-content"
-                    onClick={() => {
-                      if (!isEditingCoreContent) {
-                        setCoreContentDraft(serializeSectionsToMarkdown(lesson));
-                      }
-                      setIsEditingCoreContent((v) => !v);
-                    }}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1.5 border transition cursor-pointer ${
-                      isEditingCoreContent
-                        ? 'bg-teal-600 text-white border-teal-600 shadow-xs'
-                        : 'bg-teal-50 dark:bg-slate-800 text-teal-800 dark:text-teal-300 border-teal-200 dark:border-slate-700 hover:bg-teal-100'
-                    }`}
-                  >
-                    <Edit3 className="w-3.5 h-3.5" />
-                    <span>{isEditingCoreContent ? 'Đóng khung sửa' : 'Sửa & Định dạng đề mục'}</span>
-                  </button>
+                  {lesson.coreWordDoc && (
+                    <>
+                      <button
+                        type="button"
+                        data-testid="btn-remove-core-word"
+                        onClick={handleRemoveCoreWordFile}
+                        className="px-3 py-2 rounded-xl bg-rose-50 dark:bg-rose-950/50 hover:bg-rose-100 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 text-xs font-bold flex items-center gap-1 cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Xóa file Word</span>
+                      </button>
+
+                      <div className="inline-flex rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-0.5">
+                        <button
+                          type="button"
+                          onClick={() => setCoreWordViewMode('word')}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                            coreWordViewMode === 'word'
+                              ? 'bg-blue-600 text-white shadow-xs'
+                              : 'text-slate-600 dark:text-slate-300'
+                          }`}
+                        >
+                          Trình đọc Word
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setCoreWordViewMode('summary')}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                            coreWordViewMode === 'summary'
+                              ? 'bg-teal-600 text-white shadow-xs'
+                              : 'text-slate-600 dark:text-slate-300'
+                          }`}
+                        >
+                          Tóm tắt chữ
+                        </button>
+                      </div>
+                    </>
+                  )}
+
+                  {(!lesson.coreWordDoc || coreWordViewMode === 'summary') && (
+                    <>
+                      <button
+                        type="button"
+                        data-testid="btn-bold-core-content"
+                        onClick={handleHeaderBoldButtonClick}
+                        title="Bôi đen văn bản bất kỳ rồi bấm In đậm (hoặc mở trình chỉnh sửa in đậm đề mục)"
+                        className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-teal-600 dark:hover:bg-teal-500 text-white text-xs font-black flex items-center gap-1.5 shadow-xs transition cursor-pointer"
+                      >
+                        <Bold className="w-3.5 h-3.5 stroke-[3]" />
+                        <span>In đậm (B)</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        data-testid="btn-edit-core-content"
+                        onClick={() => {
+                          if (!isEditingCoreContent) {
+                            setCoreContentDraft(serializeSectionsToMarkdown(lesson));
+                          }
+                          setIsEditingCoreContent((v) => !v);
+                        }}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1.5 border transition cursor-pointer ${
+                          isEditingCoreContent
+                            ? 'bg-teal-600 text-white border-teal-600 shadow-xs'
+                            : 'bg-teal-50 dark:bg-slate-800 text-teal-800 dark:text-teal-300 border-teal-200 dark:border-slate-700 hover:bg-teal-100'
+                        }`}
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                        <span>{isEditingCoreContent ? 'Đóng khung sửa' : 'Sửa & Định dạng chữ'}</span>
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -919,6 +1104,45 @@ export const LessonDetailPage: React.FC = () => {
                   <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
                   <span>{coreContentFeedback}</span>
                 </div>
+              )}
+
+              {/* Empty Word Reader Drop Banner when no Word file uploaded yet */}
+              {!lesson.coreWordDoc && (
+                <div
+                  data-testid="core-word-empty-banner"
+                  className="rounded-2xl border-2 border-dashed border-blue-200 dark:border-blue-800/80 bg-gradient-to-r from-blue-50/80 via-sky-50/60 to-teal-50/60 dark:from-blue-950/30 dark:via-slate-900 dark:to-teal-950/20 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-800 text-blue-600 flex items-center justify-center shrink-0 shadow-xs">
+                      <BookOpen className="w-5 h-5" />
+                    </div>
+                    <div className="space-y-1">
+                      <div className="text-sm font-black text-slate-900 dark:text-white">
+                        Trình Đọc File Word Nội Dung Cốt Lõi
+                      </div>
+                      <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                        Giáo viên chỉ cần tải lên 1 tệp Word (<strong>.docx</strong>) bài giảng trọng tâm — học sinh sẽ đọc trực tiếp với Mục lục, phóng to/thu nhỏ, tìm kiếm từ khóa và bảng/công thức giữ nguyên định dạng Word.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => coreWordInputRef.current?.click()}
+                    disabled={isUploadingCoreWord}
+                    className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-extrabold flex items-center justify-center gap-1.5 shadow-sm shrink-0 cursor-pointer"
+                  >
+                    <Upload className="w-4 h-4" />
+                    <span>Chọn file Word (.docx)</span>
+                  </button>
+                </div>
+              )}
+
+              {/* Primary Word Reader View when teacher uploaded a Core Word file */}
+              {lesson.coreWordDoc && coreWordViewMode === 'word' && (
+                <WordDocumentReader
+                  coreWordDoc={lesson.coreWordDoc}
+                  lessonTitle={lesson.title}
+                />
               )}
 
               {/* Inline Core Knowledge Editor with Bold Button & Formatting Toolbar */}
@@ -1056,125 +1280,128 @@ export const LessonDetailPage: React.FC = () => {
                 </div>
               )}
 
-              <div className="space-y-6">
-                {lesson.sections.map((sec, idx) => {
-                  const cleanTitle = sec.title.replace(/^\d+\.\s*/, '').trim();
-                  const formulaItems = sec.formula
-                    ? sec.formula
-                        .split(/\s*\|\s*/)
-                        .map((f) => f.trim())
-                        .filter(Boolean)
-                    : [];
+              {/* Fallback Structured Sections (displayed when no Word file is uploaded or when switched to summary view) */}
+              {(!lesson.coreWordDoc || coreWordViewMode === 'summary') && (
+                <div className="space-y-6">
+                  {lesson.sections.map((sec, idx) => {
+                    const cleanTitle = sec.title.replace(/^\d+\.\s*/, '').trim();
+                    const formulaItems = sec.formula
+                      ? sec.formula
+                          .split(/\s*\|\s*/)
+                          .map((f) => f.trim())
+                          .filter(Boolean)
+                      : [];
 
-                  return (
-                    <section
-                      key={idx}
-                      className="rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-gradient-to-b from-slate-50/70 to-white dark:from-slate-900/90 dark:to-slate-900 p-5 sm:p-6 shadow-xs space-y-4"
-                    >
-                      {/* Section Heading with Numbered Badge */}
-                      <div className="flex items-start gap-3 pb-3 border-b border-slate-200/80 dark:border-slate-800">
-                        <span className="px-2.5 py-1 rounded-xl bg-teal-700 text-white font-mono font-black text-xs sm:text-sm shrink-0 shadow-xs mt-0.5">
-                          Mục {idx + 1}
-                        </span>
-                        <h3 className="text-base sm:text-lg font-black text-teal-950 dark:text-teal-300 leading-snug">
-                          {renderFormattedMathAndChem(cleanTitle || sec.title)}
-                        </h3>
-                      </div>
-
-                      {/* Structured Paragraphs with Bold Subheadings & Bullet Points */}
-                      <div className="space-y-3 text-slate-700 dark:text-slate-200 text-sm sm:text-base leading-relaxed">
-                        {sec.content.map((p, pIdx) => renderStructuredTheoryParagraph(p, pIdx))}
-                      </div>
-
-                      {/* Core Formula & Chemical Equation Callout Card */}
-                      {formulaItems.length > 0 && (
-                        <div className="rounded-2xl bg-gradient-to-r from-indigo-50/90 via-sky-50/80 to-teal-50/80 dark:from-indigo-950/40 dark:via-slate-900 dark:to-teal-950/40 border-2 border-indigo-200/80 dark:border-indigo-800/70 p-4 sm:p-5 space-y-3">
-                          <div className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-wider text-indigo-800 dark:text-indigo-300">
-                            <Sigma className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
-                            <span>Công Thức &amp; Phương Trình Trọng Tâm</span>
-                          </div>
-
-                          <div className="flex flex-wrap items-center gap-3">
-                            {formulaItems.map((fItem, fIdx) => (
-                              <div
-                                key={fIdx}
-                                className="px-4 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-800 shadow-xs text-sm sm:text-base font-extrabold text-indigo-950 dark:text-indigo-200 tracking-wide"
-                              >
-                                {renderFormattedMathAndChem(fItem)}
-                              </div>
-                            ))}
-                          </div>
-
-                          {sec.formulaMeaning && (
-                            <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 leading-relaxed pt-1 border-t border-indigo-200/60 dark:border-indigo-800/50">
-                              <strong className="font-extrabold text-indigo-900 dark:text-indigo-300">
-                                Giải thích kí hiệu &amp; Ý nghĩa:{' '}
-                              </strong>
-                              {renderFormattedMathAndChem(sec.formulaMeaning)}
-                            </p>
-                          )}
+                    return (
+                      <section
+                        key={idx}
+                        className="rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-gradient-to-b from-slate-50/70 to-white dark:from-slate-900/90 dark:to-slate-900 p-5 sm:p-6 shadow-xs space-y-4"
+                      >
+                        {/* Section Heading with Numbered Badge */}
+                        <div className="flex items-start gap-3 pb-3 border-b border-slate-200/80 dark:border-slate-800">
+                          <span className="px-2.5 py-1 rounded-xl bg-teal-700 text-white font-mono font-black text-xs sm:text-sm shrink-0 shadow-xs mt-0.5">
+                            Mục {idx + 1}
+                          </span>
+                          <h3 className="text-base sm:text-lg font-black text-teal-950 dark:text-teal-300 leading-snug">
+                            {renderFormattedMathAndChem(cleanTitle || sec.title)}
+                          </h3>
                         </div>
-                      )}
 
-                      {/* Key Points Summary Box inside Section */}
-                      {sec.keyPoints && sec.keyPoints.length > 0 && (
-                        <div className="rounded-2xl bg-emerald-50/75 dark:bg-emerald-950/30 border border-emerald-200/90 dark:border-emerald-800/70 p-4 sm:p-5 space-y-2.5">
-                          <div className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-wider text-emerald-800 dark:text-emerald-300">
-                            <Sparkles className="w-4 h-4 text-emerald-600 shrink-0" />
-                            <span>Ý Chính Cần Ghi Nhớ</span>
-                          </div>
-                          <ul className="space-y-2">
-                            {sec.keyPoints.map((kp, kpIdx) => (
-                              <li
-                                key={kpIdx}
-                                className="flex items-start gap-2.5 text-xs sm:text-sm text-slate-800 dark:text-slate-200 leading-relaxed"
-                              >
-                                <span className="w-5 h-5 rounded-full bg-emerald-600 text-white font-extrabold text-[11px] flex items-center justify-center shrink-0 mt-0.5">
-                                  {kpIdx + 1}
-                                </span>
-                                <div className="flex-1 font-medium">
-                                  {renderFormattedMathAndChem(kp)}
+                        {/* Structured Paragraphs with Bold Subheadings & Bullet Points */}
+                        <div className="space-y-3 text-slate-700 dark:text-slate-200 text-sm sm:text-base leading-relaxed">
+                          {sec.content.map((p, pIdx) => renderStructuredTheoryParagraph(p, pIdx))}
+                        </div>
+
+                        {/* Core Formula & Chemical Equation Callout Card */}
+                        {formulaItems.length > 0 && (
+                          <div className="rounded-2xl bg-gradient-to-r from-indigo-50/90 via-sky-50/80 to-teal-50/80 dark:from-indigo-950/40 dark:via-slate-900 dark:to-teal-950/40 border-2 border-indigo-200/80 dark:border-indigo-800/70 p-4 sm:p-5 space-y-3">
+                            <div className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-wider text-indigo-800 dark:text-indigo-300">
+                              <Sigma className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                              <span>Công Thức &amp; Phương Trình Trọng Tâm</span>
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-3">
+                              {formulaItems.map((fItem, fIdx) => (
+                                <div
+                                  key={fIdx}
+                                  className="px-4 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-800 shadow-xs text-sm sm:text-base font-extrabold text-indigo-950 dark:text-indigo-200 tracking-wide"
+                                >
+                                  {renderFormattedMathAndChem(fItem)}
                                 </div>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
+                              ))}
+                            </div>
 
-                      {/* Visual Figure Illustration */}
-                      {sec.imageUrl && (
-                        <figure className="my-2 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
-                          <img
-                            src={sec.imageUrl}
-                            alt={sec.imageCaption || sec.title}
-                            className="w-full max-h-72 object-cover"
-                          />
-                          {sec.imageCaption && (
-                            <figcaption className="px-4 py-2.5 text-xs font-semibold text-slate-600 dark:text-slate-400 text-center">
-                              Hình minh họa: {renderFormattedMathAndChem(sec.imageCaption)}
-                            </figcaption>
-                          )}
-                        </figure>
-                      )}
-
-                      {/* Highlight Note Box */}
-                      {sec.highlightBox && (
-                        <div className="p-4 sm:p-5 rounded-2xl bg-amber-50/90 dark:bg-amber-950/40 border border-amber-200/90 dark:border-amber-800 flex items-start gap-3">
-                          <Lightbulb className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                          <div className="space-y-1">
-                            <span className="text-xs font-extrabold uppercase tracking-wider text-amber-800 dark:text-amber-300">
-                              {renderFormattedMathAndChem(sec.highlightBox.title)}
-                            </span>
-                            <p className="text-xs sm:text-sm text-amber-950 dark:text-amber-100 font-medium leading-relaxed">
-                              {renderFormattedMathAndChem(sec.highlightBox.text)}
-                            </p>
+                            {sec.formulaMeaning && (
+                              <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 leading-relaxed pt-1 border-t border-indigo-200/60 dark:border-indigo-800/50">
+                                <strong className="font-extrabold text-indigo-900 dark:text-indigo-300">
+                                  Giải thích kí hiệu &amp; Ý nghĩa:{' '}
+                                </strong>
+                                {renderFormattedMathAndChem(sec.formulaMeaning)}
+                              </p>
+                            )}
                           </div>
-                        </div>
-                      )}
-                    </section>
-                  );
-                })}
-              </div>
+                        )}
+
+                        {/* Key Points Summary Box inside Section */}
+                        {sec.keyPoints && sec.keyPoints.length > 0 && (
+                          <div className="rounded-2xl bg-emerald-50/75 dark:bg-emerald-950/30 border border-emerald-200/90 dark:border-emerald-800/70 p-4 sm:p-5 space-y-2.5">
+                            <div className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-wider text-emerald-800 dark:text-emerald-300">
+                              <Sparkles className="w-4 h-4 text-emerald-600 shrink-0" />
+                              <span>Ý Chính Cần Ghi Nhớ</span>
+                            </div>
+                            <ul className="space-y-2">
+                              {sec.keyPoints.map((kp, kpIdx) => (
+                                <li
+                                  key={kpIdx}
+                                  className="flex items-start gap-2.5 text-xs sm:text-sm text-slate-800 dark:text-slate-200 leading-relaxed"
+                                >
+                                  <span className="w-5 h-5 rounded-full bg-emerald-600 text-white font-extrabold text-[11px] flex items-center justify-center shrink-0 mt-0.5">
+                                    {kpIdx + 1}
+                                  </span>
+                                  <div className="flex-1 font-medium">
+                                    {renderFormattedMathAndChem(kp)}
+                                  </div>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {/* Visual Figure Illustration */}
+                        {sec.imageUrl && (
+                          <figure className="my-2 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
+                            <img
+                              src={sec.imageUrl}
+                              alt={sec.imageCaption || sec.title}
+                              className="w-full max-h-72 object-cover"
+                            />
+                            {sec.imageCaption && (
+                              <figcaption className="px-4 py-2.5 text-xs font-semibold text-slate-600 dark:text-slate-400 text-center">
+                                Hình minh họa: {renderFormattedMathAndChem(sec.imageCaption)}
+                              </figcaption>
+                            )}
+                          </figure>
+                        )}
+
+                        {/* Highlight Note Box */}
+                        {sec.highlightBox && (
+                          <div className="p-4 sm:p-5 rounded-2xl bg-amber-50/90 dark:bg-amber-950/40 border border-amber-200/90 dark:border-amber-800 flex items-start gap-3">
+                            <Lightbulb className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                            <div className="space-y-1">
+                              <span className="text-xs font-extrabold uppercase tracking-wider text-amber-800 dark:text-amber-300">
+                                {renderFormattedMathAndChem(sec.highlightBox.title)}
+                              </span>
+                              <p className="text-xs sm:text-sm text-amber-950 dark:text-amber-100 font-medium leading-relaxed">
+                                {renderFormattedMathAndChem(sec.highlightBox.text)}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                      </section>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {/* Embedded 3D Interactive Lab (if available) */}
@@ -1474,7 +1701,7 @@ export const LessonDetailPage: React.FC = () => {
                           </span>
                         </div>
                         <h4 className="font-bold text-xs sm:text-sm text-slate-800 dark:text-slate-100 group-hover:text-teal-600 transition truncate">
-                          {hasRealFile ? docData.downloadFileName || asset.title : asset.title}
+                          {asset.title || docData.downloadFileName}
                         </h4>
                         <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-teal-600 dark:text-teal-400">
                           <Eye className="w-3 h-3" />{' '}

@@ -93,7 +93,7 @@ export async function saveTeacherFileToRepo(
   let fileUrl = `idb://${id}`;
   const mimeType = file.type || guessMimeTypeFromFileName(file.name);
 
-  const dataUrl = file.size <= 15 * 1024 * 1024 ? await readFileAsDataUrl(file) : null;
+  const dataUrl = file.size <= 50 * 1024 * 1024 ? await readFileAsDataUrl(file) : null;
 
   // Try uploading to server /api/upload-teacher-file so other computers can access the static file at /assets/uploads/...
   if (dataUrl && typeof window !== 'undefined' && typeof fetch !== 'undefined') {

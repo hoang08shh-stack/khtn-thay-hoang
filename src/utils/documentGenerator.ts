@@ -13,6 +13,7 @@ import {
   isRealUploadedFileUrl,
   resolvePlayableOrDownloadableUrl,
 } from '../services/localFileStore.ts';
+import { isCoreWordAssetType } from './wordReaderEngine.ts';
 
 export interface GeneratedDocumentData {
   id: string;
@@ -150,8 +151,12 @@ export function findTeacherUploadedFileInRepo(params: {
       (normLessonTitle && l.title.trim().toLowerCase() === normLessonTitle)
   );
 
+  const targetIsCoreWord = isCoreWordAssetType(params.type);
+
   if (targetLesson && Array.isArray(targetLesson.assets)) {
-    const validAssets = targetLesson.assets.filter((a) => isRealUploadedFileUrl(a.fileUrl));
+    const validAssets = targetLesson.assets.filter(
+      (a) => isRealUploadedFileUrl(a.fileUrl) && (targetIsCoreWord || !isCoreWordAssetType(a.type))
+    );
     const matchedAsset =
       validAssets.find((a) => isMatchingDocCategory(a.type, a.title, params.type)) ||
       validAssets[0];
@@ -168,8 +173,8 @@ export function findTeacherUploadedFileInRepo(params: {
   }
 
   // 4. Tìm trong kho Tệp Đính kèm chung (khtn_admin_assets_v2) hoặc Kho Đề cương (khtn_admin_catalog_docs_v2)
-  const generalAssets = getGeneralUploadedAssetsSync().filter((a) =>
-    isRealUploadedFileUrl(a.fileUrl)
+  const generalAssets = getGeneralUploadedAssetsSync().filter(
+    (a) => isRealUploadedFileUrl(a.fileUrl) && (targetIsCoreWord || !isCoreWordAssetType(a.type))
   );
   const matchedGeneral = generalAssets.find(
     (a) =>
@@ -187,7 +192,9 @@ export function findTeacherUploadedFileInRepo(params: {
   }
 
   const catalogDocs = getAdminCatalogDocsSync().filter(
-    (d) => isRealUploadedFileUrl(d.fileUrl) || isRealUploadedFileUrl(d.downloadUrl)
+    (d) =>
+      (isRealUploadedFileUrl(d.fileUrl) || isRealUploadedFileUrl(d.downloadUrl)) &&
+      (targetIsCoreWord || !isCoreWordAssetType(d.type))
   );
   const matchedCatalog = catalogDocs.find(
     (d) =>
