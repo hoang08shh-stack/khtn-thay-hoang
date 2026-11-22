@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  LEGACY_LOCAL_UPDATED_AT_KEY,
   STORAGE_KEYS,
   buildCmsSnapshotPayload,
   fetchAndApplyRemoteCmsSnapshot,
@@ -633,4 +634,214 @@ test('server isSameOriginWriteAllowed permits Nginx/Cloud Run forwarded hosts & 
     false,
     'Must reject unrelated third-party Origin'
   );
+
+  // 4. Sec-Fetch-Site: same-origin MUST be allowed even if reverse proxy strips X-Forwarded-Host
+  assert.equal(
+    isSameOriginWriteAllowed({
+      headers: {
+        host: 'localhost:3000',
+        origin: 'https://custom-school-domain.vn',
+        'sec-fetch-site': 'same-origin',
+      },
+    } as any),
+    true,
+    'Must allow Sec-Fetch-Site: same-origin even when proxy rewrites Host'
+  );
+
+  // 5. Sec-Fetch-Site: cross-site MUST be strictly rejected
+  assert.equal(
+    isSameOriginWriteAllowed({
+      headers: {
+        host: 'ais-pre-abc123.asia-southeast1.run.app',
+        origin: 'https://ais-pre-abc123.asia-southeast1.run.app',
+        'sec-fetch-site': 'cross-site',
+      },
+    } as any),
+    false,
+    'Must reject Sec-Fetch-Site: cross-site'
+  );
+});
+
+test('phone with legacy poisoned khtn_cms_local_updated_at_v1 (future timestamp) auto-purges it and receives server updates without overwriting server', async () => {
+  let postSyncCount = 0;
+  const serverSnapshot = {
+    updatedAt: '2026-11-22T12:45:00.000Z',
+    lessons: [
+      ...getInitialLocalLessons().slice(0, 2),
+      {
+        id: 'lesson-unblocked-legacy-phone',
+        topicId: 'topic-9-hoa',
+        grade: 9,
+        domain: 'hoa-hoc',
+        code: 'KHTN9-LEGACY-FIX',
+        slug: 'lesson-unblocked-legacy-phone',
+        title: 'Bài 98: Mở khóa điện thoại dính cache cũ',
+        summary: 'Bài giảng mới sau khi xóa key khtn_cms_local_updated_at_v1 cũ',
+        content: 'Nội dung mới',
+        durationMinutes: 45,
+        orderIndex: 98,
+        isPublished: true,
+        viewCount: 0,
+        createdAt: '2026-11-22T12:45:00.000Z',
+        updatedAt: '2026-11-22T12:45:00.000Z',
+        assets: [],
+        miniQuiz: [],
+      },
+    ],
+  };
+
+  const { ls } = installBrowserEnv(async (input, init) => {
+    const url = String(input);
+    const method = (init?.method || 'GET').toUpperCase();
+    if (url.includes('/api/sync-cms-snapshot') && method === 'POST') {
+      postSyncCount++;
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    if (url.includes('/api/cms-snapshot')) {
+      return new Response(JSON.stringify(serverSnapshot), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    return new Response('{}', { status: 404 });
+  });
+
+  try {
+    // Simulate a real phone that visited BEFORE the fix and got poisoned with a future legacy key!
+    getInitialLocalLessons();
+    ls.setItem(LEGACY_LOCAL_UPDATED_AT_KEY, JSON.stringify('2030-01-01T00:00:00.000Z'));
+
+    const applied = await fetchAndApplyRemoteCmsSnapshot(false);
+    assert.equal(applied, true, 'Phone with legacy poisoned key MUST accept live server snapshot');
+    assert.equal(postSyncCount, 0, 'Read-only phone MUST NEVER push stale localStorage back to overwrite server');
+    assert.equal(
+      ls.getItem(LEGACY_LOCAL_UPDATED_AT_KEY),
+      null,
+      'Legacy poisoned key MUST be purged automatically'
+    );
+    const lessons = getInitialLocalLessons();
+    assert.ok(
+      lessons.some((l) => l.id === 'lesson-unblocked-legacy-phone'),
+      'New server lesson must appear immediately on previously poisoned phone'
+    );
+  } finally {
+    cleanupBrowserEnv();
+  }
+});
+
+test('mobile QuotaExceededError / Zalo Private Browsing still displays fresh server lessons via memory cache', async () => {
+  const serverSnapshot = {
+    updatedAt: '2026-11-22T12:46:00.000Z',
+    lessons: [
+      {
+        id: 'lesson-mobile-quota-ok',
+        topicId: 'topic-9-hoa',
+        grade: 9,
+        domain: 'hoa-hoc',
+        code: 'KHTN9-QUOTA',
+        slug: 'lesson-mobile-quota-ok',
+        title: 'Bài 97: Vượt giới hạn 5MB Safari / Zalo WebView',
+        summary: 'Tóm tắt',
+        content: 'Nội dung',
+        durationMinutes: 45,
+        orderIndex: 97,
+        isPublished: true,
+        viewCount: 0,
+        createdAt: '2026-11-22T12:46:00.000Z',
+        updatedAt: '2026-11-22T12:46:00.000Z',
+        assets: [],
+        miniQuiz: [],
+      },
+    ],
+  };
+
+  const { ls } = installBrowserEnv(async (input) => {
+    const url = String(input);
+    if (url.includes('/api/cms-snapshot')) {
+      return new Response(JSON.stringify(serverSnapshot), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    return new Response('{}', { status: 404 });
+  });
+
+  try {
+    // Seed old lessons first, then simulate mobile Safari/Zalo throwing QuotaExceededError on every setItem!
+    getInitialLocalLessons();
+    const origSetItem = ls.setItem.bind(ls);
+    ls.setItem = () => {
+      const err: any = new Error('QuotaExceededError');
+      err.name = 'QuotaExceededError';
+      throw err;
+    };
+
+    const applied = await fetchAndApplyRemoteCmsSnapshot(false);
+    assert.equal(applied, true, 'Must still apply server snapshot even when localStorage.setItem throws');
+    const lessons = getInitialLocalLessons();
+    assert.ok(
+      lessons.some((l) => l.id === 'lesson-mobile-quota-ok'),
+      'safeReadLocal MUST read authoritative fresh server data from memoryFallbackStore instead of stale localStorage'
+    );
+    ls.setItem = origSetItem;
+  } finally {
+    cleanupBrowserEnv();
+  }
+});
+
+test('content fingerprint mismatch updates read-only phone even if SNAPSHOT_APPLIED_AT timestamp collides', async () => {
+  const sharedStamp = '2026-11-22T12:47:00.000Z';
+  const serverSnapshot = {
+    updatedAt: sharedStamp,
+    lessons: [
+      {
+        id: 'lesson-fingerprint-sync',
+        topicId: 'topic-8-hoa',
+        grade: 8,
+        domain: 'hoa-hoc',
+        code: 'KHTN8-FP',
+        slug: 'lesson-fingerprint-sync',
+        title: 'Bài 96: Cập nhật theo dấu vân tay nội dung',
+        summary: 'Tóm tắt',
+        content: 'Nội dung',
+        durationMinutes: 45,
+        orderIndex: 96,
+        isPublished: true,
+        viewCount: 0,
+        createdAt: sharedStamp,
+        updatedAt: sharedStamp,
+        assets: [],
+        miniQuiz: [],
+      },
+    ],
+  };
+
+  const { ls } = installBrowserEnv(async (input) => {
+    const url = String(input);
+    if (url.includes('/api/cms-snapshot')) {
+      return new Response(JSON.stringify(serverSnapshot), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    return new Response('{}', { status: 404 });
+  });
+
+  try {
+    getInitialLocalLessons();
+    // Simulate identical timestamp recorded on phone while lesson content actually differs from server!
+    ls.setItem(STORAGE_KEYS.SNAPSHOT_APPLIED_AT, JSON.stringify(sharedStamp));
+
+    const applied = await fetchAndApplyRemoteCmsSnapshot(false);
+    assert.equal(applied, true, 'Must apply remote snapshot when content fingerprint differs despite equal updatedAt');
+    assert.ok(
+      getInitialLocalLessons().some((l) => l.id === 'lesson-fingerprint-sync'),
+      'Lesson missing on phone must appear after fingerprint sync'
+    );
+  } finally {
+    cleanupBrowserEnv();
+  }
 });

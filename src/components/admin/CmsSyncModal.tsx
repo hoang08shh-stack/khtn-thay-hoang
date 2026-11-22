@@ -19,6 +19,7 @@ import {
   importCmsSnapshotFromJson,
   syncCmsSnapshotWithReport,
 } from '../../services/adminService.ts';
+import { useAuth } from '../../hooks/useAuth.ts';
 
 interface CmsSyncModalProps {
   isOpen: boolean;
@@ -33,6 +34,7 @@ export const CmsSyncModal: React.FC<CmsSyncModalProps> = ({
   onSyncedSuccess,
   onExportJsonFile,
 }) => {
+  const { isFirebaseAdmin, loginWithGoogle } = useAuth();
   const [pastedJson, setPastedJson] = useState('');
   const [statusMessage, setStatusMessage] = useState<{
     type: 'success' | 'error' | 'info';
@@ -40,6 +42,10 @@ export const CmsSyncModal: React.FC<CmsSyncModalProps> = ({
   } | null>(null);
   const [isSyncingCloud, setIsSyncingCloud] = useState(false);
   const [syncAvailability, setSyncAvailability] = useState<{
+    firebaseAvailable: boolean;
+    firebaseAuthenticated: boolean;
+    firebaseEmail?: string;
+    firebaseUpdatedAt?: string;
     serverApiAvailable: boolean;
     supabaseAvailable: boolean;
     supabaseAuthenticated: boolean;
@@ -57,26 +63,56 @@ export const CmsSyncModal: React.FC<CmsSyncModalProps> = ({
 
   if (!isOpen) return null;
 
+  const handleConnectGoogleInModal = async () => {
+    setIsSyncingCloud(true);
+    setStatusMessage(null);
+    try {
+      await loginWithGoogle();
+      const report = await syncCmsSnapshotWithReport(false);
+      checkRemoteSyncAvailability().then(setSyncAvailability).catch(() => {});
+      if (report.target === 'firebase' && report.ok) {
+        setStatusMessage({
+          type: 'success',
+          text: 'Đã đăng nhập Google Firebase và đẩy toàn bộ bài giảng lên Firestore Cloud! Điện thoại mở bất kỳ link nào cũng sẽ tự động thấy bài giảng mới.',
+        });
+      } else {
+        setStatusMessage({
+          type: 'success',
+          text: 'Đã kết nối Google Firebase thành công! Hãy bấm "Đẩy dữ liệu máy này lên Cloud" để đồng bộ ngay.',
+        });
+      }
+    } catch (err: any) {
+      setStatusMessage({
+        type: 'error',
+        text:
+          err?.message ||
+          'Chưa đăng nhập được Google Firebase. Hãy cho phép cửa sổ popup và chọn tài khoản hoang08shh@gmail.com.',
+      });
+    } finally {
+      setIsSyncingCloud(false);
+    }
+  };
+
   const handlePullFromRemote = async () => {
     setIsSyncingCloud(true);
     setStatusMessage(null);
     try {
       const ok = await fetchAndApplyRemoteCmsSnapshot(true);
       if (ok) {
-        onSyncedSuccess('Đã tải và áp dụng bản cập nhật bài giảng mới nhất từ Supabase / Máy chủ!');
+        onSyncedSuccess('Đã tải và áp dụng bản cập nhật bài giảng mới nhất từ Firebase Cloud / Máy chủ!');
         onClose();
       } else {
         setStatusMessage({
           type: 'info',
-          text: syncAvailability?.supabaseAvailable
-            ? 'Chưa có bản cập nhật nào trên Supabase Cloud. Trên Máy 1, hãy bấm "Đẩy dữ liệu máy này lên Máy chủ" (và nhớ đăng nhập bằng mật khẩu Supabase của giáo viên).'
-            : 'Website hiện chưa gắn biến môi trường Supabase (VITE_SUPABASE_URL và VITE_SUPABASE_ANON_KEY) trên Cloudflare Pages / Vercel nên không có máy chủ chung. Hãy dùng Cách 2 (Dán mã JSON) hoặc cấu hình Supabase theo hướng dẫn bên dưới.',
+          text: syncAvailability?.firebaseAvailable
+            ? 'Chưa có dữ liệu mới hơn trên Firebase Firestore. Hãy bấm "Đăng nhập Google Firebase" rồi bấm "Đẩy dữ liệu máy này lên Cloud" trên máy tính đã soạn bài.'
+            : 'Chưa có bản cập nhật mới từ máy chủ đồng bộ.',
         });
       }
     } catch {
       setStatusMessage({
         type: 'error',
-        text: 'Không thể kết nối tới Supabase / Máy chủ đồng bộ. Vui lòng thử Dán mã JSON hoặc Chọn tệp từ máy.',
+        text: 'Không thể kết nối tới Firebase / Máy chủ đồng bộ. Vui lòng thử lại hoặc dùng Dán mã JSON.',
       });
     } finally {
       setIsSyncingCloud(false);
@@ -92,25 +128,32 @@ export const CmsSyncModal: React.FC<CmsSyncModalProps> = ({
         setStatusMessage({
           type: 'success',
           text:
-            report.target === 'supabase'
+            report.target === 'firebase'
+              ? 'Đã đẩy toàn bộ bài giảng và tài liệu lên Firebase Firestore Cloud! Mọi điện thoại và máy tính mở bất kỳ đường link nào đều sẽ tự động cập nhật ngay lập tức.'
+              : report.target === 'supabase'
               ? 'Đã đẩy toàn bộ bài giảng và học liệu lên Supabase Cloud! Mọi thiết bị khác mở website sẽ tự động cập nhật ngay lập tức.'
-              : 'Đã lưu dữ liệu vào máy chủ phát triển (/api/sync-cms-snapshot). Nếu bạn dùng Cloudflare Pages tĩnh, hãy gắn thêm Supabase để đồng bộ trực tiếp.',
+              : 'Đã lưu vào máy chủ cục bộ hiện tại. Để đồng bộ xuyên suốt giữa mọi đường link (ais-dev & ais-pre) và lưu vĩnh viễn trên Firebase, hãy bấm nút "Đăng nhập Google (Firebase)" ở trên rồi đẩy lại.',
         });
         checkRemoteSyncAvailability().then(setSyncAvailability).catch(() => {});
+      } else if (report.reason === 'firebase_auth_required') {
+        setStatusMessage({
+          type: 'error',
+          text: 'Firebase đã bật nhưng trình duyệt chưa đăng nhập tài khoản Google Quản trị (hoang08shh@gmail.com). Hãy bấm nút "Đăng nhập Google (Firebase)" ngay bên dưới.',
+        });
+      } else if (report.reason === 'firebase_error') {
+        setStatusMessage({
+          type: 'error',
+          text: `Lỗi ghi dữ liệu lên Firebase Firestore: ${report.errorDetail || 'Vui lòng thử lại.'}`,
+        });
       } else if (report.reason === 'supabase_auth_required') {
         setStatusMessage({
           type: 'error',
-          text: 'Supabase đã kết nối nhưng trình duyệt chưa đăng nhập phiên Supabase Auth của giáo viên. Hãy đăng xuất và đăng nhập lại tại /dang-nhap bằng Email + Mật khẩu tài khoản Supabase (không dùng nút Truy cập nhanh).',
-        });
-      } else if (report.reason === 'supabase_permission_or_schema_error') {
-        setStatusMessage({
-          type: 'error',
-          text: `Supabase từ chối ghi dữ liệu (${report.errorDetail || 'thiếu bảng cms_snapshots hoặc quyền admin trong user_roles'}). Hãy chạy lại tệp SQL khtn_supabase_all_in_one.sql trong Supabase SQL Editor.`,
+          text: 'Supabase đã kết nối nhưng chưa đăng nhập phiên giáo viên.',
         });
       } else {
         setStatusMessage({
           type: 'info',
-          text: 'Trang web hiện đang chạy bản tĩnh trên Cloudflare/Vercel và chưa được cấu hình biến môi trường VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY. Hãy gắn 2 biến này trên Cloudflare Pages (hoặc dùng Cách 2: Sao chép & Dán mã JSON).',
+          text: 'Chưa kết nối được máy chủ đồng bộ. Vui lòng đăng nhập Google Firebase hoặc dùng Cách 2 (Sao chép & Dán mã JSON).',
         });
       }
     } finally {
@@ -247,69 +290,53 @@ export const CmsSyncModal: React.FC<CmsSyncModalProps> = ({
                 <div className="space-y-1.5">
                   <div className="flex flex-wrap items-center gap-2">
                     <h3 className="text-sm font-extrabold text-slate-900 dark:text-white">
-                      Cách 1: Đồng bộ tự động trực tuyến qua Supabase / Máy chủ
+                      Cách 1: Đồng bộ tự động trực tuyến qua Firebase Cloud
                     </h3>
                     <span
                       className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold ${
-                        syncAvailability?.supabaseAvailable || syncAvailability?.serverApiAvailable
+                        isFirebaseAdmin || syncAvailability?.firebaseAuthenticated
+                          ? 'bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200'
+                          : syncAvailability?.firebaseAvailable
+                          ? 'bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-200'
+                          : syncAvailability?.serverApiAvailable
                           ? 'bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200'
                           : 'bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-200'
                       }`}
                     >
-                      {syncAvailability?.supabaseAvailable
-                        ? syncAvailability.supabaseAuthenticated
-                          ? 'Supabase: Đã kết nối & Đăng nhập'
-                          : 'Supabase: Đã gắn URL (Cần đăng nhập mật khẩu Supabase)'
+                      {isFirebaseAdmin || syncAvailability?.firebaseAuthenticated
+                        ? 'Firebase Cloud: Đã kết nối & Đã đăng nhập Google'
+                        : syncAvailability?.firebaseAvailable
+                        ? 'Firebase Cloud: Sẵn sàng (Cần đăng nhập Google)'
                         : syncAvailability?.serverApiAvailable
                         ? 'Máy chủ trực tiếp: Đang đồng bộ tự động'
-                        : 'Chế độ tĩnh: Chưa cấu hình Supabase'}
+                        : 'Chế độ cục bộ'}
                     </span>
                   </div>
                   <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                    {syncAvailability?.supabaseAvailable
-                      ? syncAvailability.supabaseAuthenticated
-                        ? 'Mọi bài giảng và học liệu tải lên sẽ tự động lưu lên Supabase Cloud và cập nhật sang mọi thiết bị khác.'
-                        : 'Để đẩy bài giảng lên Supabase, hãy đăng xuất rồi đăng nhập lại bằng Email + Mật khẩu tài khoản Supabase (không dùng Truy cập nhanh).'
-                      : syncAvailability?.serverApiAvailable
-                      ? 'Máy chủ web đang tự động lưu bài giảng & tệp tải lên và đẩy cập nhật tức thì tới mọi điện thoại/máy tính mở CÙNG đường link này.'
-                      : 'Hiện web chạy tĩnh chưa có biến môi trường VITE_SUPABASE_URL & VITE_SUPABASE_ANON_KEY nên bài giảng mới chỉ lưu trên trình duyệt máy này.'}
+                    {isFirebaseAdmin || syncAvailability?.firebaseAuthenticated
+                      ? 'Mọi bài giảng, trình đọc Word và học liệu tải lên sẽ tự động lưu vào Firebase Firestore và cập nhật tức thì sang mọi điện thoại (dù mở link xem trước hay link chia sẻ).'
+                      : syncAvailability?.firebaseAvailable
+                      ? 'Firebase Firestore đã được khởi tạo. Thầy chỉ cần bấm "Đăng nhập Google (hoang08shh@gmail.com)" 1 lần để kích hoạt đồng bộ đám mây vĩnh viễn cho mọi điện thoại.'
+                      : 'Máy chủ đang tự động lưu bài giảng & tệp tải lên cho các thiết bị mở cùng đường link.'}
                   </p>
                 </div>
               </div>
             </div>
 
-            {!syncAvailability?.supabaseAvailable && (
-              <div className="p-3 rounded-xl bg-white/80 dark:bg-slate-900/70 border border-teal-200/80 dark:border-teal-800/60 text-[11px] text-slate-700 dark:text-slate-300 space-y-1.5">
-                {syncAvailability?.serverApiAvailable && (
-                  <div className="p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-200 leading-relaxed">
-                    <strong>Lưu ý quan trọng khi xem trên điện thoại:</strong> Hãy mở <strong>đúng cùng một đường link chia sẻ</strong> (ví dụ link <code className="font-mono">ais-pre-...</code>) trên cả máy tính (để tải bài giảng trong Quản trị) và điện thoại (để xem). Đường link xem trước (<code className="font-mono">ais-dev-...</code>) và đường link chia sẻ (<code className="font-mono">ais-pre-...</code>) chạy trên 2 máy chủ độc lập nếu chưa gắn cơ sở dữ liệu đám mây Supabase.
-                  </div>
-                )}
-                <div className="font-bold text-slate-900 dark:text-white">
-                  Nếu muốn đồng bộ xuyên suốt giữa nhiều link / hosting tĩnh bằng Supabase (Miễn phí):
-                </div>
-                <ol className="list-decimal list-inside space-y-0.5">
-                  <li>
-                    Mở dự án Supabase → vào <strong>SQL Editor</strong> → chạy tệp{' '}
-                    <a
-                      href="/khtn_supabase_all_in_one.sql"
-                      download="khtn_supabase_all_in_one.sql"
-                      className="text-teal-700 dark:text-teal-300 underline font-bold"
-                    >
-                      khtn_supabase_all_in_one.sql (Tải tại đây)
-                    </a>
-                    .
-                  </li>
-                  <li>
-                    Thêm biến môi trường{' '}
-                    <code className="font-mono bg-slate-100 dark:bg-slate-800 px-1 rounded">VITE_SUPABASE_URL</code> và{' '}
-                    <code className="font-mono bg-slate-100 dark:bg-slate-800 px-1 rounded">VITE_SUPABASE_ANON_KEY</code> rồi Deploy lại.
-                  </li>
-                </ol>
-              </div>
-            )}
-
             <div className="flex flex-wrap gap-2">
+              {syncAvailability?.firebaseAvailable && !(isFirebaseAdmin || syncAvailability?.firebaseAuthenticated) && (
+                <button
+                  type="button"
+                  onClick={handleConnectGoogleInModal}
+                  disabled={isSyncingCloud}
+                  data-testid="modal-connect-google-firebase-btn"
+                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white font-extrabold text-xs flex items-center gap-1.5 transition cursor-pointer"
+                >
+                  <Cloud className="w-3.5 h-3.5" />
+                  <span>Đăng nhập Google (Firebase)</span>
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={handlePullFromRemote}
@@ -329,7 +356,7 @@ export const CmsSyncModal: React.FC<CmsSyncModalProps> = ({
                 className="px-4 py-2 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 border border-slate-300 dark:border-slate-600 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer"
               >
                 <Cloud className="w-3.5 h-3.5 text-sky-600" />
-                <span>Đẩy dữ liệu máy này lên Máy chủ</span>
+                <span>Đẩy dữ liệu máy này lên Cloud</span>
               </button>
             </div>
           </div>

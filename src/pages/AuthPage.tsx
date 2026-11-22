@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Breadcrumbs } from '../components/common/Breadcrumbs.tsx';
 import { useAuth } from '../hooks/useAuth.ts';
+import { isFirebaseConfigured } from '../firebase.ts';
 import { AppUser, Grade } from '../types/index.ts';
 import {
   Lock,
@@ -29,9 +30,28 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
-  const { login, register } = useAuth();
+  const { login, loginWithGoogle, register } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+
+  const handleGoogleTeacherLogin = async () => {
+    setErrorMsg('');
+    setSuccessMsg('');
+    setIsSubmitting(true);
+    try {
+      const loggedUser = await loginWithGoogle();
+      if (onLoginSuccess) onLoginSuccess(loggedUser);
+      const destination = (location.state as any)?.from?.pathname || '/quan-tri';
+      navigate(destination, { replace: true });
+    } catch (err: any) {
+      setErrorMsg(
+        err?.message ||
+          'Không thể đăng nhập Google Firebase. Vui lòng cho phép cửa sổ bật lên (popup) và chọn đúng tài khoản hoang08shh@gmail.com.'
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const handleStartAnonymousStudentMode = async (selectedGrade: Grade) => {
     setIsSubmitting(true);
@@ -230,8 +250,39 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
                     Đăng Nhập Dành Riêng Cho Giáo Viên
                   </h2>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                    Khu vực quản trị ngân hàng câu hỏi, chuyển đổi đề Word (.docx) và quản lý học liệu của giáo viên.
+                    Khu vực quản trị bài giảng, trình đọc Word, ngân hàng câu hỏi và đồng bộ dữ liệu lên điện thoại học sinh.
                   </p>
+                </div>
+
+                {isFirebaseConfigured && (
+                  <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/70 space-y-3">
+                    <div className="text-xs text-emerald-900 dark:text-emerald-200 leading-relaxed">
+                      <strong>Khuyên dùng (Firebase Cloud):</strong> Đăng nhập bằng tài khoản Google{' '}
+                      <code className="font-mono font-bold">hoang08shh@gmail.com</code> để mọi bài giảng và tài liệu tải lên tự động đồng bộ tức thì tới tất cả điện thoại và mọi đường link.
+                    </div>
+                    <button
+                      type="button"
+                      disabled={isSubmitting}
+                      onClick={handleGoogleTeacherLogin}
+                      data-testid="google-firebase-login-btn"
+                      className="w-full py-3 px-4 rounded-xl bg-emerald-700 hover:bg-emerald-600 disabled:opacity-60 text-white font-bold text-sm shadow-sm transition flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <ShieldCheck className="w-4 h-4 shrink-0" />
+                      <span>
+                        {isSubmitting
+                          ? 'Đang kết nối Google Firebase...'
+                          : 'Đăng Nhập Google Quản Trị (Firebase Cloud)'}
+                      </span>
+                    </button>
+                  </div>
+                )}
+
+                <div className="relative flex items-center py-1">
+                  <div className="flex-grow border-t border-slate-200 dark:border-slate-700" />
+                  <span className="shrink mx-3 text-[11px] font-semibold text-slate-400">
+                    Hoặc đăng nhập quản trị nhanh (nội bộ)
+                  </span>
+                  <div className="flex-grow border-t border-slate-200 dark:border-slate-700" />
                 </div>
 
                 <form onSubmit={handleTeacherLogin} className="space-y-4">

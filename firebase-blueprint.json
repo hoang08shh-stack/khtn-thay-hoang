@@ -1,0 +1,630 @@
+{
+  "entities": {
+    "AdminRegistry": {
+      "title": "AdminRegistry",
+      "description": "Authorized teacher/administrator registry record keyed by Firebase Auth UID.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "role": {
+          "type": "string",
+          "enum": ["admin", "teacher"]
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "role", "displayName", "createdAt", "updatedAt"]
+    },
+    "CmsMeta": {
+      "title": "CmsMeta",
+      "description": "Global CMS synchronization metadata, site configuration, and deleted ID tombstones.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "isPublic": {
+          "type": "boolean"
+        },
+        "updatedAtIso": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 64
+        },
+        "revision": {
+          "type": "number"
+        },
+        "siteSettings": {
+          "type": "object"
+        },
+        "deletedIds": {
+          "type": "object"
+        },
+        "ownerUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["id", "isPublic", "updatedAtIso", "revision", "siteSettings", "deletedIds", "ownerUid", "createdAt", "updatedAt"]
+    },
+    "CmsLesson": {
+      "title": "CmsLesson",
+      "description": "Natural Sciences (KHTN 6-9) lesson document including theory, Core Word Reader content, attachments, and review questions.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "topicId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "grade": {
+          "type": "number",
+          "enum": [6, 7, 8, 9]
+        },
+        "domain": {
+          "type": "string",
+          "enum": ["vat-li", "hoa-hoc", "sinh-hoc"]
+        },
+        "code": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "slug": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "summary": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "content": {
+          "type": "string",
+          "maxLength": 120000
+        },
+        "durationMinutes": {
+          "type": "number"
+        },
+        "orderIndex": {
+          "type": "number"
+        },
+        "isPublished": {
+          "type": "boolean"
+        },
+        "isPublic": {
+          "type": "boolean"
+        },
+        "thumbnailUrl": {
+          "type": "string",
+          "maxLength": 2048
+        },
+        "videoUrl": {
+          "type": "string",
+          "maxLength": 2048
+        },
+        "viewCount": {
+          "type": "number"
+        },
+        "lessonCreatedAt": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "lessonUpdatedAt": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "assets": {
+          "type": "array"
+        },
+        "coreWordDoc": {
+          "type": "object"
+        },
+        "simulationIds": {
+          "type": "array"
+        },
+        "miniQuiz": {
+          "type": "array"
+        },
+        "ownerUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["id", "topicId", "grade", "domain", "code", "slug", "title", "summary", "content", "durationMinutes", "orderIndex", "isPublished", "isPublic", "viewCount", "ownerUid", "createdAt", "updatedAt"]
+    },
+    "CmsTopic": {
+      "title": "CmsTopic",
+      "description": "Curriculum topic/chapter for KHTN Grades 6-9.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "grade": {
+          "type": "number",
+          "enum": [6, 7, 8, 9]
+        },
+        "domain": {
+          "type": "string",
+          "enum": ["vat-li", "hoa-hoc", "sinh-hoc"]
+        },
+        "code": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "chapterNumber": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "lessonCount": {
+          "type": "number"
+        },
+        "experimentCount": {
+          "type": "number"
+        },
+        "icon": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "order": {
+          "type": "number"
+        },
+        "image": {
+          "type": "string",
+          "maxLength": 2048
+        },
+        "isPublic": {
+          "type": "boolean"
+        },
+        "ownerUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["id", "grade", "domain", "code", "title", "description", "lessonCount", "experimentCount", "icon", "order", "isPublic", "ownerUid", "createdAt", "updatedAt"]
+    },
+    "CmsVideo": {
+      "title": "CmsVideo",
+      "description": "Experiment or lecture video entry linked to YouTube.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "grade": {
+          "type": "number",
+          "enum": [6, 7, 8, 9]
+        },
+        "domain": {
+          "type": "string",
+          "enum": ["vat-li", "hoa-hoc", "sinh-hoc"]
+        },
+        "duration": {
+          "type": "string",
+          "maxLength": 32
+        },
+        "youtubeId": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "experimentType": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "instructor": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "summary": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "thumbnail": {
+          "type": "string",
+          "maxLength": 2048
+        },
+        "views": {
+          "type": "number"
+        },
+        "timestamps": {
+          "type": "array"
+        },
+        "isPublic": {
+          "type": "boolean"
+        },
+        "ownerUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["id", "title", "grade", "domain", "duration", "youtubeId", "experimentType", "instructor", "description", "views", "timestamps", "isPublic", "ownerUid", "createdAt", "updatedAt"]
+    },
+    "CmsCatalogDoc": {
+      "title": "CmsCatalogDoc",
+      "description": "Teaching catalog document (PPTX, PDF, DOCX) visible in the Documents repository.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "lessonId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "grade": {
+          "type": "number",
+          "enum": [6, 7, 8, 9]
+        },
+        "domain": {
+          "type": "string",
+          "enum": ["vat-li", "hoa-hoc", "sinh-hoc"]
+        },
+        "format": {
+          "type": "string",
+          "enum": ["pptx", "pdf", "docx"]
+        },
+        "type": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "pageCount": {
+          "type": "number"
+        },
+        "fileSize": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "author": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "downloadCount": {
+          "type": "number"
+        },
+        "downloadUrl": {
+          "type": "string",
+          "maxLength": 2048
+        },
+        "fileUrl": {
+          "type": "string",
+          "maxLength": 2048
+        },
+        "fileName": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "isPublic": {
+          "type": "boolean"
+        },
+        "ownerUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["id", "title", "grade", "domain", "format", "type", "pageCount", "fileSize", "description", "author", "downloadCount", "downloadUrl", "isPublic", "ownerUid", "createdAt", "updatedAt"]
+    },
+    "CmsResource": {
+      "title": "CmsResource",
+      "description": "Unified learning resource, general uploaded asset, or custom curriculum item.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "resourceKind": {
+          "type": "string",
+          "enum": ["unified", "general_asset", "custom_lesson", "custom_topic"]
+        },
+        "payload": {
+          "type": "object"
+        },
+        "isPublic": {
+          "type": "boolean"
+        },
+        "ownerUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["id", "resourceKind", "payload", "isPublic", "ownerUid", "createdAt", "updatedAt"]
+    },
+    "CmsQuestion": {
+      "title": "CmsQuestion",
+      "description": "Quiz bank question (multiple choice, true/false, short answer, essay) for KHTN 6-9.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "grade": {
+          "type": "number",
+          "enum": [6, 7, 8, 9]
+        },
+        "domain": {
+          "type": "string",
+          "enum": ["vat-li", "hoa-hoc", "sinh-hoc"]
+        },
+        "question": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        },
+        "payload": {
+          "type": "object"
+        },
+        "isPublic": {
+          "type": "boolean"
+        },
+        "ownerUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["id", "grade", "domain", "question", "payload", "isPublic", "ownerUid", "createdAt", "updatedAt"]
+    },
+    "CmsQuiz": {
+      "title": "CmsQuiz",
+      "description": "Published or draft quiz metadata for KHTN 6-9.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "lessonId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "lessonTitle": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "grade": {
+          "type": "number",
+          "enum": [6, 7, 8, 9]
+        },
+        "domain": {
+          "type": "string",
+          "enum": ["vat-li", "hoa-hoc", "sinh-hoc"]
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "durationMinutes": {
+          "type": "number"
+        },
+        "passScore": {
+          "type": "number"
+        },
+        "questionCount": {
+          "type": "number"
+        },
+        "isPublished": {
+          "type": "boolean"
+        },
+        "isPublic": {
+          "type": "boolean"
+        },
+        "ownerUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["id", "grade", "domain", "title", "durationMinutes", "passScore", "questionCount", "isPublished", "isPublic", "ownerUid", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/admins/{userId}": {
+      "schema": {
+        "$ref": "#/entities/AdminRegistry"
+      },
+      "description": "Private RBAC registry of authorized teacher/admin UIDs."
+    },
+    "/cms_meta/{metaId}": {
+      "schema": {
+        "$ref": "#/entities/CmsMeta"
+      },
+      "description": "Global CMS sync revision, site settings, and deletion tombstones (document ID: live)."
+    },
+    "/cms_lessons/{lessonId}": {
+      "schema": {
+        "$ref": "#/entities/CmsLesson"
+      },
+      "description": "All KHTN 6-9 lessons including Core Word Reader HTML, attachments, and mini-quizzes."
+    },
+    "/cms_topics/{topicId}": {
+      "schema": {
+        "$ref": "#/entities/CmsTopic"
+      },
+      "description": "Curriculum topics/chapters for Grades 6-9."
+    },
+    "/cms_videos/{videoId}": {
+      "schema": {
+        "$ref": "#/entities/CmsVideo"
+      },
+      "description": "Experiment and lecture videos."
+    },
+    "/cms_catalog_docs/{docId}": {
+      "schema": {
+        "$ref": "#/entities/CmsCatalogDoc"
+      },
+      "description": "Catalog documents (PPTX, PDF, DOCX) for student downloads."
+    },
+    "/cms_resources/{resourceId}": {
+      "schema": {
+        "$ref": "#/entities/CmsResource"
+      },
+      "description": "Unified learning resources, general uploaded assets, and custom curriculum entries."
+    },
+    "/cms_questions/{questionId}": {
+      "schema": {
+        "$ref": "#/entities/CmsQuestion"
+      },
+      "description": "Practice question bank items."
+    },
+    "/cms_quizzes/{quizId}": {
+      "schema": {
+        "$ref": "#/entities/CmsQuiz"
+      },
+      "description": "Online quiz metadata definitions."
+    }
+  }
+}

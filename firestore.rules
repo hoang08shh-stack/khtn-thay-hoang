@@ -1,0 +1,461 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Pillar 4.1: Global Safety Net (Default Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // =========================================================================
+    // Phase 3: Reusable Hardened Global Primitives
+    // =========================================================================
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isBootstrappedAdmin() {
+      return isVerifiedUser() && request.auth.token.email == 'hoang08shh@gmail.com';
+    }
+
+    function isAdmin() {
+      return isVerifiedUser() && (
+        isBootstrappedAdmin() ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isValidGrade(g) {
+      return g is int && g in [6, 7, 8, 9];
+    }
+
+    function isValidDomain(d) {
+      return d is string && d in ['vat-li', 'hoa-hoc', 'sinh-hoc'];
+    }
+
+    function isOptionalString(data, field, maxLen) {
+      return !(field in data) || (data[field] is string && data[field].size() <= maxLen);
+    }
+
+    function isOptionalBool(data, field) {
+      return !(field in data) || data[field] is bool;
+    }
+
+    function isBoundedStringList(data, field, maxItems) {
+      return !(field in data) || (
+        data[field] is list &&
+        data[field].size() <= maxItems &&
+        (data[field].size() == 0 || data[field][0] is string)
+      );
+    }
+
+    function isBoundedMapList(data, field, maxItems) {
+      return !(field in data) || (
+        data[field] is list &&
+        data[field].size() <= maxItems &&
+        (data[field].size() == 0 || data[field][0] is map)
+      );
+    }
+
+    // =========================================================================
+    // Validation Blueprints (Pillar 2: Anti-Update-Gap)
+    // =========================================================================
+    function isValidAdminRegistry(data, userId) {
+      return data.keys().hasAll(['uid', 'role', 'displayName', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['uid', 'role', 'displayName', 'createdAt', 'updatedAt']) &&
+        isValidId(data.uid) &&
+        data.uid == userId &&
+        data.role is string && data.role in ['admin', 'teacher'] &&
+        data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 120 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidCmsMeta(data, metaId) {
+      return data.keys().hasAll(['id', 'isPublic', 'updatedAtIso', 'revision', 'siteSettings', 'deletedIds', 'ownerUid', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'isPublic', 'updatedAtIso', 'revision', 'siteSettings', 'deletedIds', 'ownerUid', 'createdAt', 'updatedAt']) &&
+        isValidId(data.id) &&
+        data.id == metaId &&
+        data.id == 'live' &&
+        data.isPublic is bool &&
+        data.updatedAtIso is string && data.updatedAtIso.size() >= 10 && data.updatedAtIso.size() <= 64 &&
+        data.revision is int && data.revision >= 0 &&
+        data.siteSettings is map &&
+        data.siteSettings.keys().hasOnly(['siteName', 'labName', 'bookSeries', 'location', 'email', 'zalo', 'domainsLabel', 'allowStudentRegister', 'maintenanceMode']) &&
+        isOptionalString(data.siteSettings, 'siteName', 120) &&
+        isOptionalString(data.siteSettings, 'labName', 120) &&
+        isOptionalString(data.siteSettings, 'bookSeries', 160) &&
+        isOptionalString(data.siteSettings, 'location', 160) &&
+        isOptionalString(data.siteSettings, 'email', 160) &&
+        isOptionalString(data.siteSettings, 'zalo', 64) &&
+        isOptionalString(data.siteSettings, 'domainsLabel', 160) &&
+        isOptionalBool(data.siteSettings, 'allowStudentRegister') &&
+        isOptionalBool(data.siteSettings, 'maintenanceMode') &&
+        data.deletedIds is map &&
+        data.deletedIds.keys().hasOnly(['lessons', 'videos', 'topics', 'catalogDocs', 'questions', 'quizzes', 'clearedLessonVideoIds']) &&
+        isBoundedStringList(data.deletedIds, 'lessons', 500) &&
+        isBoundedStringList(data.deletedIds, 'videos', 500) &&
+        isBoundedStringList(data.deletedIds, 'topics', 500) &&
+        isBoundedStringList(data.deletedIds, 'catalogDocs', 500) &&
+        isBoundedStringList(data.deletedIds, 'questions', 500) &&
+        isBoundedStringList(data.deletedIds, 'quizzes', 500) &&
+        isBoundedStringList(data.deletedIds, 'clearedLessonVideoIds', 500) &&
+        isValidId(data.ownerUid) &&
+        data.ownerUid == request.auth.uid &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidCmsLesson(data, lessonId) {
+      return data.keys().hasAll(['id', 'topicId', 'grade', 'domain', 'code', 'slug', 'title', 'summary', 'content', 'durationMinutes', 'orderIndex', 'isPublished', 'isPublic', 'viewCount', 'ownerUid', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'topicId', 'grade', 'domain', 'code', 'slug', 'title', 'summary', 'content', 'durationMinutes', 'orderIndex', 'isPublished', 'isPublic', 'thumbnailUrl', 'videoUrl', 'viewCount', 'lessonCreatedAt', 'lessonUpdatedAt', 'assets', 'coreWordDoc', 'simulationIds', 'miniQuiz', 'ownerUid', 'createdAt', 'updatedAt']) &&
+        isValidId(data.id) &&
+        data.id == lessonId &&
+        data.topicId is string && data.topicId.size() <= 128 &&
+        isValidGrade(data.grade) &&
+        isValidDomain(data.domain) &&
+        data.code is string && data.code.size() <= 64 &&
+        data.slug is string && data.slug.size() <= 200 &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 300 &&
+        data.summary is string && data.summary.size() <= 2000 &&
+        data.content is string && data.content.size() <= 120000 &&
+        data.durationMinutes is number && data.durationMinutes >= 0 && data.durationMinutes <= 600 &&
+        data.orderIndex is number && data.orderIndex >= 0 && data.orderIndex <= 10000 &&
+        data.isPublished is bool &&
+        data.isPublic is bool &&
+        data.isPublic == data.isPublished &&
+        data.viewCount is number && data.viewCount >= 0 &&
+        isOptionalString(data, 'thumbnailUrl', 2048) &&
+        isOptionalString(data, 'videoUrl', 2048) &&
+        isOptionalString(data, 'lessonCreatedAt', 64) &&
+        isOptionalString(data, 'lessonUpdatedAt', 64) &&
+        isBoundedMapList(data, 'assets', 50) &&
+        (!('coreWordDoc' in data) || (
+          data.coreWordDoc is map &&
+          data.coreWordDoc.keys().hasOnly(['id', 'fileName', 'fileUrl', 'fileSize', 'htmlContent', 'uploadedAt']) &&
+          isOptionalString(data.coreWordDoc, 'id', 128) &&
+          isOptionalString(data.coreWordDoc, 'fileName', 256) &&
+          isOptionalString(data.coreWordDoc, 'fileUrl', 2048) &&
+          isOptionalString(data.coreWordDoc, 'fileSize', 64) &&
+          isOptionalString(data.coreWordDoc, 'htmlContent', 600000) &&
+          isOptionalString(data.coreWordDoc, 'uploadedAt', 64)
+        )) &&
+        isBoundedStringList(data, 'simulationIds', 30) &&
+        isBoundedMapList(data, 'miniQuiz', 50) &&
+        isValidId(data.ownerUid) &&
+        data.ownerUid == request.auth.uid &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidCmsTopic(data, topicId) {
+      return data.keys().hasAll(['id', 'grade', 'domain', 'code', 'title', 'description', 'lessonCount', 'experimentCount', 'icon', 'order', 'isPublic', 'ownerUid', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'grade', 'domain', 'code', 'chapterNumber', 'title', 'description', 'lessonCount', 'experimentCount', 'icon', 'order', 'image', 'isPublic', 'ownerUid', 'createdAt', 'updatedAt']) &&
+        isValidId(data.id) &&
+        data.id == topicId &&
+        isValidGrade(data.grade) &&
+        isValidDomain(data.domain) &&
+        data.code is string && data.code.size() <= 64 &&
+        isOptionalString(data, 'chapterNumber', 64) &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 300 &&
+        data.description is string && data.description.size() <= 2000 &&
+        data.lessonCount is number && data.lessonCount >= 0 &&
+        data.experimentCount is number && data.experimentCount >= 0 &&
+        data.icon is string && data.icon.size() <= 64 &&
+        data.order is number && data.order >= 0 &&
+        isOptionalString(data, 'image', 2048) &&
+        data.isPublic is bool &&
+        isValidId(data.ownerUid) &&
+        data.ownerUid == request.auth.uid &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidCmsVideo(data, videoId) {
+      return data.keys().hasAll(['id', 'title', 'grade', 'domain', 'duration', 'youtubeId', 'experimentType', 'instructor', 'description', 'views', 'timestamps', 'isPublic', 'ownerUid', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'title', 'grade', 'domain', 'duration', 'youtubeId', 'experimentType', 'instructor', 'description', 'summary', 'thumbnail', 'views', 'timestamps', 'isPublic', 'ownerUid', 'createdAt', 'updatedAt']) &&
+        isValidId(data.id) &&
+        data.id == videoId &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 300 &&
+        isValidGrade(data.grade) &&
+        isValidDomain(data.domain) &&
+        data.duration is string && data.duration.size() <= 32 &&
+        data.youtubeId is string && data.youtubeId.size() <= 64 &&
+        data.experimentType is string && data.experimentType.size() <= 120 &&
+        data.instructor is string && data.instructor.size() <= 120 &&
+        data.description is string && data.description.size() <= 4000 &&
+        isOptionalString(data, 'summary', 2000) &&
+        isOptionalString(data, 'thumbnail', 2048) &&
+        data.views is number && data.views >= 0 &&
+        isBoundedMapList(data, 'timestamps', 50) &&
+        data.isPublic is bool &&
+        isValidId(data.ownerUid) &&
+        data.ownerUid == request.auth.uid &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidCmsCatalogDoc(data, docId) {
+      return data.keys().hasAll(['id', 'title', 'grade', 'domain', 'format', 'type', 'pageCount', 'fileSize', 'description', 'author', 'downloadCount', 'downloadUrl', 'isPublic', 'ownerUid', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'lessonId', 'title', 'grade', 'domain', 'format', 'type', 'pageCount', 'fileSize', 'description', 'author', 'downloadCount', 'downloadUrl', 'fileUrl', 'fileName', 'isPublic', 'ownerUid', 'createdAt', 'updatedAt']) &&
+        isValidId(data.id) &&
+        data.id == docId &&
+        isOptionalString(data, 'lessonId', 128) &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 300 &&
+        isValidGrade(data.grade) &&
+        isValidDomain(data.domain) &&
+        data.format is string && data.format in ['pptx', 'pdf', 'docx'] &&
+        data.type is string && data.type.size() <= 120 &&
+        data.pageCount is number && data.pageCount >= 0 &&
+        data.fileSize is string && data.fileSize.size() <= 64 &&
+        data.description is string && data.description.size() <= 2000 &&
+        data.author is string && data.author.size() <= 120 &&
+        data.downloadCount is number && data.downloadCount >= 0 &&
+        data.downloadUrl is string && data.downloadUrl.size() <= 2048 &&
+        isOptionalString(data, 'fileUrl', 2048) &&
+        isOptionalString(data, 'fileName', 256) &&
+        data.isPublic is bool &&
+        isValidId(data.ownerUid) &&
+        data.ownerUid == request.auth.uid &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidCmsResource(data, resourceId) {
+      return data.keys().hasAll(['id', 'resourceKind', 'payload', 'isPublic', 'ownerUid', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'resourceKind', 'payload', 'isPublic', 'ownerUid', 'createdAt', 'updatedAt']) &&
+        isValidId(data.id) &&
+        data.id == resourceId &&
+        data.resourceKind is string && data.resourceKind in ['unified', 'general_asset', 'custom_lesson', 'custom_topic'] &&
+        data.payload is map &&
+        data.payload.keys().size() <= 40 &&
+        data.isPublic is bool &&
+        isValidId(data.ownerUid) &&
+        data.ownerUid == request.auth.uid &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidCmsQuestion(data, questionId) {
+      return data.keys().hasAll(['id', 'grade', 'domain', 'question', 'payload', 'isPublic', 'ownerUid', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'grade', 'domain', 'question', 'payload', 'isPublic', 'ownerUid', 'createdAt', 'updatedAt']) &&
+        isValidId(data.id) &&
+        data.id == questionId &&
+        isValidGrade(data.grade) &&
+        isValidDomain(data.domain) &&
+        data.question is string && data.question.size() >= 1 && data.question.size() <= 4000 &&
+        data.payload is map &&
+        data.payload.keys().size() <= 40 &&
+        data.isPublic is bool &&
+        isValidId(data.ownerUid) &&
+        data.ownerUid == request.auth.uid &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidCmsQuiz(data, quizId) {
+      return data.keys().hasAll(['id', 'grade', 'domain', 'title', 'durationMinutes', 'passScore', 'questionCount', 'isPublished', 'isPublic', 'ownerUid', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'lessonId', 'lessonTitle', 'grade', 'domain', 'title', 'description', 'durationMinutes', 'passScore', 'questionCount', 'isPublished', 'isPublic', 'ownerUid', 'createdAt', 'updatedAt']) &&
+        isValidId(data.id) &&
+        data.id == quizId &&
+        isOptionalString(data, 'lessonId', 128) &&
+        isOptionalString(data, 'lessonTitle', 300) &&
+        isValidGrade(data.grade) &&
+        isValidDomain(data.domain) &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 300 &&
+        isOptionalString(data, 'description', 2000) &&
+        data.durationMinutes is number && data.durationMinutes >= 0 && data.durationMinutes <= 300 &&
+        data.passScore is number && data.passScore >= 0 && data.passScore <= 100 &&
+        data.questionCount is number && data.questionCount >= 0 && data.questionCount <= 500 &&
+        data.isPublished is bool &&
+        data.isPublic is bool &&
+        data.isPublic == data.isPublished &&
+        isValidId(data.ownerUid) &&
+        data.ownerUid == request.auth.uid &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    // =========================================================================
+    // Collection Match Blocks (Exhaustive Blueprint Coverage)
+    // =========================================================================
+
+    // Startup connectivity check document (single read-only probe)
+    match /test/{docId} {
+      allow get: if docId == 'connection';
+      allow list, write: if false;
+    }
+
+    // Private Admin RBAC Registry (PII & Privilege Isolation)
+    match /admins/{userId} {
+      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isSignedIn() && isValidId(userId) && isValidAdminRegistry(incoming(), userId) &&
+        incoming().createdAt == request.time && incoming().updatedAt == request.time &&
+        isBootstrappedAdmin();
+      allow update: if isSignedIn() && isValidId(userId) && isValidAdminRegistry(incoming(), userId) &&
+        incoming().uid == existing().uid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['role', 'displayName', 'updatedAt']) &&
+        isBootstrappedAdmin();
+      allow delete: if isValidId(userId) && isBootstrappedAdmin();
+    }
+
+    // Global CMS Sync Metadata (single document: live)
+    match /cms_meta/{metaId} {
+      allow get: if isValidId(metaId) && metaId == 'live' && (resource == null || existing().isPublic == true || isAdmin());
+      allow list: if false;
+      allow create: if isSignedIn() && isValidId(metaId) && isValidCmsMeta(incoming(), metaId) &&
+        incoming().createdAt == request.time && incoming().updatedAt == request.time &&
+        isAdmin();
+      allow update: if isSignedIn() && isValidId(metaId) && isValidCmsMeta(incoming(), metaId) &&
+        incoming().id == existing().id &&
+        incoming().ownerUid == existing().ownerUid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['isPublic', 'updatedAtIso', 'revision', 'siteSettings', 'deletedIds', 'updatedAt']) &&
+        isAdmin();
+      allow delete: if isValidId(metaId) && isAdmin();
+    }
+
+    // Curriculum Lessons (public read for published lessons; admin read/write all)
+    match /cms_lessons/{lessonId} {
+      allow get: if isValidId(lessonId) && (resource == null || existing().isPublic == true || isAdmin());
+      allow list: if existing().isPublic == true || isAdmin();
+      allow create: if isSignedIn() && isValidId(lessonId) && isValidCmsLesson(incoming(), lessonId) &&
+        incoming().createdAt == request.time && incoming().updatedAt == request.time &&
+        isAdmin();
+      allow update: if isSignedIn() && isValidId(lessonId) && isValidCmsLesson(incoming(), lessonId) &&
+        incoming().id == existing().id &&
+        incoming().ownerUid == existing().ownerUid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['topicId', 'grade', 'domain', 'code', 'slug', 'title', 'summary', 'content', 'durationMinutes', 'orderIndex', 'isPublished', 'isPublic', 'thumbnailUrl', 'videoUrl', 'viewCount', 'lessonCreatedAt', 'lessonUpdatedAt', 'assets', 'coreWordDoc', 'simulationIds', 'miniQuiz', 'updatedAt']) &&
+        isAdmin();
+      allow delete: if isValidId(lessonId) && isAdmin();
+    }
+
+    // Curriculum Topics
+    match /cms_topics/{topicId} {
+      allow get: if isValidId(topicId) && (resource == null || existing().isPublic == true || isAdmin());
+      allow list: if existing().isPublic == true || isAdmin();
+      allow create: if isSignedIn() && isValidId(topicId) && isValidCmsTopic(incoming(), topicId) &&
+        incoming().createdAt == request.time && incoming().updatedAt == request.time &&
+        isAdmin();
+      allow update: if isSignedIn() && isValidId(topicId) && isValidCmsTopic(incoming(), topicId) &&
+        incoming().id == existing().id &&
+        incoming().ownerUid == existing().ownerUid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['grade', 'domain', 'code', 'chapterNumber', 'title', 'description', 'lessonCount', 'experimentCount', 'icon', 'order', 'image', 'isPublic', 'updatedAt']) &&
+        isAdmin();
+      allow delete: if isValidId(topicId) && isAdmin();
+    }
+
+    // Videos
+    match /cms_videos/{videoId} {
+      allow get: if isValidId(videoId) && (resource == null || existing().isPublic == true || isAdmin());
+      allow list: if existing().isPublic == true || isAdmin();
+      allow create: if isSignedIn() && isValidId(videoId) && isValidCmsVideo(incoming(), videoId) &&
+        incoming().createdAt == request.time && incoming().updatedAt == request.time &&
+        isAdmin();
+      allow update: if isSignedIn() && isValidId(videoId) && isValidCmsVideo(incoming(), videoId) &&
+        incoming().id == existing().id &&
+        incoming().ownerUid == existing().ownerUid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['title', 'grade', 'domain', 'duration', 'youtubeId', 'experimentType', 'instructor', 'description', 'summary', 'thumbnail', 'views', 'timestamps', 'isPublic', 'updatedAt']) &&
+        isAdmin();
+      allow delete: if isValidId(videoId) && isAdmin();
+    }
+
+    // Catalog Documents
+    match /cms_catalog_docs/{docId} {
+      allow get: if isValidId(docId) && (resource == null || existing().isPublic == true || isAdmin());
+      allow list: if existing().isPublic == true || isAdmin();
+      allow create: if isSignedIn() && isValidId(docId) && isValidCmsCatalogDoc(incoming(), docId) &&
+        incoming().createdAt == request.time && incoming().updatedAt == request.time &&
+        isAdmin();
+      allow update: if isSignedIn() && isValidId(docId) && isValidCmsCatalogDoc(incoming(), docId) &&
+        incoming().id == existing().id &&
+        incoming().ownerUid == existing().ownerUid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['lessonId', 'title', 'grade', 'domain', 'format', 'type', 'pageCount', 'fileSize', 'description', 'author', 'downloadCount', 'downloadUrl', 'fileUrl', 'fileName', 'isPublic', 'updatedAt']) &&
+        isAdmin();
+      allow delete: if isValidId(docId) && isAdmin();
+    }
+
+    // Unified Resources & General Assets
+    match /cms_resources/{resourceId} {
+      allow get: if isValidId(resourceId) && (resource == null || existing().isPublic == true || isAdmin());
+      allow list: if existing().isPublic == true || isAdmin();
+      allow create: if isSignedIn() && isValidId(resourceId) && isValidCmsResource(incoming(), resourceId) &&
+        incoming().createdAt == request.time && incoming().updatedAt == request.time &&
+        isAdmin();
+      allow update: if isSignedIn() && isValidId(resourceId) && isValidCmsResource(incoming(), resourceId) &&
+        incoming().id == existing().id &&
+        incoming().ownerUid == existing().ownerUid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['resourceKind', 'payload', 'isPublic', 'updatedAt']) &&
+        isAdmin();
+      allow delete: if isValidId(resourceId) && isAdmin();
+    }
+
+    // Quiz Questions
+    match /cms_questions/{questionId} {
+      allow get: if isValidId(questionId) && (resource == null || existing().isPublic == true || isAdmin());
+      allow list: if existing().isPublic == true || isAdmin();
+      allow create: if isSignedIn() && isValidId(questionId) && isValidCmsQuestion(incoming(), questionId) &&
+        incoming().createdAt == request.time && incoming().updatedAt == request.time &&
+        isAdmin();
+      allow update: if isSignedIn() && isValidId(questionId) && isValidCmsQuestion(incoming(), questionId) &&
+        incoming().id == existing().id &&
+        incoming().ownerUid == existing().ownerUid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['grade', 'domain', 'question', 'payload', 'isPublic', 'updatedAt']) &&
+        isAdmin();
+      allow delete: if isValidId(questionId) && isAdmin();
+    }
+
+    // Quizzes
+    match /cms_quizzes/{quizId} {
+      allow get: if isValidId(quizId) && (resource == null || existing().isPublic == true || isAdmin());
+      allow list: if existing().isPublic == true || isAdmin();
+      allow create: if isSignedIn() && isValidId(quizId) && isValidCmsQuiz(incoming(), quizId) &&
+        incoming().createdAt == request.time && incoming().updatedAt == request.time &&
+        isAdmin();
+      allow update: if isSignedIn() && isValidId(quizId) && isValidCmsQuiz(incoming(), quizId) &&
+        incoming().id == existing().id &&
+        incoming().ownerUid == existing().ownerUid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['lessonId', 'lessonTitle', 'grade', 'domain', 'title', 'description', 'durationMinutes', 'passScore', 'questionCount', 'isPublished', 'isPublic', 'updatedAt']) &&
+        isAdmin();
+      allow delete: if isValidId(quizId) && isAdmin();
+    }
+  }
+}

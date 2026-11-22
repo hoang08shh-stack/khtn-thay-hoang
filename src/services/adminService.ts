@@ -1,5 +1,15 @@
 import { supabase, isSupabaseConfigured, DEMO_USERS } from '../lib/supabase.ts';
 import {
+  isFirebaseConfigured,
+  isFirebaseAdminAuthenticated,
+  getFirebaseCurrentUser,
+} from '../firebase.ts';
+import {
+  pushCmsSnapshotToFirebase,
+  fetchCmsSnapshotFromFirebase,
+  fetchFirebaseCmsMetaVersion,
+} from './firebaseCmsService.ts';
+import {
   Grade,
   SubjectDomain,
   Topic,
@@ -105,8 +115,10 @@ export const STORAGE_KEYS = {
   SETTINGS: 'khtn_admin_site_settings_v2',
   DELETED_IDS: 'khtn_admin_deleted_ids_v1',
   SNAPSHOT_APPLIED_AT: 'khtn_cms_snapshot_applied_at_v1',
-  LOCAL_UPDATED_AT: 'khtn_cms_local_updated_at_v1',
+  LOCAL_UPDATED_AT: 'khtn_cms_admin_dirty_at_v2',
 } as const;
+
+export const LEGACY_LOCAL_UPDATED_AT_KEY = 'khtn_cms_local_updated_at_v1';
 
 export interface DeletedIdsRegistry {
   lessons: string[];
@@ -185,15 +197,79 @@ export function normalizeVideoUrl(rawUrl?: string): string | undefined {
 }
 
 const memoryFallbackStore = new Map<string, string>();
+const memoryAuthoritativeKeys = new Set<string>();
+
+export function safeRemoveLocal(key: string): void {
+  memoryFallbackStore.delete(key);
+  memoryAuthoritativeKeys.delete(key);
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem(key);
+    }
+  } catch {
+    // ignore
+  }
+}
+
+export function purgeLegacyPoisonedLocalUpdatedKey(): void {
+  try {
+    if (typeof localStorage !== 'undefined' && localStorage.getItem(LEGACY_LOCAL_UPDATED_AT_KEY)) {
+      localStorage.removeItem(LEGACY_LOCAL_UPDATED_AT_KEY);
+    }
+  } catch {
+    // ignore
+  }
+  memoryFallbackStore.delete(LEGACY_LOCAL_UPDATED_AT_KEY);
+  memoryAuthoritativeKeys.delete(LEGACY_LOCAL_UPDATED_AT_KEY);
+}
+
+function compactPayloadForMobileQuota(key: string, data: unknown): unknown {
+  if (!Array.isArray(data)) return data;
+  if (key === STORAGE_KEYS.LESSONS) {
+    return data.map((lesson: any) => {
+      if (!lesson || typeof lesson !== 'object') return lesson;
+      const next = { ...lesson };
+      if (next.coreWordDoc && typeof next.coreWordDoc === 'object') {
+        const doc = { ...next.coreWordDoc };
+        // If server fileUrl exists and inline htmlContent is huge (> 120KB), keep metadata + fileUrl so mobile loads it cleanly without exceeding 5MB localStorage
+        if (
+          typeof doc.fileUrl === 'string' &&
+          doc.fileUrl.startsWith('/') &&
+          typeof doc.htmlContent === 'string' &&
+          doc.htmlContent.length > 120000
+        ) {
+          doc.htmlContent = '';
+        }
+        next.coreWordDoc = doc;
+      }
+      if (Array.isArray(next.assets)) {
+        next.assets = next.assets.map((a: any) =>
+          a && typeof a.fileUrl === 'string' && a.fileUrl.startsWith('data:') && a.fileUrl.length > 150000
+            ? { ...a, fileUrl: '#uploaded-on-teacher-device' }
+            : a
+        );
+      }
+      return next;
+    });
+  }
+  if (key === 'khtn_unified_learning_resources_v2') {
+    return data.map((r: any) =>
+      r && typeof r.fileDataUrl === 'string' && r.fileDataUrl.startsWith('data:') && r.fileDataUrl.length > 150000
+        ? { ...r, fileDataUrl: '#uploaded-on-teacher-device' }
+        : r
+    );
+  }
+  return data;
+}
 
 export function safeReadLocal<T>(key: string, fallback: T): T {
   try {
-    if (typeof localStorage === 'undefined') {
+    if (typeof localStorage === 'undefined' || memoryAuthoritativeKeys.has(key)) {
       const memRaw = memoryFallbackStore.get(key);
       if (memRaw) {
         return JSON.parse(memRaw) as T;
       }
-      return fallback;
+      if (typeof localStorage === 'undefined') return fallback;
     }
     const raw = localStorage.getItem(key);
     if (raw) {
@@ -204,6 +280,14 @@ export function safeReadLocal<T>(key: string, fallback: T): T {
     }
   } catch (e) {
     console.warn(`Could not read ${key} from localStorage:`, e);
+    const memRaw = memoryFallbackStore.get(key);
+    if (memRaw) {
+      try {
+        return JSON.parse(memRaw) as T;
+      } catch {
+        // ignore
+      }
+    }
   }
   return fallback;
 }
@@ -213,9 +297,29 @@ export function safeWriteLocal<T>(key: string, data: T): void {
     const serialized = JSON.stringify(data);
     memoryFallbackStore.set(key, serialized);
     if (typeof localStorage === 'undefined') return;
-    localStorage.setItem(key, serialized);
+    try {
+      localStorage.setItem(key, serialized);
+      memoryAuthoritativeKeys.delete(key);
+    } catch (quotaErr) {
+      // Retry once with compacted payload if mobile Safari/Chrome hit the 5MB localStorage limit
+      try {
+        const compacted = compactPayloadForMobileQuota(key, data);
+        const compactedSerialized = JSON.stringify(compacted);
+        localStorage.setItem(key, compactedSerialized);
+        // Keep full uncompacted data authoritative in memory for this session while localStorage has the safe compact copy
+        if (compactedSerialized === serialized) {
+          memoryAuthoritativeKeys.delete(key);
+        } else {
+          memoryAuthoritativeKeys.add(key);
+        }
+      } catch {
+        // Private Browsing / Zalo WebView / full quota -> serve fresh data from memoryFallbackStore instead of stale localStorage!
+        memoryAuthoritativeKeys.add(key);
+        console.warn(`localStorage write unavailable for ${key}, using live memory cache:`, quotaErr);
+      }
+    }
   } catch (e) {
-    console.warn(`Failed to write ${key} to localStorage:`, e);
+    console.warn(`Failed to serialize ${key} for storage:`, e);
   }
 }
 
@@ -541,9 +645,11 @@ export function markLocalCmsModified(explicitIso?: string): string {
 }
 
 function ensureBundledSnapshotSynced(): void {
+  purgeLegacyPoisonedLocalUpdatedKey();
   if (!snapshotUpdatedAt) return;
   const hasLessons = Boolean(
-    typeof localStorage !== 'undefined' && localStorage.getItem(STORAGE_KEYS.LESSONS)
+    memoryAuthoritativeKeys.has(STORAGE_KEYS.LESSONS) ||
+      (typeof localStorage !== 'undefined' && localStorage.getItem(STORAGE_KEYS.LESSONS))
   );
   const seenBundled = safeReadLocal<string>(BUNDLED_SNAPSHOT_SEEN_KEY, '');
   // If we already seeded this build's bundled snapshot OR applied a live server snapshot,
@@ -683,11 +789,16 @@ export function importCmsSnapshotFromJson(rawJson: any): { ok: boolean; message:
 
 export interface CloudSyncStatusReport {
   ok: boolean;
-  target: 'supabase' | 'server' | 'local_only';
+  target: 'firebase' | 'supabase' | 'server' | 'local_only';
+  firebaseConfigured: boolean;
+  firebaseAuthenticated: boolean;
+  firebaseEmail?: string;
   supabaseConfigured: boolean;
   supabaseAuthenticated: boolean;
   reason:
     | 'ok'
+    | 'firebase_auth_required'
+    | 'firebase_error'
     | 'supabase_not_configured'
     | 'supabase_auth_required'
     | 'supabase_permission_or_schema_error';
@@ -696,11 +807,20 @@ export interface CloudSyncStatusReport {
 }
 
 let lastCloudSyncReport: CloudSyncStatusReport = {
-  ok: isSupabaseConfigured,
-  target: isSupabaseConfigured ? 'supabase' : 'local_only',
+  ok: isFirebaseConfigured || isSupabaseConfigured,
+  target: isFirebaseConfigured ? 'firebase' : isSupabaseConfigured ? 'supabase' : 'local_only',
+  firebaseConfigured: isFirebaseConfigured,
+  firebaseAuthenticated: isFirebaseAdminAuthenticated(),
+  firebaseEmail: getFirebaseCurrentUser()?.email || undefined,
   supabaseConfigured: isSupabaseConfigured,
   supabaseAuthenticated: false,
-  reason: isSupabaseConfigured ? 'ok' : 'supabase_not_configured',
+  reason: isFirebaseConfigured
+    ? isFirebaseAdminAuthenticated()
+      ? 'ok'
+      : 'firebase_auth_required'
+    : isSupabaseConfigured
+    ? 'ok'
+    : 'supabase_not_configured',
 };
 
 export function getLastCloudSyncReport(): CloudSyncStatusReport {
@@ -718,8 +838,11 @@ function updateCloudSyncReport(report: CloudSyncStatusReport): CloudSyncStatusRe
 export async function getSupabaseSyncDiagnostics(): Promise<CloudSyncStatusReport> {
   if (!isSupabaseConfigured || !supabase) {
     return updateCloudSyncReport({
-      ok: false,
-      target: 'local_only',
+      ok: isFirebaseAdminAuthenticated(),
+      target: isFirebaseAdminAuthenticated() ? 'firebase' : 'local_only',
+      firebaseConfigured: isFirebaseConfigured,
+      firebaseAuthenticated: isFirebaseAdminAuthenticated(),
+      firebaseEmail: getFirebaseCurrentUser()?.email || undefined,
       supabaseConfigured: false,
       supabaseAuthenticated: false,
       reason: 'supabase_not_configured',
@@ -736,6 +859,9 @@ export async function getSupabaseSyncDiagnostics(): Promise<CloudSyncStatusRepor
 
   return {
     ...lastCloudSyncReport,
+    firebaseConfigured: isFirebaseConfigured,
+    firebaseAuthenticated: isFirebaseAdminAuthenticated(),
+    firebaseEmail: getFirebaseCurrentUser()?.email || undefined,
     supabaseConfigured: true,
     supabaseAuthenticated,
     reason: supabaseAuthenticated ? lastCloudSyncReport.reason : 'supabase_auth_required',
@@ -754,11 +880,28 @@ async function executeCmsSnapshotSyncOnce(rebuildZip: boolean): Promise<CloudSyn
     rebuildZip,
   };
 
+  let firebaseOk = false;
+  let firebaseErrorDetail: string | undefined;
   let supabaseOk = false;
   let serverOk = false;
   let supabaseAuthenticated = false;
   let supabaseErrorDetail: string | undefined;
   let finalUpdatedAt = baseSnapshot.updatedAt;
+  const firebaseAuthenticated = isFirebaseAdminAuthenticated();
+  const firebaseEmail = getFirebaseCurrentUser()?.email || undefined;
+
+  // 0. Primary Cloud Sync: Firebase Firestore (persists permanently across ais-dev, ais-pre, and all phones)
+  if (isFirebaseConfigured && firebaseAuthenticated) {
+    const fbRes = await pushCmsSnapshotToFirebase(baseSnapshot);
+    if (fbRes.ok) {
+      firebaseOk = true;
+      if (fbRes.updatedAt) {
+        finalUpdatedAt = fbRes.updatedAt;
+      }
+    } else if (fbRes.errorDetail) {
+      firebaseErrorDetail = fbRes.errorDetail;
+    }
+  }
 
   // 1. Sync to Supabase Cloud (Database table `cms_snapshots` + Storage buckets)
   if (isSupabaseConfigured && supabase) {
@@ -836,6 +979,7 @@ async function executeCmsSnapshotSyncOnce(rebuildZip: boolean): Promise<CloudSyn
       rebuildZip ? '/api/sync-cms-snapshot?rebuildZip=1' : '/api/sync-cms-snapshot',
       {
         method: 'POST',
+        credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       }
@@ -843,7 +987,7 @@ async function executeCmsSnapshotSyncOnce(rebuildZip: boolean): Promise<CloudSyn
     if (res.ok) {
       const data = await res.json().catch(() => null);
       if (data && data.ok === true) {
-        if (typeof data.updatedAt === 'string' && data.updatedAt) {
+        if (typeof data.updatedAt === 'string' && data.updatedAt && !firebaseOk) {
           finalUpdatedAt = data.updatedAt;
         }
         serverOk = true;
@@ -853,46 +997,51 @@ async function executeCmsSnapshotSyncOnce(rebuildZip: boolean): Promise<CloudSyn
     // ignore if static host without /api/sync-cms-snapshot
   }
 
-  if (supabaseOk || serverOk) {
+  if (firebaseOk || supabaseOk || serverOk) {
     const currentLocal = safeReadLocal<string>(STORAGE_KEYS.LOCAL_UPDATED_AT, '');
     const currentMs = currentLocal ? Date.parse(currentLocal) || 0 : 0;
     const baseMs = Date.parse(baseSnapshot.updatedAt) || 0;
     const finalMs = Date.parse(finalUpdatedAt) || 0;
     if (Math.max(baseMs, finalMs) >= currentMs) {
       safeWriteLocal(STORAGE_KEYS.SNAPSHOT_APPLIED_AT, finalUpdatedAt);
-      if (typeof localStorage !== 'undefined') {
-        try {
-          localStorage.removeItem(STORAGE_KEYS.LOCAL_UPDATED_AT);
-        } catch {
-          // ignore
-        }
-      }
+      safeRemoveLocal(STORAGE_KEYS.LOCAL_UPDATED_AT);
+      purgeLegacyPoisonedLocalUpdatedKey();
     }
   }
 
   dispatchCmsUpdatedEvent();
 
-  const target: CloudSyncStatusReport['target'] = supabaseOk
+  const target: CloudSyncStatusReport['target'] = firebaseOk
+    ? 'firebase'
+    : supabaseOk
     ? 'supabase'
     : serverOk
     ? 'server'
     : 'local_only';
 
-  const reason: CloudSyncStatusReport['reason'] = supabaseOk || serverOk
-    ? 'ok'
-    : !isSupabaseConfigured
-    ? 'supabase_not_configured'
-    : !supabaseAuthenticated
-    ? 'supabase_auth_required'
-    : 'supabase_permission_or_schema_error';
+  const reason: CloudSyncStatusReport['reason'] =
+    firebaseOk || supabaseOk || serverOk
+      ? 'ok'
+      : isFirebaseConfigured && !firebaseAuthenticated
+      ? 'firebase_auth_required'
+      : firebaseErrorDetail
+      ? 'firebase_error'
+      : !isSupabaseConfigured
+      ? 'supabase_not_configured'
+      : !supabaseAuthenticated
+      ? 'supabase_auth_required'
+      : 'supabase_permission_or_schema_error';
 
   return updateCloudSyncReport({
-    ok: supabaseOk || serverOk,
+    ok: firebaseOk || supabaseOk || serverOk,
     target,
+    firebaseConfigured: isFirebaseConfigured,
+    firebaseAuthenticated,
+    firebaseEmail,
     supabaseConfigured: isSupabaseConfigured,
     supabaseAuthenticated,
     reason,
-    errorDetail: supabaseOk ? undefined : supabaseErrorDetail,
+    errorDetail: firebaseOk ? undefined : firebaseErrorDetail || (supabaseOk ? undefined : supabaseErrorDetail),
     updatedAt: finalUpdatedAt,
   });
 }
@@ -904,9 +1053,11 @@ export async function syncCmsSnapshotWithReport(
     return {
       ok: false,
       target: 'local_only',
+      firebaseConfigured: isFirebaseConfigured,
+      firebaseAuthenticated: isFirebaseAdminAuthenticated(),
       supabaseConfigured: isSupabaseConfigured,
       supabaseAuthenticated: false,
-      reason: 'supabase_not_configured',
+      reason: isFirebaseConfigured ? 'firebase_auth_required' : 'supabase_not_configured',
     };
   }
 
@@ -945,12 +1096,129 @@ export async function syncCmsSnapshotToRepo(rebuildZip = false): Promise<boolean
   return report.ok;
 }
 
+function computeSnapshotContentFingerprint(snap: any): string {
+  if (!snap || typeof snap !== 'object') return '';
+  const lessons = Array.isArray(snap.lessons) ? snap.lessons : [];
+  const lessonSig = lessons
+    .map(
+      (l: any) =>
+        `${l?.id || ''}:${l?.updatedAt || ''}:${(l?.assets || []).length}:${l?.coreWordDoc?.fileUrl || ''}:${(l?.miniQuiz || []).length}`
+    )
+    .sort()
+    .join('|');
+  const catalogDocs = Array.isArray(snap.catalogDocs) ? snap.catalogDocs : [];
+  const catSig = catalogDocs
+    .map((d: any) => `${d?.id || ''}:${d?.fileUrl || d?.downloadUrl || ''}`)
+    .sort()
+    .join('|');
+  const assets = Array.isArray(snap.generalAssets) ? snap.generalAssets : [];
+  const assetSig = assets.map((a: any) => `${a?.id || ''}:${a?.fileUrl || ''}`).sort().join('|');
+  const uni = Array.isArray(snap.unifiedResources) ? snap.unifiedResources : [];
+  const uniSig = uni.map((r: any) => `${r?.id || ''}:${r?.updatedAt || r?.fileDataUrl || ''}`).sort().join('|');
+  const delLessons = Array.isArray(snap.deletedIds?.lessons) ? [...snap.deletedIds.lessons].sort().join(',') : '';
+  return `${lessons.length}#${lessonSig}#${catSig}#${assetSig}#${uniSig}#${delLessons}`;
+}
+
+function computeLocalContentFingerprint(): string {
+  const lessons = safeReadLocal<any[]>(STORAGE_KEYS.LESSONS, []);
+  const catalogDocs = safeReadLocal<any[]>(STORAGE_KEYS.CATALOG_DOCS, []);
+  const generalAssets = safeReadLocal<any[]>(STORAGE_KEYS.ASSETS, []);
+  const unifiedResources = safeReadLocal<any[]>('khtn_unified_learning_resources_v2', []);
+  const deletedIds = safeReadLocal<any>(STORAGE_KEYS.DELETED_IDS, {});
+  return computeSnapshotContentFingerprint({
+    lessons,
+    catalogDocs,
+    generalAssets,
+    unifiedResources,
+    deletedIds,
+  });
+}
+
+async function fetchJsonWithTimeoutAndRetry(
+  url: string,
+  timeoutMs: number,
+  retries = 1
+): Promise<any | null> {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      const res = await fetch(url, {
+        cache: 'no-store',
+        credentials: 'same-origin',
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+      if (res.ok) {
+        const contentType = res.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+          return await res.json().catch(() => null);
+        }
+      }
+      // If response came back cleanly (e.g., 404 or HTML fallback on static host), don't waste retries
+      return null;
+    } catch {
+      if (attempt < retries) {
+        await new Promise((r) => setTimeout(r, 1200));
+      }
+    }
+  }
+  return null;
+}
+
 /**
- * Tự động tải bản chụp CMS mới nhất từ Supabase (bảng cms_snapshots + Storage) hoặc Máy chủ (/api/cms-snapshot)
- * để máy tính khác và học sinh khi truy cập đều nhận được ngay các bài giảng và học liệu vừa tải lên.
+ * Lightweight 60-byte version check for background mobile polling.
+ * Only downloads the full snapshot when server updatedAt or counts actually changed.
+ */
+export async function pollRemoteCmsVersionAndSync(): Promise<boolean> {
+  if (typeof window === 'undefined' || typeof fetch === 'undefined') return false;
+  if (activeSyncPromise) return false;
+  purgeLegacyPoisonedLocalUpdatedKey();
+  const lastApplied = safeReadLocal<string>(STORAGE_KEYS.SNAPSHOT_APPLIED_AT, '');
+
+  // Check Firebase Firestore lightweight metadata version first (works across ais-dev & ais-pre)
+  if (isFirebaseConfigured) {
+    try {
+      const fbMeta = await fetchFirebaseCmsMetaVersion();
+      if (fbMeta.exists && fbMeta.updatedAtIso && fbMeta.updatedAtIso !== lastApplied) {
+        return fetchAndApplyRemoteCmsSnapshot(false);
+      }
+    } catch {
+      // ignore and continue to server check
+    }
+  }
+
+  try {
+    const version = await fetchJsonWithTimeoutAndRetry(
+      `/api/cms-version?t=${Date.now()}`,
+      8000,
+      0
+    );
+    if (version && version.ok === true && typeof version.updatedAt === 'string') {
+      const localLessons = safeReadLocal<any[]>(STORAGE_KEYS.LESSONS, []);
+      if (
+        version.updatedAt &&
+        (version.updatedAt !== lastApplied ||
+          (typeof version.lessonCount === 'number' && version.lessonCount !== localLessons.length))
+      ) {
+        return fetchAndApplyRemoteCmsSnapshot(false);
+      }
+      return false;
+    }
+  } catch {
+    // Fall back to direct snapshot check below
+  }
+  return fetchAndApplyRemoteCmsSnapshot(false);
+}
+
+/**
+ * Tự động tải bản chụp CMS mới nhất từ Firebase Firestore, Supabase hoặc Máy chủ (/api/cms-snapshot)
+ * để máy tính khác và điện thoại học sinh khi truy cập đều nhận được ngay các bài giảng và học liệu vừa tải lên.
  */
 export async function fetchAndApplyRemoteCmsSnapshot(force = false): Promise<boolean> {
   if (typeof window === 'undefined' || typeof fetch === 'undefined') return false;
+  // Always clear legacy poisoned key so phones from older builds are never locked out
+  purgeLegacyPoisonedLocalUpdatedKey();
   // Never overwrite local state while a local edit is actively syncing upstream
   if (!force && activeSyncPromise) return false;
 
@@ -967,25 +1235,23 @@ export async function fetchAndApplyRemoteCmsSnapshot(force = false): Promise<boo
     }
   };
 
-  // 1. Check live server endpoint /api/cms-snapshot
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 3500);
-    const res = await fetch(`/api/cms-snapshot?t=${Date.now()}`, {
-      cache: 'no-store',
-      signal: controller.signal,
-    });
-    clearTimeout(timer);
-    if (res.ok) {
-      const contentType = res.headers.get('content-type') || '';
-      if (contentType.includes('application/json')) {
-        const serverSnap = await res.json().catch(() => null);
-        considerCandidate(serverSnap);
-      }
+  // 0. Check Firebase Firestore Cloud (shared across ais-dev, ais-pre, and all phones)
+  if (isFirebaseConfigured) {
+    try {
+      const firebaseSnap = await fetchCmsSnapshotFromFirebase();
+      considerCandidate(firebaseSnap);
+    } catch {
+      // Fall back cleanly to server / Supabase if offline
     }
-  } catch {
-    // ignore on static host
   }
+
+  // 1. Check live server endpoint /api/cms-snapshot (15s timeout + 1 auto-retry for mobile 4G/Cloud Run cold starts)
+  const serverSnap = await fetchJsonWithTimeoutAndRetry(
+    `/api/cms-snapshot?t=${Date.now()}`,
+    15000,
+    1
+  );
+  considerCandidate(serverSnap);
 
   // 2. Check Supabase Table (`cms_snapshots`) & Storage buckets (`science-assets`, `lesson-documents`)
   if (isSupabaseConfigured && supabase) {
@@ -1024,21 +1290,12 @@ export async function fetchAndApplyRemoteCmsSnapshot(force = false): Promise<boo
 
   // 3. Static snapshot fallback (/cms-snapshot.json) if live API & Supabase are unavailable
   if (!bestSnapshot) {
-    try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 3000);
-      const res = await fetch(`/cms-snapshot.json?t=${Date.now()}`, {
-        cache: 'no-store',
-        signal: controller.signal,
-      });
-      clearTimeout(timer);
-      if (res.ok && (res.headers.get('content-type') || '').includes('application/json')) {
-        const staticSnap = await res.json().catch(() => null);
-        considerCandidate(staticSnap);
-      }
-    } catch {
-      // ignore if static file not present
-    }
+    const staticSnap = await fetchJsonWithTimeoutAndRetry(
+      `/cms-snapshot.json?t=${Date.now()}`,
+      8000,
+      0
+    );
+    considerCandidate(staticSnap);
   }
 
   if (!bestSnapshot) return false;
@@ -1049,14 +1306,15 @@ export async function fetchAndApplyRemoteCmsSnapshot(force = false): Promise<boo
   const localUpdated = safeReadLocal<string>(STORAGE_KEYS.LOCAL_UPDATED_AT, '');
   const localUpdatedMs = localUpdated ? Date.parse(localUpdated) || 0 : 0;
   const hasLocalLessons = Boolean(
-    typeof localStorage !== 'undefined' && localStorage.getItem(STORAGE_KEYS.LESSONS)
+    memoryAuthoritativeKeys.has(STORAGE_KEYS.LESSONS) ||
+      (typeof localStorage !== 'undefined' && localStorage.getItem(STORAGE_KEYS.LESSONS))
   );
 
   if (!force && hasLocalLessons) {
     if (localUpdatedMs > 0) {
-      // This browser has unsynced local teacher edits
+      // This browser has explicit unsynced admin edits (khtn_cms_admin_dirty_at_v2)
       if (bestTime > 0 && localUpdatedMs > bestTime) {
-        // Local edits are strictly newer than remote -> NEVER wipe local; push local upstream instead
+        // Local admin edits are strictly newer than remote -> NEVER wipe local; push local upstream instead
         syncCmsSnapshotToRepo(false).catch(() => {});
         return false;
       }
@@ -1065,10 +1323,15 @@ export async function fetchAndApplyRemoteCmsSnapshot(force = false): Promise<boo
       }
     } else {
       // Read-only visitor / phone / already-synced browser:
-      // Always accept remote if it differs from the last applied snapshot timestamp!
+      // Always accept remote if updatedAt differs OR actual content fingerprint differs!
       const remoteStamp = typeof bestSnapshot.updatedAt === 'string' ? bestSnapshot.updatedAt : '';
-      if (lastApplied && remoteStamp && remoteStamp === lastApplied) {
-        return false;
+      const sameStamp = Boolean(lastApplied && remoteStamp && remoteStamp === lastApplied);
+      if (sameStamp) {
+        const remoteFp = computeSnapshotContentFingerprint(bestSnapshot);
+        const localFp = computeLocalContentFingerprint();
+        if (remoteFp === localFp) {
+          return false;
+        }
       }
     }
   }
@@ -1081,6 +1344,10 @@ export async function fetchAndApplyRemoteCmsSnapshot(force = false): Promise<boo
 }
 
 export async function checkRemoteSyncAvailability(): Promise<{
+  firebaseAvailable: boolean;
+  firebaseAuthenticated: boolean;
+  firebaseEmail?: string;
+  firebaseUpdatedAt?: string;
   serverApiAvailable: boolean;
   supabaseAvailable: boolean;
   supabaseAuthenticated: boolean;
@@ -1088,28 +1355,33 @@ export async function checkRemoteSyncAvailability(): Promise<{
 }> {
   let serverApiAvailable = false;
   let remoteUpdatedAt: string | undefined;
+  let firebaseUpdatedAt: string | undefined;
   let supabaseAuthenticated = false;
+  const firebaseAuthenticated = isFirebaseAdminAuthenticated();
+  const firebaseEmail = getFirebaseCurrentUser()?.email || undefined;
 
-  if (typeof window !== 'undefined' && typeof fetch !== 'undefined') {
+  if (isFirebaseConfigured) {
     try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 2000);
-      const res = await fetch(`/api/cms-snapshot?t=${Date.now()}`, {
-        cache: 'no-store',
-        signal: controller.signal,
-      });
-      clearTimeout(timer);
-      if (res.ok && (res.headers.get('content-type') || '').includes('application/json')) {
-        const data = await res.json().catch(() => null);
-        if (data && typeof data === 'object') {
-          serverApiAvailable = true;
-          if (typeof data.updatedAt === 'string') {
-            remoteUpdatedAt = data.updatedAt;
-          }
-        }
+      const meta = await fetchFirebaseCmsMetaVersion();
+      if (meta.exists && meta.updatedAtIso) {
+        firebaseUpdatedAt = meta.updatedAtIso;
+        remoteUpdatedAt = meta.updatedAtIso;
       }
     } catch {
-      serverApiAvailable = false;
+      // ignore
+    }
+  }
+
+  if (typeof window !== 'undefined' && typeof fetch !== 'undefined') {
+    const data = await fetchJsonWithTimeoutAndRetry(`/api/cms-snapshot?t=${Date.now()}`, 10000, 0);
+    if (data && typeof data === 'object') {
+      serverApiAvailable = true;
+      if (
+        typeof data.updatedAt === 'string' &&
+        (!remoteUpdatedAt || Date.parse(data.updatedAt) > Date.parse(remoteUpdatedAt))
+      ) {
+        remoteUpdatedAt = data.updatedAt;
+      }
     }
   }
 
@@ -1136,6 +1408,10 @@ export async function checkRemoteSyncAvailability(): Promise<{
   }
 
   return {
+    firebaseAvailable: isFirebaseConfigured,
+    firebaseAuthenticated,
+    firebaseEmail,
+    firebaseUpdatedAt,
     serverApiAvailable,
     supabaseAvailable: Boolean(isSupabaseConfigured && supabase),
     supabaseAuthenticated,

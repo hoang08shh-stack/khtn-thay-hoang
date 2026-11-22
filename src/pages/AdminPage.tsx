@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Breadcrumbs } from '../components/common/Breadcrumbs.tsx';
 import { isSupabaseConfigured } from '../lib/supabase.ts';
+import { isFirebaseConfigured } from '../firebase.ts';
 import { useAuth } from '../hooks/useAuth.ts';
 import { SIMULATIONS_3D, DOMAINS } from '../data/mockData.ts';
 import {
@@ -70,6 +71,7 @@ import {
   saveUploadedAssetToRepository,
   buildCmsSnapshotPayload,
   syncCmsSnapshotToRepo,
+  syncCmsSnapshotWithReport,
   fetchAndApplyRemoteCmsSnapshot,
   checkRemoteSyncAvailability,
 } from '../services/adminService.ts';
@@ -142,7 +144,8 @@ type AdminTabId =
   | 'users';
 
 export const AdminPage: React.FC = () => {
-  const { user } = useAuth();
+  const { user, isFirebaseAdmin, loginWithGoogle } = useAuth();
+  const [isConnectingFirebase, setIsConnectingFirebase] = useState(false);
 
   // Active Navigation Tab
   const [activeTab, setActiveTab] = useState<AdminTabId>('overview');
@@ -240,7 +243,33 @@ export const AdminPage: React.FC = () => {
 
   const showToast = (text: string, type: 'success' | 'error' = 'success') => {
     setToastMessage({ text, type });
-    setTimeout(() => setToastMessage(null), 3500);
+    setTimeout(() => setToastMessage(null), 4000);
+  };
+
+  const handleConnectFirebaseGoogle = async () => {
+    setIsConnectingFirebase(true);
+    try {
+      await loginWithGoogle();
+      const report = await syncCmsSnapshotWithReport(false);
+      if (report.target === 'firebase' && report.ok) {
+        showToast(
+          'Đã kết nối Firebase Cloud và đồng bộ toàn bộ bài giảng! Mọi điện thoại mở bất kỳ đường link nào đều sẽ tự động nhận bài mới.'
+        );
+      } else {
+        showToast(
+          'Đã đăng nhập Google Firebase thành công! Mọi bài giảng mới tải lên sẽ tự động đồng bộ đa thiết bị.'
+        );
+      }
+      loadAllData();
+    } catch (err: any) {
+      showToast(
+        err?.message ||
+          'Chưa đăng nhập được Google Firebase. Hãy cho phép cửa sổ popup và chọn tài khoản hoang08shh@gmail.com.',
+        'error'
+      );
+    } finally {
+      setIsConnectingFirebase(false);
+    }
   };
 
   // Load All System Data
@@ -534,8 +563,8 @@ export const AdminPage: React.FC = () => {
         {/* Admin Dashboard Hero Header */}
         <div className="bg-gradient-to-br from-[#0B1F3A] via-[#122B4A] to-[#0F3443] rounded-3xl p-6 sm:p-8 text-white shadow-lg border border-slate-700/80 space-y-6">
           {/* Top Row: Identity & System Utilities */}
-          <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-5">
-            <div className="space-y-2.5 flex-1 min-w-0">
+          <div className="flex flex-col gap-4">
+            <div className="space-y-2.5 min-w-0">
               <div className="flex flex-wrap items-center gap-2 text-xs text-teal-300 font-semibold">
                 <ShieldCheck className="w-4 h-4 text-teal-400 shrink-0" />
                 <span>Trung tâm Quản trị Học liệu &amp; Nội dung số (Full CMS)</span>
@@ -552,25 +581,58 @@ export const AdminPage: React.FC = () => {
               </p>
               <button
                 type="button"
-                onClick={() => setIsCmsSyncModalOpen(true)}
+                onClick={() => {
+                  if (isFirebaseConfigured && !isFirebaseAdmin) {
+                    handleConnectFirebaseGoogle();
+                  } else {
+                    setIsCmsSyncModalOpen(true);
+                  }
+                }}
+                disabled={isConnectingFirebase}
                 data-testid="admin-supabase-status-pill"
                 className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-[11px] font-bold border transition cursor-pointer ${
-                  isSupabaseConfigured || liveServerSyncAvailable
+                  isFirebaseAdmin || isSupabaseConfigured
+                    ? 'bg-emerald-500/15 border-emerald-400/35 text-emerald-200 hover:bg-emerald-500/25'
+                    : isFirebaseConfigured
+                    ? 'bg-amber-500/20 border-amber-400/40 text-amber-100 hover:bg-amber-500/30'
+                    : liveServerSyncAvailable
                     ? 'bg-emerald-500/15 border-emerald-400/30 text-emerald-200 hover:bg-emerald-500/25'
                     : 'bg-amber-500/15 border-amber-400/30 text-amber-200 hover:bg-amber-500/25'
                 }`}
               >
                 <span>
-                  {isSupabaseConfigured
+                  {isFirebaseAdmin
+                    ? 'Firebase Cloud: Đã kết nối — Tự động đồng bộ mọi điện thoại & mọi đường link →'
+                    : isFirebaseConfigured
+                    ? isConnectingFirebase
+                      ? 'Đang kết nối Google Firebase...'
+                      : 'Firebase Cloud sẵn sàng: Bấm đăng nhập Google (hoang08shh@gmail.com) để đồng bộ mọi điện thoại →'
+                    : isSupabaseConfigured
                     ? 'Supabase Cloud: Đã kết nối đồng bộ tự động đa thiết bị'
                     : liveServerSyncAvailable
-                    ? 'Máy chủ trực tiếp: Đang đồng bộ tự động mọi thiết bị truy cập cùng link web này →'
-                    : 'Chế độ lưu trình duyệt (Chưa gắn máy chủ/Supabase) — Bấm xem cách đồng bộ →'}
+                    ? `Máy chủ trực tiếp (${typeof window !== 'undefined' ? window.location.host : ''}): Tự động đồng bộ tới điện thoại mở đúng link này →`
+                    : 'Chế độ lưu trình duyệt (Chưa gắn máy chủ/Cloud) — Bấm xem cách đồng bộ →'}
                 </span>
               </button>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 shrink-0 self-start">
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              {isFirebaseConfigured && !isFirebaseAdmin && (
+                <button
+                  type="button"
+                  onClick={handleConnectFirebaseGoogle}
+                  disabled={isConnectingFirebase}
+                  data-testid="admin-connect-firebase-google-btn"
+                  className="px-3.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-60 text-slate-950 font-extrabold text-xs transition flex items-center gap-1.5 shadow-sm cursor-pointer"
+                  title="Đăng nhập tài khoản Google hoang08shh@gmail.com để đẩy bài giảng lên Firebase Firestore"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5 stroke-[2.5]" />
+                  <span>
+                    {isConnectingFirebase ? 'Đang kết nối...' : 'Kết nối Google Firebase'}
+                  </span>
+                </button>
+              )}
+
               <Link
                 to="/"
                 className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-bold border border-white/15 transition flex items-center gap-1.5"
@@ -578,6 +640,29 @@ export const AdminPage: React.FC = () => {
                 <ExternalLink className="w-3.5 h-3.5 text-teal-300" />
                 <span>Xem trang học sinh</span>
               </Link>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  const shareUrl = `${window.location.origin}/#/`;
+                  try {
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                      await navigator.clipboard.writeText(shareUrl);
+                      showToast(`Đã sao chép đúng link đồng bộ cho điện thoại: ${shareUrl}`);
+                      return;
+                    }
+                  } catch {
+                    // fallback below
+                  }
+                  showToast(`Link đồng bộ cho điện thoại: ${shareUrl}`);
+                }}
+                data-testid="copy-phone-sync-link-btn"
+                className="px-3.5 py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-100 font-bold text-xs border border-emerald-400/40 transition flex items-center gap-1.5 cursor-pointer"
+                title="Sao chép chính xác đường link máy chủ này để mở trên điện thoại và thấy ngay bài giảng vừa tải"
+              >
+                <ExternalLink className="w-3.5 h-3.5 text-emerald-300" />
+                <span>Sao chép link cho điện thoại</span>
+              </button>
 
               <button
                 type="button"

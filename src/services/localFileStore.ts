@@ -88,6 +88,7 @@ async function uploadFileViaChunkedBinary(file: File): Promise<string | null> {
 
     const res = await fetch('/api/upload-teacher-file-chunk', {
       method: 'POST',
+      credentials: 'same-origin',
       headers: {
         'Content-Type': 'application/octet-stream',
         'X-Upload-Id': uploadId,
@@ -110,6 +111,7 @@ async function uploadFileViaChunkedBinary(file: File): Promise<string | null> {
 async function uploadFileViaRawBinary(file: File): Promise<string | null> {
   const res = await fetch('/api/upload-teacher-file-raw', {
     method: 'POST',
+    credentials: 'same-origin',
     headers: {
       'Content-Type': 'application/octet-stream',
       'X-File-Name': encodeURIComponent(file.name),
@@ -165,6 +167,7 @@ export async function saveTeacherFileToRepo(
         try {
           const res = await fetch('/api/upload-teacher-file', {
             method: 'POST',
+            credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               fileName: file.name,

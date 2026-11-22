@@ -10,7 +10,13 @@ import { NotFoundPage } from './components/common/NotFoundPage.tsx';
 import { HomePage } from './pages/HomePage.tsx';
 import { fetchUserProgress } from './services/progressService.ts';
 import { isSupabaseConfigured, supabase } from './lib/supabase.ts';
-import { fetchAndApplyRemoteCmsSnapshot, applyCmsSnapshotToLocalStorage } from './services/adminService.ts';
+import {
+  fetchAndApplyRemoteCmsSnapshot,
+  applyCmsSnapshotToLocalStorage,
+  pollRemoteCmsVersionAndSync,
+} from './services/adminService.ts';
+import { subscribeToFirebaseCmsMeta } from './services/firebaseCmsService.ts';
+import { isFirebaseConfigured } from './firebase.ts';
 import { UserProgress } from './types/index.ts';
 import { NotificationProvider, useNotification } from './context/NotificationContext.tsx';
 import { PushNotificationToast } from './components/notifications/PushNotificationToast.tsx';
@@ -128,7 +134,7 @@ function ScrollToTop() {
 }
 
 function AppContent() {
-  const { user, logout } = useAuth();
+  const { user, logout, isFirebaseAuthReady } = useAuth();
   const { activePushToast, dismissPushToast } = useNotification();
   const [progress, setProgress] = useState<UserProgress | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -151,6 +157,7 @@ function AppContent() {
 
     window.addEventListener('focus', handleFocus);
     window.addEventListener('pageshow', handleFocus);
+    window.addEventListener('online', handleFocus);
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('storage', handleStorageChange);
 
@@ -159,6 +166,9 @@ function AppContent() {
     try {
       if (typeof EventSource !== 'undefined') {
         eventSource = new EventSource('/api/cms-events');
+        eventSource.addEventListener('connected', () => {
+          pollRemoteCmsVersionAndSync().catch(() => {});
+        });
         eventSource.addEventListener('cms-updated', () => {
           fetchAndApplyRemoteCmsSnapshot(false).catch(() => {});
         });
@@ -167,12 +177,12 @@ function AppContent() {
       // ignore on static hosts without /api/cms-events
     }
 
-    // Gentle background refresh while tab is visible (safety net if proxy drops SSE)
+    // Lightweight 10s version check while tab is visible (safety net if mobile carrier/proxy drops SSE)
     const pollTimer = window.setInterval(() => {
       if (document.visibilityState === 'visible') {
-        fetchAndApplyRemoteCmsSnapshot(false).catch(() => {});
+        pollRemoteCmsVersionAndSync().catch(() => {});
       }
-    }, 20000);
+    }, 10000);
 
     let broadcastChannel: BroadcastChannel | null = null;
     try {
@@ -210,6 +220,7 @@ function AppContent() {
     return () => {
       window.removeEventListener('focus', handleFocus);
       window.removeEventListener('pageshow', handleFocus);
+      window.removeEventListener('online', handleFocus);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('storage', handleStorageChange);
       window.clearInterval(pollTimer);
@@ -232,6 +243,24 @@ function AppContent() {
       }
     };
   }, []);
+
+  // Real-time Firebase Firestore listener (attached once auth state is ready)
+  useEffect(() => {
+    if (!isFirebaseConfigured || !isFirebaseAuthReady) return;
+    fetchAndApplyRemoteCmsSnapshot(false).catch(() => {});
+    const unsub = subscribeToFirebaseCmsMeta(() => {
+      fetchAndApplyRemoteCmsSnapshot(false).catch(() => {});
+    });
+    return () => {
+      if (unsub) {
+        try {
+          unsub();
+        } catch {
+          // ignore
+        }
+      }
+    };
+  }, [isFirebaseAuthReady]);
 
   useEffect(() => {
     if (user) {
